@@ -1,0 +1,29 @@
+{
+  "name": "open-event-db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open Event Database — community-owned database of events.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.5",
+  "scripts": {
+    "dev": "pnpm --filter './packages/*' --parallel dev",
+    "build": "pnpm --filter './packages/*' --recursive build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm --filter './packages/*' --recursive typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @open-event-db/db generate",
+    "db:migrate": "pnpm --filter @open-event-db/db migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
