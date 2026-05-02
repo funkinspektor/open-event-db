@@ -19,7 +19,8 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @open-event-db/db generate",
-    "db:migrate": "pnpm --filter @open-event-db/db migrate"
+    "db:migrate": "pnpm --filter @open-event-db/db migrate",
+    "db:seed": "pnpm --filter @open-event-db/db seed"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
