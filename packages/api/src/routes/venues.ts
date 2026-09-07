@@ -1,15 +1,42 @@
 import type { FastifyInstance } from 'fastify'
 import { and, asc, eq, gt, ilike, or, sql } from 'drizzle-orm'
-import { venueListQuerySchema } from '@open-event-db/shared'
-import { events, venues } from '@open-event-db/db'
+import { venueCreateSchema, venueListQuerySchema, venueUpdateSchema } from '@open-event-db/shared'
+import { events, venues, type Venue as VenueRow } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { notFound } from '../errors.js'
 import { serializeCoordinates } from '../serializers.js'
+import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
+import { diff, logEdit } from '../history.js'
 
 interface VenueCursor extends Record<string, string> {
   name: string
   id: string
+}
+
+const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
+
+function serializeVenue(v: VenueRow) {
+  return {
+    id: v.id,
+    name: v.name,
+    address: v.address,
+    city: v.city,
+    coordinates: serializeCoordinates(v.coordinates),
+    links: v.links,
+    created_at: v.createdAt.toISOString(),
+    updated_at: v.updatedAt.toISOString(),
+  }
+}
+
+function venueSnapshot(v: VenueRow): Record<string, unknown> {
+  return {
+    name: v.name,
+    address: v.address,
+    city: v.city,
+    coordinates: serializeCoordinates(v.coordinates),
+    links: v.links,
+  }
 }
 
 export async function venueRoutes(app: FastifyInstance) {
@@ -43,16 +70,7 @@ export async function venueRoutes(app: FastifyInstance) {
       hasMore && last ? encodeCursor({ name: last.name, id: last.id }) : null
 
     return {
-      data: page.map((v) => ({
-        id: v.id,
-        name: v.name,
-        address: v.address,
-        city: v.city,
-        coordinates: serializeCoordinates(v.coordinates),
-        links: v.links,
-        created_at: v.createdAt.toISOString(),
-        updated_at: v.updatedAt.toISOString(),
-      })),
+      data: page.map(serializeVenue),
       meta: { cursor: nextCursor, has_more: hasMore },
     }
   })
@@ -89,14 +107,7 @@ export async function venueRoutes(app: FastifyInstance) {
 
     return {
       data: {
-        id: venue.id,
-        name: venue.name,
-        address: venue.address,
-        city: venue.city,
-        coordinates: serializeCoordinates(venue.coordinates),
-        links: venue.links,
-        created_at: venue.createdAt.toISOString(),
-        updated_at: venue.updatedAt.toISOString(),
+        ...serializeVenue(venue),
         upcoming_events: upcoming.map((r) => ({
           id: r.id,
           title: r.title,
@@ -112,5 +123,72 @@ export async function venueRoutes(app: FastifyInstance) {
         })),
       },
     }
+  })
+
+  app.post('/venues', write, async (req, reply) => {
+    const me = currentPublisher(req)
+    const body = venueCreateSchema.parse(req.body)
+
+    const venue = await db.transaction(async (tx) => {
+      const [v] = await tx
+        .insert(venues)
+        .values({
+          name: body.name,
+          address: body.address,
+          city: body.city,
+          coordinates: [body.coordinates.lng, body.coordinates.lat],
+          links: body.links ?? {},
+        })
+        .returning()
+      if (!v) throw new Error('insert returned no row')
+      await logEdit(tx, {
+        entityType: 'venue',
+        entityId: v.id,
+        publisherId: me.id,
+        action: 'created',
+        diff: diff(null, venueSnapshot(v)),
+      })
+      return v
+    })
+
+    reply.status(201)
+    return { data: serializeVenue(venue) }
+  })
+
+  app.put<{ Params: { id: string } }>('/venues/:id', write, async (req) => {
+    const me = currentPublisher(req)
+    const body = venueUpdateSchema.parse(req.body)
+
+    const [current] = await db.select().from(venues).where(eq(venues.id, req.params.id)).limit(1)
+    if (!current) throw notFound('Venue not found')
+
+    const patch: Partial<typeof venues.$inferInsert> = {}
+    if (body.name !== undefined) patch.name = body.name
+    if (body.address !== undefined) patch.address = body.address
+    if (body.city !== undefined) patch.city = body.city
+    if (body.links !== undefined) patch.links = body.links
+    if (body.coordinates !== undefined) {
+      patch.coordinates = [body.coordinates.lng, body.coordinates.lat]
+    }
+    if (Object.keys(patch).length === 0) return { data: serializeVenue(current) }
+
+    const updated = await db.transaction(async (tx) => {
+      const [v] = await tx
+        .update(venues)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(venues.id, current.id))
+        .returning()
+      if (!v) throw new Error('update returned no row')
+      await logEdit(tx, {
+        entityType: 'venue',
+        entityId: v.id,
+        publisherId: me.id,
+        action: 'updated',
+        diff: diff(venueSnapshot(current), venueSnapshot(v)),
+      })
+      return v
+    })
+
+    return { data: serializeVenue(updated) }
   })
 }

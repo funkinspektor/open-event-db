@@ -12,16 +12,39 @@ import {
   or,
   sql,
 } from 'drizzle-orm'
-import { eventListQuerySchema, type EventStatus } from '@open-event-db/shared'
+import {
+  addOwnerSchema,
+  eventCreateSchema,
+  eventListQuerySchema,
+  eventUpdateSchema,
+  normalizeTags,
+  type EventStatus,
+} from '@open-event-db/shared'
 import { eventOwners, events, publishers, venues } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
-import { notFound } from '../errors.js'
-import { serializeCoordinates } from '../serializers.js'
+import { badRequest, forbidden, notFound } from '../errors.js'
+import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
+import { diff, logEdit } from '../history.js'
+import { eventSnapshot, getEventDetail, getOwnerIds, getOwnerRole } from '../queries/events.js'
 
 interface EventCursor extends Record<string, string> {
   starts_at: string
   id: string
+}
+
+const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
+
+async function venueCity(venueId: string): Promise<string> {
+  const [v] = await db.select({ city: venues.city }).from(venues).where(eq(venues.id, venueId)).limit(1)
+  if (!v) throw badRequest('venue_id does not reference an existing venue')
+  return v.city
+}
+
+async function loadEvent(id: string) {
+  const [e] = await db.select().from(events).where(eq(events.id, id)).limit(1)
+  if (!e) throw notFound('Event not found')
+  return e
 }
 
 export async function eventRoutes(app: FastifyInstance) {
@@ -110,66 +133,203 @@ export async function eventRoutes(app: FastifyInstance) {
   })
 
   app.get<{ Params: { id: string } }>('/events/:id', async (req) => {
-    const { id } = req.params
-
-    const [row] = await db
-      .select({
-        event: events,
-        venue: venues,
-      })
-      .from(events)
-      .leftJoin(venues, eq(events.venueId, venues.id))
-      .where(eq(events.id, id))
-      .limit(1)
-
-    if (!row) throw notFound('Event not found')
-
-    const owners = await db
-      .select({
-        publisherId: eventOwners.publisherId,
-        role: eventOwners.role,
-        slug: publishers.slug,
-        name: publishers.name,
-      })
-      .from(eventOwners)
-      .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
-      .where(eq(eventOwners.eventId, id))
-
-    const e = row.event
-    const v = row.venue
-
-    return {
-      data: {
-        id: e.id,
-        title: e.title,
-        description: e.description,
-        starts_at: e.startsAt.toISOString(),
-        ends_at: e.endsAt?.toISOString() ?? null,
-        status: e.status,
-        tags: e.tags,
-        links: e.links,
-        recurrence: e.recurrence,
-        location_text: e.locationText,
-        city: e.city,
-        created_by: e.createdBy,
-        created_at: e.createdAt.toISOString(),
-        updated_at: e.updatedAt.toISOString(),
-        venue: v
-          ? {
-              id: v.id,
-              name: v.name,
-              address: v.address,
-              city: v.city,
-              coordinates: serializeCoordinates(v.coordinates),
-            }
-          : null,
-        owners: owners.map((o) => ({
-          publisher_id: o.publisherId,
-          slug: o.slug,
-          name: o.name,
-          role: o.role,
-        })),
-      },
-    }
+    const detail = await getEventDetail(req.params.id)
+    if (!detail) throw notFound('Event not found')
+    return { data: detail }
   })
+
+  app.post('/events', write, async (req, reply) => {
+    const me = currentPublisher(req)
+    const body = eventCreateSchema.parse(req.body)
+
+    const city = body.venue_id ? await venueCity(body.venue_id) : body.city
+    if (!city) throw badRequest('city is required when no venue_id is provided')
+
+    const startsAt = new Date(body.starts_at)
+    const endsAt = body.ends_at ? new Date(body.ends_at) : null
+    if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
+
+    const id = await db.transaction(async (tx) => {
+      const [e] = await tx
+        .insert(events)
+        .values({
+          title: body.title,
+          description: body.description ?? '',
+          startsAt,
+          endsAt,
+          venueId: body.venue_id ?? null,
+          locationText: body.location_text ?? null,
+          city,
+          tags: normalizeTags(body.tags ?? []),
+          links: body.links ?? {},
+          recurrence: body.recurrence ?? null,
+          createdBy: me.id,
+        })
+        .returning()
+      if (!e) throw new Error('insert returned no row')
+      await tx.insert(eventOwners).values({ eventId: e.id, publisherId: me.id, role: 'creator' })
+      await logEdit(tx, {
+        entityType: 'event',
+        entityId: e.id,
+        publisherId: me.id,
+        action: 'created',
+        diff: diff(null, eventSnapshot(e)),
+      })
+      return e.id
+    })
+
+    reply.status(201)
+    return { data: await getEventDetail(id) }
+  })
+
+  app.put<{ Params: { id: string } }>('/events/:id', write, async (req) => {
+    const me = currentPublisher(req)
+    const body = eventUpdateSchema.parse(req.body)
+    const current = await loadEvent(req.params.id)
+
+    const role = await getOwnerRole(current.id, me.id)
+    if (!role) throw forbidden('Only event owners can edit this event')
+    if (body.status === 'cancelled' && role !== 'creator') {
+      throw forbidden('Only the event creator can cancel an event')
+    }
+
+    const patch: Partial<typeof events.$inferInsert> = {}
+    if (body.title !== undefined) patch.title = body.title
+    if (body.description !== undefined) patch.description = body.description
+    if (body.starts_at !== undefined) patch.startsAt = new Date(body.starts_at)
+    if (body.ends_at !== undefined) patch.endsAt = body.ends_at ? new Date(body.ends_at) : null
+    if (body.location_text !== undefined) patch.locationText = body.location_text
+    if (body.tags !== undefined) patch.tags = normalizeTags(body.tags)
+    if (body.links !== undefined) patch.links = body.links
+    if (body.recurrence !== undefined) patch.recurrence = body.recurrence
+    if (body.status !== undefined) patch.status = body.status
+
+    if (body.venue_id !== undefined) {
+      patch.venueId = body.venue_id
+      if (body.venue_id) patch.city = await venueCity(body.venue_id)
+      else if (body.city) patch.city = body.city
+    } else if (body.city !== undefined && !current.venueId) {
+      patch.city = body.city
+    }
+
+    const startsAt = patch.startsAt ?? current.startsAt
+    const endsAt = patch.endsAt === undefined ? current.endsAt : patch.endsAt
+    if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
+
+    if (Object.keys(patch).length === 0) return { data: await getEventDetail(current.id) }
+
+    await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(events)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(events.id, current.id))
+        .returning()
+      if (!updated) throw new Error('update returned no row')
+      const cancelledNow = updated.status === 'cancelled' && current.status !== 'cancelled'
+      await logEdit(tx, {
+        entityType: 'event',
+        entityId: current.id,
+        publisherId: me.id,
+        action: cancelledNow ? 'cancelled' : 'updated',
+        diff: diff(eventSnapshot(current), eventSnapshot(updated)),
+      })
+    })
+
+    return { data: await getEventDetail(current.id) }
+  })
+
+  app.delete<{ Params: { id: string } }>('/events/:id', write, async (req) => {
+    const me = currentPublisher(req)
+    const current = await loadEvent(req.params.id)
+
+    const role = await getOwnerRole(current.id, me.id)
+    if (role !== 'creator') throw forbidden('Only the event creator can cancel an event')
+
+    if (current.status !== 'cancelled') {
+      await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(events)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(eq(events.id, current.id))
+          .returning()
+        if (!updated) throw new Error('update returned no row')
+        await logEdit(tx, {
+          entityType: 'event',
+          entityId: current.id,
+          publisherId: me.id,
+          action: 'cancelled',
+          diff: diff(eventSnapshot(current), eventSnapshot(updated)),
+        })
+      })
+    }
+
+    return { data: await getEventDetail(current.id) }
+  })
+
+  app.post<{ Params: { id: string } }>('/events/:id/owners', write, async (req, reply) => {
+    const me = currentPublisher(req)
+    const { publisher_id } = addOwnerSchema.parse(req.body)
+    const current = await loadEvent(req.params.id)
+
+    const role = await getOwnerRole(current.id, me.id)
+    if (role !== 'creator') throw forbidden('Only the event creator can manage owners')
+
+    const [target] = await db
+      .select({ id: publishers.id, verified: publishers.verified })
+      .from(publishers)
+      .where(eq(publishers.id, publisher_id))
+      .limit(1)
+    if (!target) throw badRequest('publisher_id does not reference an existing publisher')
+    if (!target.verified) throw badRequest('Publisher is not verified')
+
+    const before = await getOwnerIds(current.id)
+    if (before.includes(publisher_id)) throw badRequest('Publisher is already an owner of this event')
+
+    await db.transaction(async (tx) => {
+      await tx.insert(eventOwners).values({ eventId: current.id, publisherId: publisher_id, role: 'co_owner' })
+      await logEdit(tx, {
+        entityType: 'event',
+        entityId: current.id,
+        publisherId: me.id,
+        action: 'ownership_changed',
+        diff: { owners: { before, after: [...before, publisher_id] } },
+      })
+    })
+
+    reply.status(201)
+    return { data: await getEventDetail(current.id) }
+  })
+
+  app.delete<{ Params: { id: string; publisher_id: string } }>(
+    '/events/:id/owners/:publisher_id',
+    write,
+    async (req) => {
+      const me = currentPublisher(req)
+      const current = await loadEvent(req.params.id)
+      const target = req.params.publisher_id
+
+      const role = await getOwnerRole(current.id, me.id)
+      if (role !== 'creator') throw forbidden('Only the event creator can manage owners')
+
+      const targetRole = await getOwnerRole(current.id, target)
+      if (!targetRole) throw notFound('Publisher is not an owner of this event')
+      if (targetRole === 'creator') throw badRequest('The creator cannot be removed from an event')
+
+      const before = await getOwnerIds(current.id)
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(eventOwners)
+          .where(and(eq(eventOwners.eventId, current.id), eq(eventOwners.publisherId, target)))
+        await logEdit(tx, {
+          entityType: 'event',
+          entityId: current.id,
+          publisherId: me.id,
+          action: 'ownership_changed',
+          diff: { owners: { before, after: before.filter((id) => id !== target) } },
+        })
+      })
+
+      return { data: await getEventDetail(current.id) }
+    },
+  )
 }

@@ -2,6 +2,12 @@ import { z } from 'zod'
 import { cursorQuerySchema, metaSchema } from './pagination.js'
 import { linksSchema } from './links.js'
 
+export const slugSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, 'invalid slug format')
+
 export const publisherListQuerySchema = cursorQuerySchema.extend({
   q: z.string().min(1).optional(),
 })
@@ -25,13 +31,23 @@ export const publisherListResponseSchema = z.object({
 })
 
 export const checkSlugQuerySchema = z.object({
-  slug: z
-    .string()
-    .min(1)
-    .max(100)
-    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, 'invalid slug format'),
+  slug: slugSchema,
 })
 
 export const checkSlugResponseSchema = z.object({
   data: z.object({ available: z.boolean() }),
+})
+
+export const publisherUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    slug: slugSchema,
+    links: linksSchema,
+  })
+  .partial()
+
+export type PublisherUpdateInput = z.infer<typeof publisherUpdateSchema>
+
+export const apiKeyResponseSchema = z.object({
+  data: z.object({ api_key: z.string() }),
 })

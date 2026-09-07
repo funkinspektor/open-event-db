@@ -31,3 +31,17 @@ export const venueListResponseSchema = z.object({
 export const venueDetailResponseSchema = z.object({
   data: venueSchema,
 })
+
+export const venueCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  address: z.string().trim().min(1).max(300),
+  city: z.string().trim().min(1).max(100),
+  coordinates: coordinatesSchema,
+  links: linksSchema.optional(),
+})
+
+export type VenueCreateInput = z.infer<typeof venueCreateSchema>
+
+export const venueUpdateSchema = venueCreateSchema.partial()
+
+export type VenueUpdateInput = z.infer<typeof venueUpdateSchema>

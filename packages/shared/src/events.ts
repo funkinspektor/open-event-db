@@ -53,9 +53,11 @@ export const eventSlimSchema = z.object({
 export type EventSlim = z.infer<typeof eventSlimSchema>
 
 export const coordinatesSchema = z.object({
-  lat: z.number(),
-  lng: z.number(),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
 })
+
+export type Coordinates = z.infer<typeof coordinatesSchema>
 
 export const venueDetailEmbedSchema = z.object({
   id: z.string().uuid(),
@@ -65,11 +67,14 @@ export const venueDetailEmbedSchema = z.object({
   coordinates: coordinatesSchema.nullable(),
 })
 
+export const eventOwnerRoleSchema = z.enum(['creator', 'co_owner'])
+export type EventOwnerRole = z.infer<typeof eventOwnerRoleSchema>
+
 export const eventOwnerSchema = z.object({
   publisher_id: z.string().uuid(),
   slug: z.string(),
   name: z.string(),
-  role: z.enum(['creator', 'co_owner']),
+  role: eventOwnerRoleSchema,
 })
 
 export const eventDetailSchema = eventSlimSchema
@@ -92,4 +97,29 @@ export const eventListResponseSchema = z.object({
 
 export const eventDetailResponseSchema = z.object({
   data: eventDetailSchema,
+})
+
+export const eventCreateSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  starts_at: z.string().datetime({ offset: true }),
+  ends_at: z.string().datetime({ offset: true }).nullable().optional(),
+  description: z.string().max(10_000).optional(),
+  venue_id: z.string().uuid().nullable().optional(),
+  location_text: z.string().trim().max(300).nullable().optional(),
+  city: z.string().trim().min(1).max(100).optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  links: linksSchema.optional(),
+  recurrence: z.string().trim().max(200).nullable().optional(),
+})
+
+export type EventCreateInput = z.infer<typeof eventCreateSchema>
+
+export const eventUpdateSchema = eventCreateSchema.partial().extend({
+  status: eventStatusSchema.optional(),
+})
+
+export type EventUpdateInput = z.infer<typeof eventUpdateSchema>
+
+export const addOwnerSchema = z.object({
+  publisher_id: z.string().uuid(),
 })

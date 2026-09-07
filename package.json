@@ -2,7 +2,7 @@
   "name": "open-event-db",
   "version": "0.0.0",
   "private": true,
-  "description": "Open Event Database — community-owned database of events.",
+  "description": "Open Event Database \u2014 community-owned database of events.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -20,7 +20,8 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @open-event-db/db generate",
     "db:migrate": "pnpm --filter @open-event-db/db migrate",
-    "db:seed": "pnpm --filter @open-event-db/db seed"
+    "db:seed": "pnpm --filter @open-event-db/db seed",
+    "db:cli": "pnpm --filter @open-event-db/db cli"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
