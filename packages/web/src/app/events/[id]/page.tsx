@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getEvent, isUuid } from '@/lib/api'
+import { getCurrentPublisher } from '@/lib/session'
 import { describeRecurrence, formatDate, formatDateTime, formatTimeRange } from '@/lib/format'
 import { StatusBanner } from '@/components/StatusBadge'
 import { LinkButtons } from '@/components/LinkButtons'
@@ -37,7 +38,8 @@ const SCHEMA_STATUS = {
 } as const
 
 export default async function EventPage({ params }: { params: Params }) {
-  const e = await load(params)
+  const [e, me] = await Promise.all([load(params), getCurrentPublisher()])
+  const canEdit = !!me && e.owners.some((o) => o.publisher_id === me.id)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -81,7 +83,17 @@ export default async function EventPage({ params }: { params: Params }) {
         <p className="text-sm font-medium text-violet-700">
           {formatDate(e.starts_at, true)}
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{e.title}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{e.title}</h1>
+          {canEdit && (
+            <Link
+              href={`/events/${e.id}/edit`}
+              className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            >
+              Edit event
+            </Link>
+          )}
+        </div>
         <p className="text-lg text-neutral-700">
           <span className="tabular-nums">{formatTimeRange(e.starts_at, e.ends_at)}</span>
           {e.recurrence && (

@@ -3,7 +3,13 @@ import type { EventSlim } from '@open-event-db/shared'
 import { formatDate, formatTimeRange } from '@/lib/format'
 import { StatusBadge } from './StatusBadge'
 
-export function EventCard({ event }: { event: EventSlim }) {
+interface Props {
+  event: EventSlim
+  action?: React.ReactNode
+  happeningNow?: boolean
+}
+
+export function EventCard({ event, action, happeningNow = false }: Props) {
   const cancelled = event.status === 'cancelled'
   return (
     <article
@@ -33,6 +39,12 @@ export function EventCard({ event }: { event: EventSlim }) {
             </Link>
           </h3>
           <StatusBadge status={event.status} />
+          {happeningNow && (
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+              Happening now
+            </span>
+          )}
+          {action && <span className="ml-auto">{action}</span>}
         </div>
 
         <p className="mt-1 text-sm text-neutral-600">

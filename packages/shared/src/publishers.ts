@@ -51,3 +51,15 @@ export type PublisherUpdateInput = z.infer<typeof publisherUpdateSchema>
 export const apiKeyResponseSchema = z.object({
   data: z.object({ api_key: z.string() }),
 })
+
+export const publisherMeSchema = publisherPublicSchema.extend({
+  email: z.string().email(),
+  has_api_key: z.boolean(),
+  auth_method: z.enum(['api_key', 'session']),
+})
+
+export type PublisherMe = z.infer<typeof publisherMeSchema>
+
+export const magicLinkRequestSchema = z.object({
+  email: z.string().trim().email(),
+})

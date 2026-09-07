@@ -2,6 +2,7 @@ import type {
   EventDetail,
   EventSlim,
   Meta,
+  PublisherMe,
   PublisherPublic,
   Venue,
 } from '@open-event-db/shared'
@@ -49,4 +50,18 @@ export async function getPublisher(slug: string): Promise<PublisherPublic | null
 export async function getTags(): Promise<string[]> {
   const res = await get<{ data: string[] }>('/api/v1/tags')
   return res?.data ?? []
+}
+
+export async function getVenues(): Promise<Venue[]> {
+  const res = await get<{ data: Venue[] }>('/api/v1/venues?limit=100')
+  return res?.data ?? []
+}
+
+export async function getMe(cookieHeader: string): Promise<PublisherMe | null> {
+  const res = await fetch(`${API_URL}/api/v1/auth/me`, {
+    headers: { cookie: cookieHeader },
+    cache: 'no-store',
+  })
+  if (!res.ok) return null
+  return ((await res.json()) as { data: PublisherMe }).data
 }

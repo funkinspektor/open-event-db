@@ -8,6 +8,7 @@ import { tagsRoutes } from './routes/tags.js'
 import { publisherRoutes } from './routes/publishers.js'
 import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
+import { authRoutes } from './routes/auth.js'
 
 export interface AppOptions {
   logger?: boolean
@@ -41,6 +42,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
       await api.register(venueRoutes)
       await api.register(publisherRoutes)
       await api.register(tagsRoutes)
+      await api.register(authRoutes)
     },
     { prefix: '/api/v1' },
   )
