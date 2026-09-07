@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  index,
   jsonb,
   pgEnum,
   pgTable,
@@ -53,25 +54,29 @@ export const venues = pgTable('venues', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const events = pgTable('events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description').notNull().default(''),
-  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
-  endsAt: timestamp('ends_at', { withTimezone: true }),
-  venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
-  locationText: text('location_text'),
-  city: text('city').notNull(),
-  tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
-  links: jsonb('links').$type<Links>().notNull().default({}),
-  createdBy: uuid('created_by')
-    .notNull()
-    .references(() => publishers.id, { onDelete: 'restrict' }),
-  status: eventStatus('status').notNull().default('scheduled'),
-  recurrence: text('recurrence'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
+    locationText: text('location_text'),
+    city: text('city').notNull(),
+    tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
+    links: jsonb('links').$type<Links>().notNull().default({}),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => publishers.id, { onDelete: 'restrict' }),
+    status: eventStatus('status').notNull().default('scheduled'),
+    recurrence: text('recurrence'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('events_tags_gin_idx').using('gin', t.tags)],
+)
 
 export const eventOwners = pgTable(
   'event_owners',

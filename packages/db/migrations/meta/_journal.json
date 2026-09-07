@@ -8,6 +8,13 @@
       "when": 1777737285594,
       "tag": "0000_wet_phalanx",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777738184539,
+      "tag": "0001_silent_nightshade",
+      "breakpoints": true
     }
   ]
 }

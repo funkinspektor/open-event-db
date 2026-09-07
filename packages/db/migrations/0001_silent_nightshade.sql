@@ -1,0 +1,1 @@
+CREATE INDEX "events_tags_gin_idx" ON "events" USING gin ("tags");
