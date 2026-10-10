@@ -68,14 +68,6 @@ export default async function DashboardPage() {
           >
             Create event
           </Link>
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-400"
-          >
-            Invite someone
-          </button>
         </div>
       </section>
 
