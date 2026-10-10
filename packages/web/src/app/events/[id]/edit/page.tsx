@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getEvent, getTags, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { EventForm } from '@/components/EventForm'
+import { Headline } from '@/components/Headline'
 
 type Params = Promise<{ id: string }>
 
@@ -22,14 +23,14 @@ export default async function EditEventPage({ params }: { params: Params }) {
   if (!role) redirect(`/events/${id}`)
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">Edit event</p>
-        <h1 className="text-3xl font-semibold tracking-tight">{event.title}</h1>
-        <p className="mt-1 text-neutral-600">
-          You are editing as {me.name} ({role === 'creator' ? 'creator' : 'co-host'}).
+    <div className="kk-container kk-container--narrow">
+      <section className="kk-intro" style={{ gap: 12 }}>
+        <p className="kk-eyebrow">Edit event</p>
+        <Headline text="Edit event" narrow />
+        <p className="kk-lede max-w-none">
+          Editing as {me.name} ({role === 'creator' ? 'creator' : 'co-host'}). Changes go live as soon as you save.
         </p>
-      </div>
+      </section>
       <EventForm mode="edit" event={event} role={role} knownTags={tags} />
     </div>
   )

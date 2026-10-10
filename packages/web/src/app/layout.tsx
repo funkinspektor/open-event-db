@@ -1,16 +1,29 @@
+import '@/styles/kellerkompass/tokens.css'
+import '@/styles/kellerkompass/components.css'
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import { Germania_One, JetBrains_Mono, Schibsted_Grotesk } from 'next/font/google'
 import { Header } from '@/components/Header'
+
+// Self-hosted at build time by next/font — visitors never request fonts from Google.
+const germaniaOne = Germania_One({ weight: '400', subsets: ['latin'], variable: '--font-germania-one' })
+const schibstedGrotesk = Schibsted_Grotesk({
+  weight: ['400', '500', '700'],
+  subsets: ['latin'],
+  variable: '--font-schibsted-grotesk',
+})
+const jetbrainsMono = JetBrains_Mono({ weight: '500', subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
   title: {
-    default: 'Open Event Database — Events in Berlin',
-    template: '%s · Open Event Database',
+    default: 'Kellerkompass — Events in Berlin',
+    template: '%s · Kellerkompass',
   },
   description: 'Discover events in Berlin. A community-owned, open database of events.',
+  applicationName: 'Kellerkompass',
   openGraph: {
     type: 'website',
-    siteName: 'Open Event Database',
+    siteName: 'Kellerkompass',
   },
   twitter: { card: 'summary' },
 }
@@ -18,17 +31,20 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#0c0c0d',
+  colorScheme: 'dark',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-neutral-50 text-neutral-900">
+    <html
+      lang="en"
+      className={`${germaniaOne.variable} ${schibstedGrotesk.variable} ${jetbrainsMono.variable} h-full`}
+    >
+      <body className="kk-root flex min-h-full flex-col">
         <Header />
-        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">{children}</main>
-        <footer className="mx-auto max-w-5xl px-4 pb-10 pt-6 text-xs text-neutral-500 sm:px-6">
-          Open Event Database · community-owned, open source, EU-hosted.
-        </footer>
+        <main className="flex-1">{children}</main>
+        <footer className="kk-footer w-full">Kellerkompass · community-owned, open source, EU-hosted.</footer>
       </body>
     </html>
   )

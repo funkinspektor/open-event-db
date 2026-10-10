@@ -14,34 +14,35 @@ interface Props {
   rows: LinkRow[]
   onChange: (rows: LinkRow[]) => void
   suggestedKeys: string[]
-  inputClassName: string
 }
 
-export function LinksEditor({ rows, onChange, suggestedKeys, inputClassName }: Props) {
+export function LinksEditor({ rows, onChange, suggestedKeys }: Props) {
   const listId = useId()
 
   return (
-    <div className="mt-1 space-y-2">
+    <>
       {rows.map((row, i) => (
-        <div key={i} className="flex gap-2">
+        <div key={i} className="kk-linkrow">
           <input
             list={listId}
             value={row.key}
             onChange={(e) => onChange(rows.map((l, j) => (j === i ? { ...l, key: e.target.value } : l)))}
             placeholder="type"
-            className={`${inputClassName} mt-0 shrink-0 basis-28 sm:basis-36`}
+            aria-label="Link type"
+            className="kk-input"
           />
           <input
             type="url"
             value={row.url}
             onChange={(e) => onChange(rows.map((l, j) => (j === i ? { ...l, url: e.target.value } : l)))}
             placeholder="https://…"
-            className={`${inputClassName} mt-0 min-w-0 flex-1`}
+            aria-label="URL"
+            className="kk-input"
           />
           <button
             type="button"
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
-            className="rounded-md border border-neutral-300 px-2 text-sm text-neutral-600 hover:bg-neutral-50"
+            className="kk-iconbtn"
             aria-label="Remove link"
           >
             ×
@@ -56,10 +57,10 @@ export function LinksEditor({ rows, onChange, suggestedKeys, inputClassName }: P
       <button
         type="button"
         onClick={() => onChange([...rows, { key: '', url: '' }])}
-        className="text-sm text-neutral-700 underline-offset-2 hover:underline"
+        className="kk-btn kk-btn--text self-start py-2"
       >
         + Add link
       </button>
-    </div>
+    </>
   )
 }

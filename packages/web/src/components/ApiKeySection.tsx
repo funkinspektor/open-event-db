@@ -52,54 +52,47 @@ export function ApiKeySection({ hasApiKey }: { hasApiKey: boolean }) {
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-dashed border-neutral-300 p-6">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">For developers</p>
-        <h2 className="mt-1 text-lg font-semibold">API key</h2>
-        <p className="mt-1 text-sm text-neutral-600">
+    <section className="kk-panel kk-panel--dashed">
+      <div className="flex flex-col gap-2">
+        <p className="kk-eyebrow text-[12px]">For developers</p>
+        <h2 className="kk-section-title" style={{ margin: 0, fontSize: 34 }}>
+          API key
+        </h2>
+        <p className="m-0 text-[15px] leading-normal text-muted">
           Need to create events via the API or Claude? Generate an API key. Most publishers never need one.
         </p>
       </div>
 
       {newKey ? (
-        <div className="space-y-2 rounded-md bg-amber-50 p-4">
-          <p className="text-sm font-medium text-amber-900">Save this — you won’t see it again.</p>
+        <div className="flex flex-col gap-2.5 rounded-m border border-warn p-4">
+          <p className="m-0 text-[15px] font-bold text-warn">Save this — you won’t see it again.</p>
           <div className="flex gap-2">
             <input
               readOnly
               value={newKey}
               onFocus={(e) => e.currentTarget.select()}
-              className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 font-mono text-sm"
+              className="kk-input kk-input--mono w-full min-w-0"
               aria-label="Your new API key"
             />
-            <button
-              type="button"
-              onClick={copy}
-              className="shrink-0 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
+            <button type="button" onClick={copy} className="kk-btn kk-btn--secondary shrink-0">
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
-          <p className="text-xs text-amber-900">
-            Send it as <code className="font-mono">Authorization: Bearer …</code> with your API requests.
+          <p className="kk-hint m-0">
+            Send it as <code className="font-mono text-ink-soft">Authorization: Bearer …</code> with your API requests.
           </p>
         </div>
       ) : (
         hasKey && (
-          <p className="font-mono text-sm text-neutral-700" aria-label="API key (hidden)">
+          <p className="m-0 font-mono text-code text-ink-soft" aria-label="API key (hidden)">
             oevt_••••••••••••••••
           </p>
         )
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="kk-error">{error}</p>}
 
-      <button
-        type="button"
-        onClick={generate}
-        disabled={busy}
-        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-      >
+      <button type="button" onClick={generate} disabled={busy} className="kk-btn kk-btn--outline self-start">
         {busy ? 'Generating…' : hasKey ? 'Generate new key' : 'Generate API key'}
       </button>
     </section>

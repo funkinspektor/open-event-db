@@ -11,24 +11,23 @@ export function LoginForm() {
 
   if (state === 'sent') {
     return (
-      <div className="rounded-xl border border-neutral-200 bg-white p-6">
-        <h2 className="text-lg font-semibold">Check your email</h2>
-        <p className="mt-2 text-neutral-600">
-          If <span className="font-medium text-neutral-900">{email}</span> is registered, a login link is on its
-          way. It’s valid for 15 minutes.
+      <div className="kk-panel" style={{ gap: 10 }}>
+        <h2 className="kk-section-title" style={{ margin: 0, fontSize: 34 }}>
+          <span className="kk-live-dot" aria-hidden />
+          Check your email
+        </h2>
+        <p className="m-0 text-muted">
+          If <span className="font-medium text-ink">{email}</span> is registered, a login link is on its way. It’s
+          valid for 15 minutes.
         </p>
-        {isDev && (
-          <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Dev mode: no email is sent — the link is printed in the API server log.
-          </p>
-        )}
+        {isDev && <p className="kk-hint m-0">Dev mode: no email is sent — the link is printed in the API server log.</p>}
       </div>
     )
   }
 
   return (
     <form
-      className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6"
+      className="flex flex-col gap-3.5"
       onSubmit={async (e) => {
         e.preventDefault()
         setState('busy')
@@ -46,30 +45,25 @@ export function LoginForm() {
         }
       }}
     >
-      <label className="block">
-        <span className="text-sm font-medium text-neutral-800">Email</span>
+      <label className="kk-field">
+        Email
         <input
           type="email"
           required
           autoFocus
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+          className="kk-input"
+          style={{ height: 52, fontSize: 17 }}
           placeholder="you@example.com"
         />
       </label>
-      {state === 'limited' && (
-        <p className="text-sm text-red-600">Too many login requests. Please try again later.</p>
-      )}
-      {state === 'error' && <p className="text-sm text-red-600">Something went wrong. Please try again.</p>}
-      <button
-        type="submit"
-        disabled={state === 'busy'}
-        className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-      >
+      {state === 'limited' && <p className="kk-error">Too many login requests. Please try again later.</p>}
+      {state === 'error' && <p className="kk-error">Something went wrong. Please try again.</p>}
+      <button type="submit" disabled={state === 'busy'} className="kk-btn kk-btn--primary kk-btn--lg">
         {state === 'busy' ? 'Sending…' : 'Send me a login link'}
       </button>
-      <p className="text-xs text-neutral-500">No password needed. We’ll email you a one-time link.</p>
+      <p className="kk-hint m-0 text-[14px]">No password needed. We’ll email you a one-time link.</p>
     </form>
   )
 }

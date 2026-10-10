@@ -8,6 +8,7 @@ import { StatusBanner } from '@/components/StatusBadge'
 import { LinkButtons } from '@/components/LinkButtons'
 import { Map } from '@/components/Map'
 import { JsonLd } from '@/components/JsonLd'
+import { Headline } from '@/components/Headline'
 
 type Params = Promise<{ id: string }>
 
@@ -74,105 +75,98 @@ export default async function EventPage({ params }: { params: Params }) {
   }
 
   return (
-    <article className="space-y-8">
+    <article className="kk-container" style={{ gap: 52 }}>
       <JsonLd data={jsonLd} />
 
       <StatusBanner status={e.status} />
 
-      <header className="space-y-3">
-        <p className="text-sm font-medium text-violet-700">
-          {formatDate(e.starts_at, true)}
-        </p>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{e.title}</h1>
+      <header className="kk-intro" style={{ gap: 16 }}>
+        <p className="kk-eyebrow kk-eyebrow--live">{formatDate(e.starts_at, true)}</p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <Headline text={e.title} className="max-w-[900px]" style={{ fontSize: 'clamp(56px, 8vw, 104px)' }} />
           {canEdit && (
-            <Link
-              href={`/events/${e.id}/edit`}
-              className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-            >
+            <Link href={`/events/${e.id}/edit`} className="kk-btn kk-btn--outline">
               Edit event
             </Link>
           )}
         </div>
-        <p className="text-lg text-neutral-700">
-          <span className="tabular-nums">{formatTimeRange(e.starts_at, e.ends_at)}</span>
+        <p className="m-0 text-[20px]">
+          <span className="font-bold tabular-nums">{formatTimeRange(e.starts_at, e.ends_at, ' – ')}</span>
           {e.recurrence && (
             <>
-              <span className="mx-2 text-neutral-300">·</span>
-              <span className="text-neutral-600">{describeRecurrence(e.recurrence)}</span>
+              {' '}
+              <span className="text-border">·</span> <span className="text-muted">{describeRecurrence(e.recurrence)}</span>
             </>
           )}
         </p>
         {e.tags.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
+          <div className="kk-pills" style={{ gap: 6 }}>
             {e.tags.map((t) => (
-              <li key={t}>
-                <Link
-                  href={`/?tags=${encodeURIComponent(t)}`}
-                  className="inline-block rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700 hover:bg-neutral-200"
-                >
-                  {t}
-                </Link>
-              </li>
+              <Link key={t} href={`/?tags=${encodeURIComponent(t)}`} className="kk-tag kk-tag--filter">
+                {t}
+              </Link>
             ))}
-          </ul>
+          </div>
         )}
       </header>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_320px]">
-        <div className="space-y-8">
+      <hr className="kk-rule" />
+
+      <div className="flex flex-wrap items-start gap-12">
+        <div className="flex min-w-0 flex-col gap-10" style={{ flex: '999 1 520px' }}>
           {e.description && (
             <section>
               <h2 className="sr-only">Description</h2>
-              <p className="whitespace-pre-wrap leading-relaxed text-neutral-800">{e.description}</p>
+              <p className="m-0 max-w-[680px] whitespace-pre-line text-body-long text-ink-soft">{e.description}</p>
             </section>
           )}
 
           {Object.keys(e.links).length > 0 && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">Links</h2>
-              <LinkButtons links={e.links} />
+            <section className="flex flex-col gap-3.5">
+              <h2 className="kk-eyebrow">Links</h2>
+              <LinkButtons links={e.links} primary="tickets" />
             </section>
           )}
 
-          <section className="space-y-2">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-              Organised by
-            </h2>
-            <ul className="flex flex-wrap gap-x-4 gap-y-1">
+          <section className="flex flex-col gap-3.5">
+            <h2 className="kk-eyebrow">Organised by</h2>
+            <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
               {e.owners.map((o) => (
-                <li key={o.publisher_id} className="text-sm">
-                  <Link href={`/publishers/${o.slug}`} className="font-medium hover:underline">
+                <li key={o.publisher_id}>
+                  <Link href={`/publishers/${o.slug}`} className="font-bold">
                     {o.name}
                   </Link>
-                  {o.role === 'co_owner' && (
-                    <span className="ml-1 text-neutral-500">(co-host)</span>
-                  )}
+                  {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
                 </li>
               ))}
             </ul>
           </section>
         </div>
 
-        <aside className="space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">Location</h2>
+        <aside className="flex max-w-[380px] flex-col gap-3.5" style={{ flex: '1 1 300px' }}>
+          <h2 className="kk-eyebrow">Location</h2>
           {e.venue ? (
             <>
-              <div className="text-sm">
-                <Link href={`/venues/${e.venue.id}`} className="font-semibold hover:underline">
+              <div>
+                <Link href={`/venues/${e.venue.id}`} className="kk-listlink__name" style={{ fontSize: 30 }}>
                   {e.venue.name}
                 </Link>
-                <div className="text-neutral-600">{e.venue.address}</div>
-                <div className="text-neutral-600">{e.venue.city}</div>
+                <div className="mt-2 leading-normal text-muted">
+                  {e.venue.address}
+                  <br />
+                  {e.venue.city}
+                </div>
               </div>
               {e.venue.coordinates && (
                 <Map lat={e.venue.coordinates.lat} lng={e.venue.coordinates.lng} title={e.venue.name} />
               )}
             </>
           ) : (
-            <div className="text-sm">
-              <div className="font-semibold">{e.location_text ?? 'Location TBA'}</div>
-              <div className="text-neutral-600">{e.city}</div>
+            <div>
+              <span className="kk-listlink__name" style={{ fontSize: 30 }}>
+                {e.location_text ?? 'Location TBA'}
+              </span>
+              <div className="mt-2 text-muted">{e.city}</div>
             </div>
           )}
         </aside>

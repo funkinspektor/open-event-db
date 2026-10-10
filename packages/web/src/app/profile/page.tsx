@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { getCurrentPublisher } from '@/lib/session'
 import { ProfileForm } from '@/components/ProfileForm'
 import { ApiKeySection } from '@/components/ApiKeySection'
+import { Headline } from '@/components/Headline'
+import { NextIcon } from '@/components/Icons'
 
 export const metadata: Metadata = { title: 'Profile' }
 
@@ -12,16 +14,15 @@ export default async function ProfilePage() {
   if (!me) redirect('/login')
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">Profile</p>
-        <h1 className="text-3xl font-semibold tracking-tight">{me.name}</h1>
-        <p className="mt-1 text-neutral-600">
-          <Link href={`/publishers/${me.slug}`} className="underline-offset-2 hover:underline">
-            View public profile →
-          </Link>
-        </p>
-      </div>
+    <div className="kk-container kk-container--narrow" style={{ maxWidth: 720 }}>
+      <section className="kk-intro" style={{ gap: 12 }}>
+        <p className="kk-eyebrow">Profile</p>
+        <Headline text={me.name} narrow />
+        <Link href={`/publishers/${me.slug}`} className="text-body text-muted">
+          View public profile
+          <NextIcon />
+        </Link>
+      </section>
       <ProfileForm me={me} />
       <ApiKeySection hasApiKey={me.has_api_key} />
     </div>

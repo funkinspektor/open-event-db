@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getVenue, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { VenueEditForm } from '@/components/VenueEditForm'
+import { Headline } from '@/components/Headline'
 
 type Params = Promise<{ id: string }>
 
@@ -19,14 +20,14 @@ export default async function EditVenuePage({ params }: { params: Params }) {
   if (!venue) notFound()
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">Edit venue</p>
-        <h1 className="text-3xl font-semibold tracking-tight">{venue.name}</h1>
-        <p className="mt-1 text-neutral-600">
+    <div className="kk-container kk-container--narrow">
+      <section className="kk-intro" style={{ gap: 12 }}>
+        <p className="kk-eyebrow">Edit venue</p>
+        <Headline text={venue.name} narrow />
+        <p className="kk-lede max-w-none">
           Venues are maintained by all publishers together. Changes are logged with your name.
         </p>
-      </div>
+      </section>
       <VenueEditForm venue={venue} />
     </div>
   )

@@ -1,0 +1,70 @@
+/* Kellerkompass — generated from tokens.json (design system artifact Nzqpm9BUDTgFXEGn1Wry7m).
+   Only change in the app: the font families point at the self-hosted next/font variables set in app/layout.tsx. */
+:root, [data-theme="night"] {
+  --ground: #0c0c0d;
+  --surface-1: #121214;
+  --surface-2: #1a1a1c;
+  --surface-3: #1f1f22;
+  --line: #232326;
+  --border: #333337;
+  --ink: #ededef;
+  --ink-soft: #d6d6da;
+  --muted: #a0a0a8;
+  --faint: #8c8c94;
+  --uv: #a58bff;
+  --uv-glow: #a58bff66;
+  --uv-ring: #a58bff33;
+  --uv-wash: #a58bff14;
+  --on-accent: #0c0c0d;
+  --warn: #f2c14e;
+  --chrome-1: #9a9aa3;
+  --chrome-2: #f7f7fa;
+  --chrome-3: #d9c9ff;
+  --chrome-4: #a8eeff;
+  --chrome-5: #e2e2e8;
+  --chrome-solid: #d8d8de;
+  --glow-sm: 0 0 14px #a58bff66;
+  --glow-md: 0 0 18px #a58bff66;
+  --glow-soft: 0 0 16px #a58bff33;
+  --glow-pin: 0 0 0 6px #a58bff33, 0 0 24px #a58bff;
+  --focus-ring: 0 0 0 3px #a58bff33;
+  --mark-edge: inset 0 0 0 1px #ffffff1a;
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 28px;
+  --space-7: 40px;
+  --space-8: 56px;
+  --space-row: 26px;
+  --radius-s: 10px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-pill: 999px;
+  --chrome: linear-gradient(100deg, #9A9AA3, #F7F7FA, #D9C9FF, #A8EEFF, #E2E2E8);
+  --chrome-dark: linear-gradient(100deg, #0E0E10 0%, #2A2A30 30%, #5A5A64 46%, #1C1C21 62%, #34343B 100%);
+  --content-max: 1200px;
+  --form-max: 760px;
+  --header-h: 108px;
+  --font-display: var(--font-germania-one), "Germania One", "UnifrakturMaguntia", Georgia, serif;
+  --font-sans: var(--font-schibsted-grotesk), "Schibsted Grotesk", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+.display-xl { font-family: var(--font-display); font-size: 143px; line-height: 0.88; font-weight: 400; }
+.display-l { font-family: var(--font-display); font-size: 96px; line-height: 0.88; font-weight: 400; }
+.display-m { font-family: var(--font-display); font-size: 49px; line-height: 1; font-weight: 400; }
+.display-s { font-family: var(--font-display); font-size: 40px; line-height: 1; font-weight: 400; }
+.display-xs { font-family: var(--font-display); font-size: 30px; line-height: 1; font-weight: 400; }
+.title { font-family: var(--font-sans); font-size: 24px; line-height: 1.2; font-weight: 700; }
+.lede { font-family: var(--font-sans); font-size: 18px; line-height: 1.5; font-weight: 400; }
+.body-long { font-family: var(--font-sans); font-size: 18px; line-height: 1.7; font-weight: 400; }
+.body { font-family: var(--font-sans); font-size: 16px; line-height: 1.5; font-weight: 400; }
+.time { font-family: var(--font-sans); font-size: 16px; line-height: 1.2; font-weight: 700; }
+.ui { font-family: var(--font-sans); font-size: 15px; line-height: 1.3; font-weight: 500; }
+.label { font-family: var(--font-sans); font-size: 14px; line-height: 1.3; font-weight: 700; }
+.caption { font-family: var(--font-sans); font-size: 13px; line-height: 1.4; font-weight: 400; }
+.eyebrow { font-family: var(--font-sans); font-size: 13px; line-height: 1; font-weight: 700; letter-spacing: 0.1em; }
+.code { font-family: var(--font-mono); font-size: 15px; line-height: 1.4; font-weight: 500; }

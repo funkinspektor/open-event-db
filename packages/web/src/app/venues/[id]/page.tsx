@@ -3,11 +3,13 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ALL_STATUSES, getEvents, getVenue, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
-import { EventCard } from '@/components/EventCard'
+import { EventRow } from '@/components/EventRow'
 import { EventList } from '@/components/EventList'
 import { LinkButtons } from '@/components/LinkButtons'
 import { Map } from '@/components/Map'
 import { JsonLd } from '@/components/JsonLd'
+import { Headline } from '@/components/Headline'
+import { BackIcon } from '@/components/Icons'
 
 type Params = Promise<{ id: string }>
 
@@ -70,64 +72,67 @@ export default async function VenuePage({ params }: { params: Params }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="kk-container" style={{ gap: 48 }}>
       <JsonLd data={jsonLd} />
 
-      <header className="space-y-2">
+      <header className="kk-intro" style={{ gap: 14 }}>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-            <Link href="/venues" className="hover:text-neutral-900">
-              Venues
-            </Link>
-          </p>
+          <Link href="/venues" className="kk-eyebrow">
+            <BackIcon />
+            Venues
+          </Link>
           {me && (
-            <Link
-              href={`/venues/${v.id}/edit`}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-            >
+            <Link href={`/venues/${v.id}/edit`} className="kk-btn kk-btn--outline">
               Edit venue
             </Link>
           )}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{v.name}</h1>
-        <p className="text-neutral-600">
+        <Headline text={v.name} />
+        <p className="kk-lede max-w-none">
           {v.address} · {v.city}
         </p>
         <LinkButtons links={v.links} />
       </header>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_320px]">
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Upcoming events</h2>
+      <div className="flex flex-wrap items-start gap-12">
+        <div className="flex min-w-0 flex-col gap-10" style={{ flex: '999 1 560px' }}>
+          <section>
+            <h2 className="kk-section-title">Upcoming events</h2>
+            <hr className="kk-rule" />
             <EventList
               initialEvents={events.data}
               initialCursor={events.meta.cursor}
               apiQuery={apiQuery.toString()}
               emptyMessage="No upcoming events at this venue."
+              meta="tags"
+              showTags={false}
+              titleSize={21}
             />
           </section>
 
           {past.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-lg font-semibold text-neutral-600 hover:text-neutral-900">
-                Past events{' '}
-                <span className="text-sm font-normal text-neutral-400">
+            <details className="kk-disclosure">
+              <summary>
+                <span className="kk-section-title">Past events</span>
+                <span className="kk-disclosure__count">
                   ({past.length}
                   {pastEvents.meta.has_more ? '+' : ''})
                 </span>
               </summary>
-              <div className="mt-3 space-y-3">
+              <div className="mt-6">
+                <hr className="kk-rule" />
                 {past.map((e) => (
-                  <EventCard key={e.id} event={e} />
+                  <EventRow key={e.id} event={e} showDate meta="tags" showTags={false} titleSize={21} />
                 ))}
               </div>
             </details>
           )}
         </div>
-        <aside>
-          {v.coordinates && <Map lat={v.coordinates.lat} lng={v.coordinates.lng} title={v.name} />}
-        </aside>
+        {v.coordinates && (
+          <aside className="w-full max-w-[380px]" style={{ flex: '1 1 300px' }}>
+            <Map lat={v.coordinates.lat} lng={v.coordinates.lng} title={v.name} height={320} />
+          </aside>
+        )}
       </div>
     </div>
   )

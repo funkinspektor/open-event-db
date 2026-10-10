@@ -1,0 +1,230 @@
+/* Kellerkompass components — plain CSS classes over the tokens in tokens.css.
+   Copied from the design system (components/bundle.css); app-specific changes are marked "app:"
+   and app-only classes live in the block at the end. Wrap a page (or a preview) in .kk-root. */
+
+.kk-root { background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+/* :where() keeps these link defaults at zero specificity, so component classes (kk-btn, kk-pill, kk-tag …) set their own colours. */
+:where(.kk-root) a { color: inherit; text-decoration: none; }
+:where(.kk-root) a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.kk-root :focus-visible { outline: 2px solid var(--uv); outline-offset: 2px; }
+
+/* Page frame */
+.kk-container { max-width: var(--content-max); margin: 0 auto; padding: 56px 24px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; }
+.kk-container--narrow { max-width: var(--form-max); gap: 36px; }
+.kk-footer { max-width: var(--content-max); margin: 0 auto; padding: 16px 24px 48px; box-sizing: border-box; font-size: 13px; color: var(--faint); }
+
+/* Chrome */
+.kk-chrome-text { color: var(--chrome-solid); background: var(--chrome); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.kk-rule { display: block; height: 2px; border: 0; margin: 0; background: var(--chrome); }
+.kk-rule--live { background: var(--uv); }
+
+/* Header */
+.kk-header { max-width: calc(var(--content-max) + 48px); margin: 0 auto; min-height: var(--header-h); padding: 28px 24px 0; /* app: min-height so the nav can wrap on phones */ box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.kk-logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 30px; line-height: 1; }
+.kk-logo__dot { width: 12px; height: 12px; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-sm); } /* deprecated: replaced by .kk-mark */
+.kk-logo .kk-mark { --kk-mark-size: 36px; }
+
+/* Logo mark: a UV Fraktur K over an offset ice K, with a compass needle, on a dark-chrome squircle.
+   Size it with --kk-mark-size; everything else scales from it. */
+.kk-mark { --kk-mark-size: 36px; position: relative; display: inline-block; flex: none; width: var(--kk-mark-size); height: var(--kk-mark-size); border-radius: calc(var(--kk-mark-size) * 0.24); background: var(--chrome-dark); box-shadow: var(--mark-edge); overflow: hidden; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--kk-mark-size) * 0.7); line-height: 1; vertical-align: middle; }
+.kk-mark__inner { position: absolute; inset: 0; transform-origin: 50% 50%; transform: translate(-7.82%, -1.5%) scale(1.2); }
+.kk-mark__k { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--uv); transform: translateY(0.04em); }
+.kk-mark__k--back { color: var(--chrome-4); transform: translate(0.03em, 0.07em); }
+.kk-mark__needle { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; fill: none; stroke: var(--uv); stroke-width: 6; stroke-linecap: butt; stroke-linejoin: miter; stroke-miterlimit: 8; }
+.kk-mark__needle--back { stroke: var(--chrome-4); transform: translate(2.1%, 2.1%); }
+/* Bare: the doubled K + needle without the squircle, pulled flush left; the empty right part of the
+   box is taken back with a negative margin. Used in the header. */
+.kk-mark--bare { background: none; box-shadow: none; border-radius: 0; overflow: visible; margin-right: calc(var(--kk-mark-size) * -0.28); }
+.kk-mark--bare .kk-mark__inner { transform: translate(-26%, -1.5%) scale(1.2); }
+.kk-logo .kk-mark--bare { --kk-mark-size: 44px; }
+.kk-mark--lg { --kk-mark-size: 64px; }
+.kk-mark--xl { --kk-mark-size: 160px; }
+.kk-nav { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
+.kk-nav__link { padding: 10px 14px; border-radius: var(--radius-pill); color: var(--muted); }
+.kk-nav__link[aria-current] { background: var(--surface-3); color: var(--ink); }
+.kk-user { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: transparent; color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+.kk-user__avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-3); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 16px; }
+
+/* Headline block */
+.kk-intro { display: flex; flex-direction: column; gap: 18px; }
+.kk-headline { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(68px, 10.3vw, 143px); line-height: 0.88; }
+.kk-headline--narrow { font-size: clamp(56px, 12vw, 96px); }
+.kk-lede { margin: 0; max-width: 520px; font-size: 18px; line-height: 1.5; color: var(--muted); }
+.kk-eyebrow { margin: 0; font-size: 13px; font-weight: 700; line-height: 1; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.kk-eyebrow--live { color: var(--uv); }
+
+/* Buttons */
+.kk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4em; min-height: 44px; padding: 0 20px; border-radius: var(--radius-pill); border: 1px solid transparent; font: inherit; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; box-sizing: border-box; }
+.kk-root a.kk-btn:hover { text-decoration: none; }
+.kk-btn--primary { background: var(--chrome); color: var(--on-accent); }
+.kk-btn--secondary { background: var(--surface-2); color: var(--ink); }
+.kk-btn--outline { background: transparent; border-color: var(--border); color: var(--ink); font-weight: 500; }
+.kk-btn--light { background: var(--ink); color: var(--ground); }
+.kk-btn--text { background: transparent; color: var(--muted); padding: 0; min-height: 0; font-weight: 500; }
+.kk-btn--lg { min-height: 52px; padding: 0 28px; font-size: 16px; }
+.kk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Pills and tags */
+.kk-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kk-pill { display: inline-flex; align-items: center; padding: 10px 16px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink); font-size: 15px; font-weight: 500; line-height: 1.2; }
+.kk-pill[aria-current], .kk-pill[aria-pressed="true"] { background: var(--chrome); color: var(--on-accent); font-weight: 700; }
+.kk-pill--fixed { background: transparent; border: 1px solid var(--ink); }
+.kk-pills__sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.kk-tag { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); font-size: 13px; line-height: 1.3; }
+.kk-tag--filter { padding: 7px 12px; font-size: 14px; }
+button.kk-tag { background: transparent; font: inherit; font-size: 14px; cursor: pointer; }
+.kk-tag[aria-pressed="true"] { border-color: var(--uv); color: var(--uv); background: var(--uv-wash); }
+
+/* Pill dropdown (e.g. Tags) */
+button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+.kk-dropdown { position: relative; display: inline-flex; }
+.kk-pill__chev { width: 14px; height: 14px; margin-left: 8px; stroke-width: 2.5; transition: transform 0.15s; }
+.kk-pill[aria-expanded="true"] { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); }
+.kk-pill[aria-expanded="true"] .kk-pill__chev { transform: rotate(180deg); }
+.kk-pill__count { margin-left: 8px; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-pill); background: var(--uv); color: var(--on-accent); font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+.kk-popover { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: 380px; max-width: calc(100vw - 48px); box-sizing: border-box; padding: 18px; border-radius: var(--radius-l); background: var(--surface-1); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
+.kk-popover__foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Badges */
+.kk-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.kk-badge--now { background: var(--uv); color: var(--on-accent); box-shadow: var(--glow-md); }
+.kk-badge--cancelled { background: var(--ink); color: var(--ground); }
+.kk-badge--postponed { border: 1px solid var(--warn); color: var(--warn); }
+.kk-badge--verified { padding: 6px 12px; font-size: 14px; border: 1px solid var(--uv); color: var(--uv); box-shadow: var(--glow-soft); }
+
+/* Section title */
+.kk-section-title { margin: 0 0 24px; display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-weight: 400; font-size: 40px; line-height: 1; }
+.kk-live-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-pin); }
+
+/* Event list */
+.kk-day { margin: 0; padding: 40px 0 16px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; font-family: var(--font-display); font-weight: 400; font-size: 49px; line-height: 1; }
+.kk-day__label { font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.kk-day__label--today { color: var(--uv); }
+.kk-event { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; padding: var(--space-row) 0; border-bottom: 1px solid var(--line); }
+.kk-event__when { flex: 0 0 120px; display: flex; flex-direction: column; gap: 2px; }
+.kk-event__date { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.kk-event__time { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kk-event__main { flex: 1 1 320px; min-width: 0; }
+.kk-event__title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; }
+.kk-event__meta { margin: 6px 0 0; font-size: 15px; color: var(--muted); }
+.kk-event__aside { flex: 0 1 auto; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.kk-event--now .kk-event__time, .kk-event--now .kk-event__date { color: var(--uv); }
+.kk-event--cancelled { opacity: 0.55; }
+.kk-event--cancelled .kk-event__title { text-decoration: line-through; }
+
+/* List link (venues) */
+.kk-listlink { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 30px 0; border-bottom: 1px solid var(--line); }
+.kk-root a.kk-listlink:hover { text-decoration: none; }
+.kk-root a.kk-listlink:hover .kk-listlink__name { text-decoration: underline; text-underline-offset: 4px; }
+.kk-listlink__name { display: block; font-family: var(--font-display); font-size: 34px; line-height: 1; }
+.kk-listlink__meta { display: block; margin-top: 6px; font-size: 15px; color: var(--muted); }
+.kk-listlink__arrow { flex: none; height: 34px; display: flex; align-items: center; color: var(--muted); }
+
+/* Arrow icons (inline SVG, viewBox 0 0 24 24) */
+.kk-icon { display: inline-block; flex: none; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.kk-icon--ext { width: 0.75em; height: 0.75em; stroke-width: 3.5; margin-left: 0.3em; vertical-align: -0.02em; }
+.kk-icon--next { width: 0.9em; height: 0.9em; stroke-width: 2.25; margin-left: 0.3em; vertical-align: -0.13em; }
+.kk-icon--back { width: 0.95em; height: 0.95em; stroke-width: 2.5; margin-right: 0.3em; vertical-align: -0.17em; }
+.kk-listlink__arrow .kk-icon { width: 22px; height: 22px; stroke-width: 2; margin: 0; }
+
+/* Forms */
+.kk-panel { padding: 28px; border-radius: var(--radius-l); background: var(--surface-1); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 22px; }
+.kk-panel--dashed { background: transparent; border: 1px dashed var(--border); gap: 14px; }
+.kk-field { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700; }
+.kk-field__opt { font-weight: 400; color: var(--faint); }
+.kk-input { height: 48px; padding: 0 16px; border-radius: var(--radius-m); background: var(--ground); border: 1px solid var(--border); color: var(--ink); font: inherit; font-size: 16px; font-weight: 400; box-sizing: border-box; color-scheme: dark; }
+.kk-input::placeholder { color: var(--faint); }
+textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: vertical; }
+.kk-input--title { height: 52px; font-size: 18px; font-weight: 700; }
+.kk-input--mono { font-family: var(--font-mono); font-size: 15px; }
+.kk-input:focus { outline: none; border-color: var(--uv); box-shadow: var(--focus-ring); }
+.kk-input:disabled { background: var(--surface-1); border-style: dashed; color: var(--faint); }
+.kk-hint { font-size: 13px; font-weight: 400; color: var(--faint); }
+.kk-hint--ok { color: var(--uv); font-weight: 500; }
+.kk-affix { display: flex; height: 48px; border-radius: var(--radius-m); border: 1px solid var(--border); overflow: hidden; }
+.kk-affix:focus-within { border-color: var(--uv); box-shadow: var(--focus-ring); }
+.kk-affix__pre { display: flex; align-items: center; padding: 0 14px; background: var(--surface-2); color: var(--muted); font-family: var(--font-mono); font-size: 14px; font-weight: 500; border-right: 1px solid var(--border); }
+.kk-affix .kk-input { flex: 1; min-width: 0; height: auto; border: 0; border-radius: 0; box-shadow: none; font-family: var(--font-mono); font-size: 15px; }
+.kk-linkrow { display: flex; gap: 8px; }
+.kk-linkrow .kk-input { height: 44px; border-radius: var(--radius-s); font-size: 15px; padding: 0 14px; }
+.kk-linkrow .kk-input:first-child { width: 140px; flex: none; }
+.kk-linkrow .kk-input:nth-child(2) { flex: 1; min-width: 0; }
+.kk-iconbtn { width: 44px; height: 44px; flex: none; border-radius: var(--radius-s); border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; }
+.kk-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: var(--radius-m); border: 1px solid var(--uv); background: var(--uv-wash); }
+.kk-selected__name { display: block; font-family: var(--font-display); font-size: 24px; line-height: 1.1; }
+.kk-selected__meta { display: block; font-size: 14px; color: var(--muted); }
+
+/* Alert */
+.kk-alert { display: flex; gap: 12px; align-items: center; padding: 14px 18px; border-radius: var(--radius-m); border: 1px solid var(--warn); color: var(--warn); font-size: 15px; font-weight: 700; line-height: 1.5; }
+
+/* Map */
+.kk-map { position: relative; height: 260px; border-radius: var(--radius-l); border: 1px solid var(--line); background-color: var(--surface-1); background-image: repeating-linear-gradient(0deg, var(--surface-3) 0 1px, transparent 1px 36px), repeating-linear-gradient(90deg, var(--surface-3) 0 1px, transparent 1px 36px); overflow: hidden; }
+.kk-map__pin { position: absolute; left: 50%; top: 45%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-pin); }
+.kk-map__credit { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--faint); }
+.kk-map__credit a { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .kk-root * { transition: none !important; } }
+
+/* ── app: additions not (yet) in the design system ─────────────────────────── */
+
+/* Cancelled event banner: the Alert in the Cancelled colours (ink instead of warn). */
+.kk-alert--cancelled { border-color: var(--ink); color: var(--ink); }
+
+/* Empty list state under a rule. */
+.kk-empty { margin: 0; padding: 40px 0; font-size: 16px; color: var(--muted); }
+
+/* Collapsible "Past events" heading (dashboard, venue). */
+.kk-disclosure > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 10px; }
+.kk-disclosure > summary::-webkit-details-marker { display: none; }
+.kk-disclosure > summary .kk-section-title { margin: 0; font-size: 32px; color: var(--muted); }
+.kk-disclosure > summary:hover .kk-section-title, .kk-disclosure[open] > summary .kk-section-title { color: var(--ink); }
+.kk-disclosure__count { font-size: 15px; color: var(--faint); }
+
+/* User menu: the kk-user button as a <summary>, with a popover menu. */
+.kk-menu { position: relative; }
+.kk-menu > summary { list-style: none; }
+.kk-menu > summary::-webkit-details-marker { display: none; }
+.kk-menu[open] > .kk-user { background: var(--surface-3); }
+.kk-menu[open] > .kk-user .kk-user__avatar { background: var(--border); }
+.kk-menu__list { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 200px; padding: 6px; border-radius: var(--radius-l); background: var(--surface-1); border: 1px solid var(--border); display: flex; flex-direction: column; }
+.kk-menu__item { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--radius-s); background: transparent; color: var(--ink); font: inherit; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; box-sizing: border-box; }
+.kk-root a.kk-menu__item:hover { text-decoration: none; }
+.kk-menu__item:hover { background: var(--surface-2); }
+.kk-menu__item:disabled { color: var(--faint); cursor: not-allowed; }
+.kk-menu__sep { height: 1px; margin: 6px 4px; background: var(--line); }
+
+/* Combobox results (venue picker) and pickable map results. */
+.kk-listbox { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; max-height: 300px; overflow: auto; margin: 0; padding: 6px; list-style: none; border-radius: var(--radius-m); background: var(--surface-1); border: 1px solid var(--border); }
+.kk-option { display: block; width: 100%; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius-s); background: transparent; color: var(--ink); font: inherit; font-size: 15px; font-weight: 400; text-align: left; cursor: pointer; }
+.kk-option:hover { background: var(--surface-2); }
+.kk-option[aria-pressed="true"] { border-color: var(--uv); background: var(--uv-wash); }
+.kk-option__meta { color: var(--muted); }
+.kk-options { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+
+/* A form nested inside another form's panel (new venue inside the event form). */
+.kk-subpanel { margin: 0; padding: 20px; border-radius: var(--radius-m); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.kk-subpanel > legend { padding: 0 6px; }
+
+/* Form error under a panel. */
+.kk-error { margin: 0; font-size: 15px; font-weight: 500; color: var(--ink); }
+
+/* The real OpenStreetMap embed inside .kk-map, darkened to match. The pin is our own overlay,
+   so the embed is not interactive (panning would move the map away from the pin).
+   The iframe overflows the tile by 48px on every side, which hides the embed's own zoom buttons and
+   attribution (the credit line below the tile carries it) while keeping the venue centred. */
+.kk-map iframe { position: absolute; inset: -48px; width: calc(100% + 96px); height: calc(100% + 96px); border: 0; pointer-events: none; filter: invert(0.92) hue-rotate(180deg) saturate(0.4) brightness(0.85) contrast(0.9); }
+.kk-map__credit { flex-wrap: wrap; }
+.kk-map .kk-map__pin { top: 50%; z-index: 1; }
+
+@media (max-width: 560px) {
+  .kk-header { gap: 12px; padding-top: 20px; }
+  .kk-nav { flex-wrap: wrap; gap: 4px; }
+  .kk-nav__link { padding: 10px 12px; }
+  .kk-container { padding-top: 40px; }
+  .kk-panel { padding: 20px; }
+  .kk-linkrow .kk-input:first-child { width: 104px; }
+  .kk-day { font-size: 40px; }
+  .kk-event__when { flex-basis: 100%; flex-direction: row; gap: 10px; align-items: baseline; }
+  .kk-event__title { font-size: 21px; }
+  .kk-event__aside { margin-left: 0; justify-content: flex-start; }
+}

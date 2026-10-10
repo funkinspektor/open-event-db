@@ -1,19 +1,23 @@
 import { linkLabel } from '@/lib/format'
+import { ExtIcon } from './Icons'
 
-export function LinkButtons({ links }: { links: Record<string, string> }) {
+// Outbound links as pill buttons with ↗. `primary` names the one link that gets the chrome fill (Tickets).
+export function LinkButtons({ links, primary }: { links: Record<string, string>; primary?: string }) {
   const entries = Object.entries(links)
   if (entries.length === 0) return null
+  const sorted = primary ? [...entries].sort(([a], [b]) => Number(b === primary) - Number(a === primary)) : entries
   return (
-    <ul className="flex flex-wrap gap-2">
-      {entries.map(([key, href]) => (
+    <ul className="kk-pills m-0 list-none p-0">
+      {sorted.map(([key, href]) => (
         <li key={key}>
           <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            className={`kk-btn ${key === primary ? 'kk-btn--primary' : 'kk-btn--secondary'}`}
           >
-            {linkLabel(key)} <span aria-hidden>↗</span>
+            {linkLabel(key)}
+            <ExtIcon />
           </a>
         </li>
       ))}

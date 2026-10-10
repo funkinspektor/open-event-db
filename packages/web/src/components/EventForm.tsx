@@ -25,10 +25,6 @@ function toLocalInput(iso: string | null | undefined): string {
 }
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null)
 
-const input =
-  'mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-500'
-const label = 'block text-sm font-medium text-neutral-800'
-
 export function EventForm({ mode, event, role, knownTags }: Props) {
   const router = useRouter()
   const [title, setTitle] = useState(event?.title ?? '')
@@ -100,68 +96,75 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6">
-      <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6">
-        <label className={label}>
+    <form onSubmit={submit} className="flex flex-col gap-[18px]">
+      <div className="kk-panel">
+        <label className="kk-field">
           Title
-          <input required value={title} onChange={(e) => setTitle(e.target.value)} className={input} />
+          <input required value={title} onChange={(e) => setTitle(e.target.value)} className="kk-input kk-input--title" />
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={label}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
+          <label className="kk-field">
             Starts
             <input
               type="datetime-local"
               required
               value={startsAt}
               onChange={(e) => setStartsAt(e.target.value)}
-              className={input}
+              className="kk-input"
             />
           </label>
-          <label className={label}>
-            Ends <span className="font-normal text-neutral-500">(optional)</span>
-            <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={input} />
+          <label className="kk-field">
+            <span>
+              Ends <span className="kk-field__opt">(optional)</span>
+            </span>
+            <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="kk-input" />
           </label>
         </div>
 
-        <VenuePicker value={venue} onChange={setVenue} onCreatingChange={setCreatingVenue} inputClassName={input} />
+        <VenuePicker value={venue} onChange={setVenue} onCreatingChange={setCreatingVenue} />
 
         {!venue && !creatingVenue && (
           <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-            <label className={label}>
+            <label className="kk-field">
               Location text
               <input
                 value={locationText}
                 onChange={(e) => setLocationText(e.target.value)}
                 placeholder="e.g. Tempelhofer Feld, Eingang Oderstraße"
-                className={input}
+                className="kk-input"
               />
             </label>
-            <label className={label}>
+            <label className="kk-field">
               City
-              <input required value={city} onChange={(e) => setCity(e.target.value)} className={input} />
+              <input required value={city} onChange={(e) => setCity(e.target.value)} className="kk-input" />
             </label>
           </div>
         )}
 
-        <label className={label}>
-          Description <span className="font-normal text-neutral-500">(optional)</span>
+        <label className="kk-field">
+          <span>
+            Description <span className="kk-field__opt">(optional)</span>
+          </span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
-            className={input}
+            placeholder="What to expect, line-up, door policy, accessibility…"
+            className="kk-input"
           />
         </label>
 
-        <label className={label}>
-          Tags <span className="font-normal text-neutral-500">(comma-separated)</span>
+        <label className="kk-field">
+          <span>
+            Tags <span className="kk-field__opt">(comma-separated)</span>
+          </span>
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             list="known-tags"
             placeholder="techno, open-air"
-            className={input}
+            className="kk-input"
           />
           <datalist id="known-tags">
             {knownTags.map((t) => (
@@ -170,49 +173,54 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
           </datalist>
         </label>
 
-        <div>
-          <span className={label}>Links</span>
-          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} inputClassName={input} />
+        <div className="kk-field">
+          Links
+          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
         </div>
 
-        <label className={label}>
-          Recurrence <span className="font-normal text-neutral-500">(optional iCal RRULE, e.g. FREQ=WEEKLY;BYDAY=FR)</span>
-          <input value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className={input} />
+        <label className="kk-field">
+          <span>
+            Recurrence <span className="kk-field__opt">(optional iCal RRULE, e.g. FREQ=WEEKLY;BYDAY=FR)</span>
+          </span>
+          <input
+            value={recurrence}
+            onChange={(e) => setRecurrence(e.target.value)}
+            placeholder="FREQ=WEEKLY;BYDAY=FR"
+            className="kk-input kk-input--mono"
+          />
         </label>
 
         {mode === 'edit' && (
-          <label className={label}>
+          <label className="kk-field">
             Status
-            <select value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className={input}>
+            <select value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className="kk-input">
               {statusOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
             </select>
-            {role === 'co_owner' && (
-              <span className="mt-1 block text-xs text-neutral-500">Only the event creator can cancel an event.</span>
-            )}
+            {role === 'co_owner' && <span className="kk-hint">Only the event creator can cancel an event.</span>}
           </label>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="kk-alert" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-5">
         <button
           type="submit"
           disabled={busy || creatingVenue}
           title={creatingVenue ? 'Save or cancel the new venue first' : undefined}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          className="kk-btn kk-btn--primary kk-btn--lg"
         >
           {busy ? 'Saving…' : mode === 'create' ? 'Create event' : 'Save changes'}
         </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-sm text-neutral-600 hover:text-neutral-900"
-        >
+        <button type="button" onClick={() => router.back()} className="kk-btn kk-btn--text">
           Cancel
         </button>
       </div>

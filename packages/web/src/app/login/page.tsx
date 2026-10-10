@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getCurrentPublisher } from '@/lib/session'
 import { LoginForm } from '@/components/LoginForm'
+import { Headline } from '@/components/Headline'
 
 export const metadata: Metadata = { title: 'Log in' }
 
@@ -21,13 +22,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const error = errorKey ? ERRORS[errorKey] : undefined
 
   return (
-    <div className="mx-auto max-w-md space-y-6 py-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Log in</h1>
-        <p className="mt-2 text-neutral-600">For publishers. Enter the email you registered with.</p>
-      </div>
+    <div className="kk-container w-full" style={{ maxWidth: 480, paddingTop: 80, gap: 28 }}>
+      <section className="kk-intro" style={{ gap: 14 }}>
+        <Headline text="Log in" narrow />
+        <p className="kk-lede">For publishers. Enter the email you registered with.</p>
+      </section>
       {error && (
-        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div role="alert" className="kk-alert font-medium">
           {error}
         </div>
       )}

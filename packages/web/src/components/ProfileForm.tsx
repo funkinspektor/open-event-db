@@ -4,27 +4,25 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { slugSchema, type PublisherMe } from '@open-event-db/shared'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
+import { TickIcon } from './Icons'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 const LINK_KEYS = ['website', 'instagram', 'telegram', 'soundcloud', 'bandcamp', 'ra', 'facebook']
 
-const input =
-  'mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-500'
-const label = 'block text-sm font-medium text-neutral-800'
-
 type SlugState = 'current' | 'invalid' | 'checking' | 'available' | 'taken' | 'unknown'
 
+// Positive validation is UV (kk-hint--ok); problems are plain sentences in ink.
 const SLUG_HINT: Record<SlugState, { text: string; className: string }> = {
-  current: { text: 'Your current slug.', className: 'text-neutral-500' },
+  current: { text: 'Your current slug.', className: 'kk-hint' },
   invalid: {
     text: 'Lowercase letters, numbers and dashes only; no dash at the start or end.',
-    className: 'text-red-600',
+    className: 'kk-hint !text-ink',
   },
-  checking: { text: 'Checking…', className: 'text-neutral-500' },
-  available: { text: 'Available.', className: 'text-emerald-700' },
-  taken: { text: 'This slug is already taken.', className: 'text-red-600' },
-  unknown: { text: 'Could not check availability — it will be checked on save.', className: 'text-neutral-500' },
+  checking: { text: 'Checking…', className: 'kk-hint' },
+  available: { text: 'Available', className: 'kk-hint kk-hint--ok' },
+  taken: { text: 'This slug is already taken.', className: 'kk-hint !text-ink' },
+  unknown: { text: 'Could not check availability — it will be checked on save.', className: 'kk-hint' },
 }
 
 export function ProfileForm({ me }: { me: PublisherMe }) {
@@ -98,58 +96,59 @@ export function ProfileForm({ me }: { me: PublisherMe }) {
   const slugBlocked = slugState === 'invalid' || slugState === 'taken' || slugState === 'checking'
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6">
-        <label className={label}>
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <div className="kk-panel">
+        <label className="kk-field">
           Name
-          <input required maxLength={200} value={name} onChange={(e) => setName(e.target.value)} className={input} />
+          <input required maxLength={200} value={name} onChange={(e) => setName(e.target.value)} className="kk-input" />
         </label>
 
-        <label className={label}>
+        <label className="kk-field">
           Slug
-          <div className="mt-1 flex items-stretch overflow-hidden rounded-md border border-neutral-300 shadow-sm focus-within:border-neutral-900 focus-within:ring-1 focus-within:ring-neutral-900">
-            <span className="flex items-center border-r border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500">
-              /publishers/
-            </span>
+          <span className="kk-affix">
+            <span className="kk-affix__pre">/publishers/</span>
             <input
               required
               value={slug}
               onChange={(e) => setSlug(e.target.value.toLowerCase())}
-              className="w-full px-3 py-2 text-sm focus:outline-none"
+              className="kk-input"
               autoComplete="off"
               spellCheck={false}
             />
-          </div>
-          <span className={`mt-1 block text-xs font-normal ${SLUG_HINT[slugState].className}`}>
+          </span>
+          <span className={SLUG_HINT[slugState].className}>
+            {slugState === 'available' && (
+              <>
+                <TickIcon size={12} />{' '}
+              </>
+            )}
             {SLUG_HINT[slugState].text}
           </span>
         </label>
 
-        <label className={label}>
+        <label className="kk-field">
           Email
-          <input value={me.email} disabled className={input} />
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
-            Used for login links. Can’t be changed yet.
-          </span>
+          <input value={me.email} disabled className="kk-input" />
+          <span className="kk-hint">Used for login links. Can’t be changed yet.</span>
         </label>
 
-        <div>
-          <span className={label}>Links</span>
-          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} inputClassName={input} />
+        <div className="kk-field">
+          Links
+          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="kk-alert" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy || slugBlocked}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-        >
-          {busy ? 'Saving…' : 'Save profile'}
+      <div className="flex items-center gap-4">
+        <button type="submit" disabled={busy || slugBlocked} className="kk-btn kk-btn--primary kk-btn--lg">
+          {busy ? 'Saving…' : 'Save'}
         </button>
-        {saved && <span className="text-sm text-emerald-700">Saved.</span>}
+        {saved && <span className="kk-hint kk-hint--ok text-[14px] font-bold">Saved.</span>}
       </div>
     </form>
   )
