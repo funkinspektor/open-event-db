@@ -42,6 +42,11 @@ export async function getVenue(id: string): Promise<Venue | null> {
   return res?.data ?? null
 }
 
+export async function getVenues(params: URLSearchParams): Promise<{ data: Venue[]; meta: Meta }> {
+  const res = await get<{ data: Venue[]; meta: Meta }>(`/api/v1/venues?${params.toString()}`)
+  return res ?? { data: [], meta: { cursor: null, has_more: false } }
+}
+
 export async function getPublisher(slug: string): Promise<PublisherPublic | null> {
   const res = await get<{ data: PublisherPublic }>(`/api/v1/publishers/${slug}`)
   return res?.data ?? null
@@ -49,11 +54,6 @@ export async function getPublisher(slug: string): Promise<PublisherPublic | null
 
 export async function getTags(): Promise<string[]> {
   const res = await get<{ data: string[] }>('/api/v1/tags')
-  return res?.data ?? []
-}
-
-export async function getVenues(): Promise<Venue[]> {
-  const res = await get<{ data: Venue[] }>('/api/v1/venues?limit=100')
   return res?.data ?? []
 }
 

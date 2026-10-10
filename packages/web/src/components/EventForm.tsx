@@ -1,22 +1,16 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
+import { VenuePicker, type VenueOption } from './VenuePicker'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
-
-interface VenueOption {
-  id: string
-  name: string
-  city: string
-}
 
 interface Props {
   mode: 'create' | 'edit'
   event?: EventDetail
-  venues: VenueOption[]
   role?: EventOwnerRole
   knownTags: string[]
 }
@@ -35,12 +29,13 @@ const input =
   'mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-500'
 const label = 'block text-sm font-medium text-neutral-800'
 
-export function EventForm({ mode, event, venues, role, knownTags }: Props) {
+export function EventForm({ mode, event, role, knownTags }: Props) {
   const router = useRouter()
   const [title, setTitle] = useState(event?.title ?? '')
   const [startsAt, setStartsAt] = useState(toLocalInput(event?.starts_at))
   const [endsAt, setEndsAt] = useState(toLocalInput(event?.ends_at))
-  const [venueId, setVenueId] = useState(event?.venue?.id ?? '')
+  const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? null)
+  const [creatingVenue, setCreatingVenue] = useState(false)
   const [locationText, setLocationText] = useState(event?.location_text ?? '')
   const [city, setCity] = useState(event?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? '')
@@ -51,7 +46,6 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const selectedVenue = useMemo(() => venues.find((v) => v.id === venueId), [venues, venueId])
   const statusOptions: EventStatus[] =
     role === 'creator' ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
 
@@ -71,13 +65,13 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
       starts_at: fromLocalInput(startsAt),
       ends_at: fromLocalInput(endsAt),
       description,
-      venue_id: venueId || null,
-      location_text: locationText || null,
+      venue_id: venue?.id ?? null,
+      location_text: venue ? null : locationText || null,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
       links: fromLinkRows(links),
       recurrence: recurrence || null,
     }
-    if (!venueId) payload.city = city
+    if (!venue) payload.city = city
     if (mode === 'edit') payload.status = status
 
     setBusy(true)
@@ -130,40 +124,24 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
           </label>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={label}>
-            Venue
-            <select value={venueId} onChange={(e) => setVenueId(e.target.value)} className={input}>
-              <option value="">No venue — use location text</option>
-              {venues.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} · {v.city}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            City
-            <input
-              value={selectedVenue ? selectedVenue.city : city}
-              onChange={(e) => setCity(e.target.value)}
-              disabled={!!selectedVenue}
-              required={!selectedVenue}
-              className={input}
-            />
-          </label>
-        </div>
+        <VenuePicker value={venue} onChange={setVenue} onCreatingChange={setCreatingVenue} inputClassName={input} />
 
-        {!selectedVenue && (
-          <label className={label}>
-            Location text
-            <input
-              value={locationText}
-              onChange={(e) => setLocationText(e.target.value)}
-              placeholder="e.g. Tempelhofer Feld, Eingang Oderstraße"
-              className={input}
-            />
-          </label>
+        {!venue && !creatingVenue && (
+          <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+            <label className={label}>
+              Location text
+              <input
+                value={locationText}
+                onChange={(e) => setLocationText(e.target.value)}
+                placeholder="e.g. Tempelhofer Feld, Eingang Oderstraße"
+                className={input}
+              />
+            </label>
+            <label className={label}>
+              City
+              <input required value={city} onChange={(e) => setCity(e.target.value)} className={input} />
+            </label>
+          </div>
         )}
 
         <label className={label}>
@@ -224,7 +202,8 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || creatingVenue}
+          title={creatingVenue ? 'Save or cancel the new venue first' : undefined}
           className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
         >
           {busy ? 'Saving…' : mode === 'create' ? 'Create event' : 'Save changes'}

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
-import { getEvent, getTags, getVenues, isUuid } from '@/lib/api'
+import { getEvent, getTags, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { EventForm } from '@/components/EventForm'
 
@@ -15,7 +15,7 @@ export default async function EditEventPage({ params }: { params: Params }) {
   const me = await getCurrentPublisher()
   if (!me) redirect(`/login`)
 
-  const [event, venues, tags] = await Promise.all([getEvent(id), getVenues(), getTags()])
+  const [event, tags] = await Promise.all([getEvent(id), getTags()])
   if (!event) notFound()
 
   const role = event.owners.find((o) => o.publisher_id === me.id)?.role
@@ -30,7 +30,7 @@ export default async function EditEventPage({ params }: { params: Params }) {
           You are editing as {me.name} ({role === 'creator' ? 'creator' : 'co-host'}).
         </p>
       </div>
-      <EventForm mode="edit" event={event} venues={venues} role={role} knownTags={tags} />
+      <EventForm mode="edit" event={event} role={role} knownTags={tags} />
     </div>
   )
 }

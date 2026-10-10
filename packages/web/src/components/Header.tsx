@@ -20,6 +20,9 @@ export async function Header() {
           <Link href="/" className="hidden text-neutral-600 hover:text-neutral-900 sm:inline">
             Events
           </Link>
+          <Link href="/venues" className="hidden text-neutral-600 hover:text-neutral-900 sm:inline">
+            Venues
+          </Link>
           {me ? (
             <>
               <Link
@@ -46,6 +49,14 @@ export async function Header() {
           )}
         </nav>
       </div>
+      <nav className="flex gap-5 border-t border-neutral-100 px-4 py-2 text-sm sm:hidden" aria-label="Sections">
+        <Link href="/" className="text-neutral-600 hover:text-neutral-900">
+          Events
+        </Link>
+        <Link href="/venues" className="text-neutral-600 hover:text-neutral-900">
+          Venues
+        </Link>
+      </nav>
     </header>
   )
 }
