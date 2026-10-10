@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
+import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -19,8 +20,6 @@ interface Props {
   role?: EventOwnerRole
   knownTags: string[]
 }
-
-type LinkRow = { key: string; url: string }
 
 const LINK_KEYS = ['website', 'tickets', 'ra', 'instagram', 'facebook', 'telegram', 'soundcloud']
 
@@ -46,9 +45,7 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
   const [city, setCity] = useState(event?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? '')
   const [tags, setTags] = useState((event?.tags ?? []).join(', '))
-  const [links, setLinks] = useState<LinkRow[]>(
-    Object.entries(event?.links ?? {}).map(([key, url]) => ({ key, url })),
-  )
+  const [links, setLinks] = useState<LinkRow[]>(toLinkRows(event?.links))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
   const [busy, setBusy] = useState(false)
@@ -77,7 +74,7 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
       venue_id: venueId || null,
       location_text: locationText || null,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      links: Object.fromEntries(links.filter((l) => l.key && l.url).map((l) => [l.key.trim(), l.url.trim()])),
+      links: fromLinkRows(links),
       recurrence: recurrence || null,
     }
     if (!venueId) payload.city = city
@@ -197,46 +194,7 @@ export function EventForm({ mode, event, venues, role, knownTags }: Props) {
 
         <div>
           <span className={label}>Links</span>
-          <div className="mt-1 space-y-2">
-            {links.map((row, i) => (
-              <div key={i} className="flex gap-2">
-                <input
-                  list="link-keys"
-                  value={row.key}
-                  onChange={(e) => setLinks(links.map((l, j) => (j === i ? { ...l, key: e.target.value } : l)))}
-                  placeholder="type"
-                  className={`${input} mt-0 w-36`}
-                />
-                <input
-                  type="url"
-                  value={row.url}
-                  onChange={(e) => setLinks(links.map((l, j) => (j === i ? { ...l, url: e.target.value } : l)))}
-                  placeholder="https://…"
-                  className={`${input} mt-0 flex-1`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setLinks(links.filter((_, j) => j !== i))}
-                  className="rounded-md border border-neutral-300 px-2 text-sm text-neutral-600 hover:bg-neutral-50"
-                  aria-label="Remove link"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <datalist id="link-keys">
-              {LINK_KEYS.map((k) => (
-                <option key={k} value={k} />
-              ))}
-            </datalist>
-            <button
-              type="button"
-              onClick={() => setLinks([...links, { key: '', url: '' }])}
-              className="text-sm text-neutral-700 underline-offset-2 hover:underline"
-            >
-              + Add link
-            </button>
-          </div>
+          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} inputClassName={input} />
         </div>
 
         <label className={label}>
