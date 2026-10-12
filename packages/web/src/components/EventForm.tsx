@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
+import { TagInput } from './TagInput'
 import { VenuePicker, type VenueOption } from './VenuePicker'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
@@ -35,7 +36,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
   const [locationText, setLocationText] = useState(event?.location_text ?? '')
   const [city, setCity] = useState(event?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? '')
-  const [tags, setTags] = useState((event?.tags ?? []).join(', '))
+  const [tags, setTags] = useState<string[]>(event?.tags ?? [])
   const [links, setLinks] = useState<LinkRow[]>(toLinkRows(event?.links))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
@@ -65,7 +66,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
       description,
       venue_id: venue?.id ?? null,
       location_text: venue ? null : locationText || null,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      tags,
       links: fromLinkRows(links),
       recurrence: recurrence || null,
     }
@@ -159,23 +160,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
           />
         </label>
 
-        <label className="kk-field">
-          <span>
-            Tags <span className="kk-field__opt">(comma-separated)</span>
-          </span>
-          <input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            list="known-tags"
-            placeholder="techno, open-air"
-            className="kk-input"
-          />
-          <datalist id="known-tags">
-            {knownTags.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </label>
+        <TagInput value={tags} onChange={setTags} knownTags={knownTags} />
 
         <div className="kk-field">
           Links

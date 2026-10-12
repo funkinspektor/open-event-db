@@ -138,6 +138,16 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-affix:focus-within { border-color: var(--uv); box-shadow: var(--focus-ring); }
 .kk-affix__pre { display: flex; align-items: center; padding: 0 14px; background: var(--surface-2); color: var(--muted); font-family: var(--font-mono); font-size: 14px; font-weight: 500; border-right: 1px solid var(--border); }
 .kk-affix .kk-input { flex: 1; min-width: 0; height: auto; border: 0; border-radius: 0; box-shadow: none; font-family: var(--font-mono); font-size: 15px; }
+/* Tag input: pills + inline text field inside one input-looking box */
+.kk-taginput { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 48px; padding: 6px 8px; border-radius: var(--radius-m); background: var(--ground); border: 1px solid var(--border); box-sizing: border-box; cursor: text; }
+.kk-taginput:focus-within { border-color: var(--uv); box-shadow: var(--focus-ring); }
+.kk-taginput__field { flex: 1; min-width: 8rem; height: 34px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 16px; font-weight: 400; color-scheme: dark; }
+.kk-taginput__field:focus { outline: none; }
+.kk-taginput__field::placeholder { color: var(--faint); }
+.kk-taginput .kk-tag { gap: 4px; padding: 4px 4px 4px 10px; border-color: var(--uv); color: var(--ink); background: var(--uv-wash); font-size: 14px; font-weight: 500; }
+.kk-tag__remove { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
+.kk-tag__remove:hover { background: var(--surface-3); color: var(--ink); }
+.kk-option[data-active="true"] { background: var(--surface-2); }
 .kk-linkrow { display: flex; gap: 8px; }
 .kk-linkrow .kk-input { height: 44px; border-radius: var(--radius-s); font-size: 15px; padding: 0 14px; }
 .kk-linkrow .kk-input:first-child { width: 140px; flex: none; }
