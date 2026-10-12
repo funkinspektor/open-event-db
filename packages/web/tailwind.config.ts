@@ -39,6 +39,7 @@ export default {
         'glow-pin': v('glow-pin'),
         focus: v('focus-ring'),
         'mark-edge': v('mark-edge'),
+        'mark-edge-light': v('mark-edge-light'),
       },
       fontFamily: {
         display: v('font-display'),

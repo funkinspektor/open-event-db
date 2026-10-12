@@ -19,24 +19,17 @@
 .kk-rule--live { background: var(--uv); }
 
 /* Header */
-.kk-header { max-width: calc(var(--content-max) + 48px); margin: 0 auto; min-height: var(--header-h); padding: 28px 24px 0; /* app: min-height so the nav can wrap on phones */ box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.kk-logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 30px; line-height: 1; }
-.kk-logo__dot { width: 12px; height: 12px; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-sm); } /* deprecated: replaced by .kk-mark */
-.kk-logo .kk-mark { --kk-mark-size: 36px; }
+/* The header's content box is exactly as wide as .kk-container's, so the logo lines up with the page content. */
+.kk-header { max-width: var(--content-max); margin: 0 auto; min-height: var(--header-h); padding: 28px 24px 0; /* app: min-height so the nav can wrap on phones */ box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.kk-logo { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 30px; line-height: 1; }
+.kk-logo .kk-mark { --kk-mark-size: 40px; }
 
-/* Logo mark: a UV Fraktur K over an offset ice K, with a compass needle, on a dark-chrome squircle.
+/* Logo mark: one Germania One K, optically centred on a holo-chrome squircle.
+   Default = light (holo chrome, dark K); kk-mark--dark = gunmetal holo, light K.
    Size it with --kk-mark-size; everything else scales from it. */
-.kk-mark { --kk-mark-size: 36px; position: relative; display: inline-block; flex: none; width: var(--kk-mark-size); height: var(--kk-mark-size); border-radius: calc(var(--kk-mark-size) * 0.24); background: var(--chrome-dark); box-shadow: var(--mark-edge); overflow: hidden; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--kk-mark-size) * 0.7); line-height: 1; vertical-align: middle; }
-.kk-mark__inner { position: absolute; inset: 0; transform-origin: 50% 50%; transform: translate(-7.82%, -1.5%) scale(1.2); }
-.kk-mark__k { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--uv); transform: translateY(0.04em); }
-.kk-mark__k--back { color: var(--chrome-4); transform: translate(0.03em, 0.07em); }
-.kk-mark__needle { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; fill: none; stroke: var(--uv); stroke-width: 6; stroke-linecap: butt; stroke-linejoin: miter; stroke-miterlimit: 8; }
-.kk-mark__needle--back { stroke: var(--chrome-4); transform: translate(2.1%, 2.1%); }
-/* Bare: the doubled K + needle without the squircle, pulled flush left; the empty right part of the
-   box is taken back with a negative margin. Used in the header. */
-.kk-mark--bare { background: none; box-shadow: none; border-radius: 0; overflow: visible; margin-right: calc(var(--kk-mark-size) * -0.28); }
-.kk-mark--bare .kk-mark__inner { transform: translate(-26%, -1.5%) scale(1.2); }
-.kk-logo .kk-mark--bare { --kk-mark-size: 44px; }
+.kk-mark { --kk-mark-size: 40px; display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--kk-mark-size); height: var(--kk-mark-size); border-radius: calc(var(--kk-mark-size) * 0.24); background: var(--chrome); box-shadow: var(--mark-edge-light); color: var(--on-accent); font-family: var(--font-display); font-weight: 400; font-size: calc(var(--kk-mark-size) * 0.78); line-height: 1; vertical-align: middle; }
+.kk-mark__k { display: block; transform: translate(0.0195em, 0.0255em); }
+.kk-mark--dark { background: var(--chrome-dark); box-shadow: var(--mark-edge); color: var(--ink); }
 .kk-mark--lg { --kk-mark-size: 64px; }
 .kk-mark--xl { --kk-mark-size: 160px; }
 .kk-nav { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }

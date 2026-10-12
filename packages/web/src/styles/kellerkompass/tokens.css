@@ -29,6 +29,7 @@
   --glow-pin: 0 0 0 6px #a58bff33, 0 0 24px #a58bff;
   --focus-ring: 0 0 0 3px #a58bff33;
   --mark-edge: inset 0 0 0 1px #ffffff1a;
+  --mark-edge-light: inset 0 0 0 1px #0000001f;
 }
 :root {
   --space-1: 4px;
@@ -45,7 +46,7 @@
   --radius-l: 16px;
   --radius-pill: 999px;
   --chrome: linear-gradient(100deg, #9A9AA3, #F7F7FA, #D9C9FF, #A8EEFF, #E2E2E8);
-  --chrome-dark: linear-gradient(100deg, #0E0E10 0%, #2A2A30 30%, #5A5A64 46%, #1C1C21 62%, #34343B 100%);
+  --chrome-dark: linear-gradient(100deg, #0E0E10 0%, #26262E 24%, #4A4262 40%, #3A5864 53%, #1C1C22 66%, #33333B 100%);
   --content-max: 1200px;
   --form-max: 760px;
   --header-h: 108px;

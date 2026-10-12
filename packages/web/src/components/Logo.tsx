@@ -1,29 +1,15 @@
 import Link from 'next/link'
 
-const NEEDLE = (
-  <>
-    <path d="M47 49H82" />
-    <path d="M71 40.75Q76.5 42.175 82 49Q76.5 55.825 71 57.25" />
-  </>
-)
-
-// The Kellerkompass mark: UV Fraktur K + compass needle over an offset ice K.
-// `bare` drops the dark-chrome squircle (header form). For favicons see app/icon.svg.
-export function LogoMark({ bare = false, label }: { bare?: boolean; label?: string }) {
+// The Kellerkompass mark: one Germania One K on a holo-chrome squircle.
+// Light (default) in the header; `dark` = gunmetal holo with a light K. For favicons see app/icon.svg.
+export function LogoMark({ dark = false, label }: { dark?: boolean; label?: string }) {
   return (
     <span
-      className={`kk-mark${bare ? ' kk-mark--bare' : ''}`}
+      className={`kk-mark${dark ? ' kk-mark--dark' : ''}`}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     >
-      <span className="kk-mark__inner" aria-hidden>
-        <span className="kk-mark__k kk-mark__k--back">K</span>
-        <svg className="kk-mark__needle kk-mark__needle--back" viewBox="0 0 100 100">
-          {NEEDLE}
-        </svg>
-        <span className="kk-mark__k">K</span>
-        <svg className="kk-mark__needle" viewBox="0 0 100 100">
-          {NEEDLE}
-        </svg>
+      <span className="kk-mark__k" aria-hidden>
+        K
       </span>
     </span>
   )
@@ -32,7 +18,7 @@ export function LogoMark({ bare = false, label }: { bare?: boolean; label?: stri
 export function Logo() {
   return (
     <Link className="kk-logo" href="/">
-      <LogoMark bare />
+      <LogoMark />
       Kellerkompass
     </Link>
   )
