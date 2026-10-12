@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
@@ -51,7 +52,9 @@ const SCHEMA_STATUS = {
 export default async function EventPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const [e, me, { saved }] = await Promise.all([load(params), getCurrentPublisher(), searchParams])
   const savedMessage = saved ? SAVED_MESSAGES[saved] : undefined
-  const canEdit = !!me && e.owners.some((o) => o.publisher_id === me.id)
+  const canEdit = !!me && canEditEvent(e, me)
+  // Show who added a claimed event only when it wasn't one of its owners (i.e. a scout)
+  const addedByOther = e.claimed && !e.owners.some((o) => o.publisher_id === e.added_by.id)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -79,11 +82,16 @@ export default async function EventPage({ params, searchParams }: { params: Para
             : {}),
         }
       : { '@type': 'Place', name: e.location_text ?? e.city, address: e.city },
-    organizer: e.owners.map((o) => ({
-      '@type': 'Organization',
-      name: o.name,
-      url: absoluteUrl(`/publishers/${o.slug}`),
-    })),
+    // Unclaimed events have no confirmed organizer — the scout who added them isn't one
+    ...(e.claimed
+      ? {
+          organizer: e.owners.map((o) => ({
+            '@type': 'Organization',
+            name: o.name,
+            url: absoluteUrl(`/publishers/${o.slug}`),
+          })),
+        }
+      : {}),
   }
 
   return (
@@ -141,19 +149,36 @@ export default async function EventPage({ params, searchParams }: { params: Para
             </section>
           )}
 
-          <section className="flex flex-col gap-3.5">
-            <h2 className="kk-eyebrow">Organised by</h2>
-            <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
-              {e.owners.map((o) => (
-                <li key={o.publisher_id}>
-                  <Link href={`/publishers/${o.slug}`} className="font-bold">
-                    {o.name}
-                  </Link>
-                  {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
+          {e.claimed ? (
+            <section className="flex flex-col gap-3.5">
+              <h2 className="kk-eyebrow">Organised by</h2>
+              <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
+                {e.owners.map((o) => (
+                  <li key={o.publisher_id}>
+                    <Link href={`/publishers/${o.slug}`} className="font-bold">
+                      {o.name}
+                    </Link>
+                    {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
+                  </li>
+                ))}
+              </ul>
+              {addedByOther && (
+                <p className="m-0 text-[14px] text-muted">
+                  Added by {e.added_by.name}
+                  {e.added_by.is_scout && ' · Scout'}
+                </p>
+              )}
+            </section>
+          ) : (
+            <section className="flex flex-col gap-3.5">
+              <h2 className="kk-eyebrow">Added by</h2>
+              <p className="m-0 text-[17px]">
+                <span className="font-bold">{e.added_by.name}</span>
+                {e.added_by.is_scout && <span className="text-muted"> · Scout</span>}
+              </p>
+              <p className="m-0 text-[14px] text-muted">Not yet confirmed by the organizer</p>
+            </section>
+          )}
         </div>
 
         <aside className="flex max-w-[380px] flex-col gap-3.5" style={{ flex: '1 1 300px' }}>

@@ -15,19 +15,28 @@ import {
 } from 'drizzle-orm'
 import {
   addOwnerSchema,
+  canCancel,
+  canEdit,
+  canManageOwners,
   eventCreateSchema,
   eventListQuerySchema,
   eventUpdateSchema,
   normalizeTags,
   type EventStatus,
 } from '@open-event-db/shared'
-import { eventOwners, events, publishers, venues } from '@open-event-db/db'
+import { eventOwners, events, publishers, venues, type Publisher } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { badRequest, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
-import { eventSnapshot, getEventDetail, getOwnerIds, getOwnerRole } from '../queries/events.js'
+import {
+  eventSnapshot,
+  getEventDetail,
+  getOwners,
+  serializeSlimEvent,
+  slimEventColumns,
+} from '../queries/events.js'
 
 interface EventCursor extends Record<string, string> {
   starts_at: string
@@ -45,13 +54,15 @@ async function venueCity(venueId: string): Promise<string> {
 async function loadEvent(id: string) {
   const [e] = await db.select().from(events).where(eq(events.id, id)).limit(1)
   if (!e) throw notFound('Event not found')
-  return e
+  return { ...e, owners: await getOwners(e.id) }
 }
+
+const actor = (p: Publisher) => ({ id: p.id, is_scout: p.isScout })
 
 export async function eventRoutes(app: FastifyInstance) {
   app.get('/events', async (req) => {
     const query = eventListQuerySchema.parse(req.query)
-    const { limit, cursor, city, from, to, tags, venue_id, publisher_id, q, order } = query
+    const { limit, cursor, city, from, to, tags, venue_id, publisher_id, added_by, q, order } = query
     const status: EventStatus[] = query.status?.length
       ? query.status
       : ['scheduled', 'postponed']
@@ -73,6 +84,7 @@ export async function eventRoutes(app: FastifyInstance) {
         .where(eq(eventOwners.publisherId, publisher_id))
       conditions.push(inArray(events.id, ownedIds))
     }
+    if (added_by) conditions.push(eq(events.createdBy, added_by))
     if (decoded) {
       const cursorDate = new Date(decoded.starts_at)
       const after = order === 'desc' ? lt : gt
@@ -85,21 +97,7 @@ export async function eventRoutes(app: FastifyInstance) {
     }
 
     const rows = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        startsAt: events.startsAt,
-        endsAt: events.endsAt,
-        status: events.status,
-        tags: events.tags,
-        city: events.city,
-        locationText: events.locationText,
-        recurrence: events.recurrence,
-        venueId: venues.id,
-        venueName: venues.name,
-        venueCity: venues.city,
-      })
+      .select(slimEventColumns)
       .from(events)
       .leftJoin(venues, eq(events.venueId, venues.id))
       .where(and(...conditions))
@@ -115,21 +113,7 @@ export async function eventRoutes(app: FastifyInstance) {
         : null
 
     return {
-      data: page.map((r) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        starts_at: r.startsAt.toISOString(),
-        ends_at: r.endsAt?.toISOString() ?? null,
-        status: r.status,
-        tags: r.tags,
-        city: r.city,
-        location_text: r.locationText,
-        recurrence: r.recurrence,
-        venue: r.venueId
-          ? { id: r.venueId, name: r.venueName!, city: r.venueCity! }
-          : null,
-      })),
+      data: page.map(serializeSlimEvent),
       meta: { cursor: nextCursor, has_more: hasMore },
     }
   })
@@ -169,7 +153,10 @@ export async function eventRoutes(app: FastifyInstance) {
         })
         .returning()
       if (!e) throw new Error('insert returned no row')
-      await tx.insert(eventOwners).values({ eventId: e.id, publisherId: me.id, role: 'creator' })
+      // Scouts (is_publisher = false) add events on behalf of organizers: no owner until claimed
+      if (me.isPublisher) {
+        await tx.insert(eventOwners).values({ eventId: e.id, publisherId: me.id, role: 'creator' })
+      }
       await logEdit(tx, {
         entityType: 'event',
         entityId: e.id,
@@ -189,9 +176,14 @@ export async function eventRoutes(app: FastifyInstance) {
     const body = eventUpdateSchema.parse(req.body)
     const current = await loadEvent(req.params.id)
 
-    const role = await getOwnerRole(current.id, me.id)
-    if (!role) throw forbidden('Only event owners can edit this event')
-    if (body.status === 'cancelled' && role !== 'creator') {
+    if (!canEdit(current, actor(me))) {
+      throw forbidden(
+        current.owners.length
+          ? 'Only event owners can edit this event'
+          : 'Only scouts can edit unclaimed events',
+      )
+    }
+    if (body.status === 'cancelled' && !canCancel(current, actor(me))) {
       throw forbidden('Only the event creator can cancel an event')
     }
 
@@ -244,8 +236,13 @@ export async function eventRoutes(app: FastifyInstance) {
     const me = currentPublisher(req)
     const current = await loadEvent(req.params.id)
 
-    const role = await getOwnerRole(current.id, me.id)
-    if (role !== 'creator') throw forbidden('Only the event creator can cancel an event')
+    if (!canCancel(current, actor(me))) {
+      throw forbidden(
+        current.owners.length
+          ? 'Only the event creator can cancel an event'
+          : 'Only scouts can cancel unclaimed events',
+      )
+    }
 
     if (current.status !== 'cancelled') {
       await db.transaction(async (tx) => {
@@ -273,18 +270,20 @@ export async function eventRoutes(app: FastifyInstance) {
     const { publisher_id } = addOwnerSchema.parse(req.body)
     const current = await loadEvent(req.params.id)
 
-    const role = await getOwnerRole(current.id, me.id)
-    if (role !== 'creator') throw forbidden('Only the event creator can manage owners')
+    if (!canManageOwners(current, actor(me))) {
+      throw forbidden('Only the event creator can manage owners')
+    }
 
     const [target] = await db
-      .select({ id: publishers.id, verified: publishers.verified })
+      .select({ id: publishers.id, verified: publishers.verified, isPublisher: publishers.isPublisher })
       .from(publishers)
       .where(eq(publishers.id, publisher_id))
       .limit(1)
     if (!target) throw badRequest('publisher_id does not reference an existing publisher')
     if (!target.verified) throw badRequest('Publisher is not verified')
+    if (!target.isPublisher) throw badRequest('Scouts cannot own events')
 
-    const before = await getOwnerIds(current.id)
+    const before = current.owners.map((o) => o.publisher_id)
     if (before.includes(publisher_id)) throw badRequest('Publisher is already an owner of this event')
 
     await db.transaction(async (tx) => {
@@ -310,14 +309,15 @@ export async function eventRoutes(app: FastifyInstance) {
       const current = await loadEvent(req.params.id)
       const target = req.params.publisher_id
 
-      const role = await getOwnerRole(current.id, me.id)
-      if (role !== 'creator') throw forbidden('Only the event creator can manage owners')
+      if (!canManageOwners(current, actor(me))) {
+        throw forbidden('Only the event creator can manage owners')
+      }
 
-      const targetRole = await getOwnerRole(current.id, target)
+      const targetRole = current.owners.find((o) => o.publisher_id === target)?.role
       if (!targetRole) throw notFound('Publisher is not an owner of this event')
       if (targetRole === 'creator') throw badRequest('The creator cannot be removed from an event')
 
-      const before = await getOwnerIds(current.id)
+      const before = current.owners.map((o) => o.publisher_id)
       await db.transaction(async (tx) => {
         await tx
           .delete(eventOwners)

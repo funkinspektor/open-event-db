@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { EventSlim } from '@open-event-db/shared'
-import { ALL_STATUSES, getEvents } from '@/lib/api'
+import { ALL_STATUSES, getEvent, getEvents } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { isHappeningNow } from '@/lib/format'
 import { EventRow } from '@/components/EventRow'
@@ -33,8 +33,10 @@ export default async function DashboardPage() {
   const me = await getCurrentPublisher()
   if (!me) redirect('/login')
 
+  // Publishers see the events they own; scouts see the events they added (claimed or not)
+  const scoutView = !me.is_publisher
   const qs = new URLSearchParams({
-    publisher_id: me.id,
+    [scoutView ? 'added_by' : 'publisher_id']: me.id,
     status: ALL_STATUSES,
     from: '2000-01-01T00:00:00Z',
     limit: '100',
@@ -43,8 +45,25 @@ export default async function DashboardPage() {
   const now = new Date()
   const { happening, upcoming, past } = partition(data, now)
 
+  // Claimed events are read-only for scouts; name who claimed them
+  const claimedBy = new Map<string, string>()
+  if (scoutView) {
+    const claimed = await Promise.all(data.filter((e) => e.claimed).map((e) => getEvent(e.id)))
+    for (const d of claimed) {
+      const creator = d?.owners.find((o) => o.role === 'creator')
+      if (d && creator) claimedBy.set(d.id, creator.name)
+    }
+  }
+
+  const action = (e: EventSlim) =>
+    scoutView && e.claimed ? (
+      <span className="kk-badge kk-badge--scout">Claimed by {claimedBy.get(e.id) ?? 'organizer'}</span>
+    ) : (
+      editLink(e.id)
+    )
+
   const row = (e: EventSlim) => (
-    <EventRow key={e.id} event={e} showDate action={editLink(e.id)} titleSize={22} now={now} />
+    <EventRow key={e.id} event={e} showDate action={action(e)} titleSize={22} now={now} />
   )
 
   return (
@@ -53,10 +72,17 @@ export default async function DashboardPage() {
         <div className="kk-intro" style={{ gap: 12 }}>
           <p className="kk-eyebrow">Dashboard</p>
           <Headline text={me.name} style={{ fontSize: 'clamp(64px, 9vw, 120px)' }} />
-          <Link href={`/publishers/${me.slug}`} className="text-body text-muted">
-            View public profile
-            <NextIcon />
-          </Link>
+          {scoutView ? (
+            <p className="m-0 text-body text-muted">
+              <span className="kk-badge kk-badge--scout">Scout</span> Events you add stay unconfirmed until
+              their organizer claims them.
+            </p>
+          ) : (
+            <Link href={`/publishers/${me.slug}`} className="text-body text-muted">
+              View public profile
+              <NextIcon />
+            </Link>
+          )}
         </div>
         <Link href="/events/new" className="kk-btn kk-btn--primary kk-btn--lg">
           + Create event
@@ -65,9 +91,14 @@ export default async function DashboardPage() {
 
       {data.length === 0 && (
         <section>
-          <h2 className="kk-section-title">You’re in. Create your first event.</h2>
+          <h2 className="kk-section-title">
+            {scoutView ? 'You’re in. Add your first event.' : 'You’re in. Create your first event.'}
+          </h2>
           <hr className="kk-rule" />
-          <p className="kk-empty">It will be live on the public listing as soon as you save it.</p>
+          <p className="kk-empty">
+            It will be live on the public listing as soon as you save it
+            {scoutView && ', marked as not yet confirmed by the organizer'}.
+          </p>
         </section>
       )}
 

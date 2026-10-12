@@ -1,8 +1,11 @@
+import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
   editHistory,
+  eventOwners,
   events,
   generateApiKey,
   publishers,
@@ -16,8 +19,12 @@ import { buildApp } from '../app.js'
 let app: FastifyInstance
 let alice: Publisher
 let bob: Publisher
+let scout: Publisher
+let scout2: Publisher
 let keyA: string
 let keyB: string
+let keyS: string
+let keyS2: string
 let venue: Venue
 const stamp = Date.now()
 
@@ -28,18 +35,26 @@ beforeAll(async () => {
 
   const a = generateApiKey()
   const b = generateApiKey()
+  const sc = generateApiKey()
+  const sc2 = generateApiKey()
   keyA = a.key
   keyB = b.key
+  keyS = sc.key
+  keyS2 = sc2.key
 
   const rows = await db
     .insert(publishers)
     .values([
       { name: 'Test Alice', slug: `test-alice-${stamp}`, email: `alice-${stamp}@test.local`, verified: true, apiKeyHash: a.hash },
       { name: 'Test Bob', slug: `test-bob-${stamp}`, email: `bob-${stamp}@test.local`, verified: true, apiKeyHash: b.hash },
+      { name: 'Test Scout', slug: `test-scout-${stamp}`, email: `scout-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: sc.hash },
+      { name: 'Test Scout Two', slug: `test-scout2-${stamp}`, email: `scout2-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: sc2.hash },
     ])
     .returning()
   alice = rows.find((p) => p.slug.startsWith('test-alice'))!
   bob = rows.find((p) => p.slug.startsWith('test-bob'))!
+  scout = rows.find((p) => p.slug.startsWith('test-scout-'))!
+  scout2 = rows.find((p) => p.slug.startsWith('test-scout2'))!
 
   const [v] = await db
     .insert(venues)
@@ -49,7 +64,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  const ids = [alice.id, bob.id]
+  const ids = [alice.id, bob.id, scout.id, scout2.id]
   await db.delete(editHistory).where(inArray(editHistory.publisherId, ids))
   await db.delete(events).where(inArray(events.createdBy, ids))
   await db.delete(venues).where(eq(venues.id, venue.id))
@@ -333,5 +348,174 @@ describe('event list order', () => {
   it('rejects an unknown order', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/events?order=sideways' })
     expect(res.statusCode).toBe(400)
+  })
+})
+
+const cliPath = fileURLToPath(new URL('../../../db/src/cli.ts', import.meta.url))
+const dbDir = fileURLToPath(new URL('../../../db', import.meta.url))
+const cli = (...args: string[]) =>
+  execFileSync(process.execPath, ['--import', 'tsx', cliPath, ...args], { cwd: dbDir, encoding: 'utf8' })
+
+describe('scouts and unclaimed events', () => {
+  let eventId: string
+
+  it('a scout creates an unclaimed event: added_by is the scout, no owners', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyS),
+      payload: { title: 'Scouted Night', starts_at: '2030-02-01T22:00:00Z', venue_id: venue.id },
+    })
+    expect(res.statusCode).toBe(201)
+    const e = res.json().data
+    eventId = e.id
+    expect(e.owners).toEqual([])
+    expect(e.claimed).toBe(false)
+    expect(e.added_by).toEqual({ id: scout.id, slug: scout.slug, name: 'Test Scout', is_scout: true })
+    expect(e).not.toHaveProperty('created_by')
+  })
+
+  it('publisher-created events stay owned and claimed', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Owned Night', starts_at: '2030-02-02T22:00:00Z', venue_id: venue.id },
+    })
+    const e = res.json().data
+    expect(e.claimed).toBe(true)
+    expect(e.added_by).toEqual(expect.objectContaining({ id: alice.id, is_scout: false }))
+  })
+
+  it('lists unclaimed events in the feed with claimed=false and filters by added_by', async () => {
+    const feed = await app.inject({ method: 'GET', url: `/api/v1/events?venue_id=${venue.id}` })
+    const row = feed.json().data.find((e: { id: string }) => e.id === eventId)
+    expect(row).toEqual(expect.objectContaining({ claimed: false }))
+
+    const added = await app.inject({ method: 'GET', url: `/api/v1/events?added_by=${scout.id}` })
+    expect(added.json().data.map((e: { id: string }) => e.id)).toEqual([eventId])
+  })
+
+  it('any scout can edit an unclaimed event; a non-owner publisher gets 403', async () => {
+    const byOtherScout = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${eventId}`,
+      headers: auth(keyS2),
+      payload: { title: 'Scouted Night (fixed)' },
+    })
+    expect(byOtherScout.statusCode).toBe(200)
+
+    const byPublisher = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${eventId}`,
+      headers: auth(keyB),
+      payload: { title: 'Hijacked' },
+    })
+    expect(byPublisher.statusCode).toBe(403)
+  })
+
+  it('nobody can add co-owners to an unclaimed event', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${eventId}/owners`,
+      headers: auth(keyS),
+      payload: { publisher_id: bob.id },
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('scouts cannot be added as co-owners and are not listed as publishers', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Owner test', starts_at: '2030-02-03T22:00:00Z', venue_id: venue.id },
+    })
+    const add = await app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${created.json().data.id}/owners`,
+      headers: auth(keyA),
+      payload: { publisher_id: scout.id },
+    })
+    expect(add.statusCode).toBe(400)
+
+    const list = await app.inject({ method: 'GET', url: '/api/v1/publishers?q=Test%20Scout' })
+    expect(list.json().data).toEqual([])
+    const pubs = await app.inject({ method: 'GET', url: `/api/v1/publishers?q=Test%20Alice` })
+    expect(pubs.json().data[0]).toEqual(expect.objectContaining({ is_publisher: true, is_scout: false }))
+  })
+
+  it('claim-event makes the publisher creator and locks scouts out', async () => {
+    cli('claim-event', eventId, alice.slug)
+
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })
+    const e = detail.json().data
+    expect(e.claimed).toBe(true)
+    expect(e.owners).toEqual([expect.objectContaining({ publisher_id: alice.id, role: 'creator' })])
+    expect(e.added_by.id).toBe(scout.id)
+
+    const byScout = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${eventId}`,
+      headers: auth(keyS),
+      payload: { title: 'Too late' },
+    })
+    expect(byScout.statusCode).toBe(403)
+
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    const claim = history.find((h) => h.action === 'ownership_changed')
+    expect(claim?.publisherId).toBe(alice.id)
+    expect(claim?.diff).toEqual(expect.objectContaining({ via: 'cli' }))
+
+    expect(() => cli('claim-event', eventId, bob.slug)).toThrow()
+  })
+
+  it('scouts can cancel unclaimed events via DELETE', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyS),
+      payload: { title: 'Scouted Cancel', starts_at: '2030-02-04T22:00:00Z', venue_id: venue.id },
+    })
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/events/${created.json().data.id}`,
+      headers: auth(keyS2),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.status).toBe('cancelled')
+  })
+
+  it('delete-event hard-deletes and leaves only a content-free "deleted" history row', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyS),
+      payload: { title: 'Scouted Delete', starts_at: '2030-02-05T22:00:00Z', venue_id: venue.id },
+    })
+    const id = created.json().data.id
+    cli('delete-event', id)
+
+    const gone = await app.inject({ method: 'GET', url: `/api/v1/events/${id}` })
+    expect(gone.statusCode).toBe(404)
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, id))
+    expect(history).toEqual([expect.objectContaining({ action: 'deleted', publisherId: scout.id, diff: { via: 'cli' } })])
+  })
+
+  it('delete-event asks before deleting a claimed event', async () => {
+    // eventId was claimed by Alice above; answering anything but "y" aborts
+    expect(() =>
+      execFileSync(process.execPath, ['--import', 'tsx', cliPath, 'delete-event', eventId], {
+        cwd: dbDir,
+        input: 'n\n',
+        stdio: 'pipe',
+      }),
+    ).toThrow()
+    const owners = await db.select().from(eventOwners).where(eq(eventOwners.eventId, eventId))
+    expect(owners).toHaveLength(1)
+
+    cli('delete-event', eventId, '--yes')
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    expect(history).toEqual([expect.objectContaining({ action: 'deleted', publisherId: alice.id })])
   })
 })

@@ -23,7 +23,10 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   to: z.coerce.date().optional(),
   tags: csvOrArray(z.string().min(1)),
   venue_id: z.string().uuid().optional(),
+  /** Events owned by this publisher (creator or co-owner). */
   publisher_id: z.string().uuid().optional(),
+  /** Events added by this account (`created_by`), whether claimed or not. */
+  added_by: z.string().uuid().optional(),
   status: csvOrArray(eventStatusSchema),
   q: z.string().min(1).optional(),
   /** Sort by start time: `asc` (soonest first, default) or `desc` (newest first, e.g. for past events). */
@@ -50,6 +53,8 @@ export const eventSlimSchema = z.object({
   location_text: z.string().nullable(),
   recurrence: z.string().nullable(),
   venue: venueSummarySchema.nullable(),
+  /** False while the event has no owner (added by a scout, not yet confirmed by the organizer). */
+  claimed: z.boolean(),
 })
 
 export type EventSlim = z.infer<typeof eventSlimSchema>
@@ -79,11 +84,21 @@ export const eventOwnerSchema = z.object({
   role: eventOwnerRoleSchema,
 })
 
+/** Who added the event. Immutable, survives a claim. */
+export const eventAddedBySchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  is_scout: z.boolean(),
+})
+
+export type EventAddedBy = z.infer<typeof eventAddedBySchema>
+
 export const eventDetailSchema = eventSlimSchema
   .omit({ venue: true })
   .extend({
     links: linksSchema,
-    created_by: z.string().uuid(),
+    added_by: eventAddedBySchema,
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
     venue: venueDetailEmbedSchema.nullable(),

@@ -20,6 +20,8 @@ export const publisherPublicSchema = z.object({
   slug: z.string(),
   links: linksSchema,
   verified: z.boolean(),
+  is_publisher: z.boolean(),
+  is_scout: z.boolean(),
   created_at: z.string().datetime({ offset: true }),
 })
 

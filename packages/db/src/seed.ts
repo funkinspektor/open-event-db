@@ -48,6 +48,20 @@ const [bob] = await db
   .returning()
 if (!bob) throw new Error('failed to insert seed publisher')
 
+// Scouts add events for organizers who aren't on the platform yet; those events stay unclaimed
+const [scout] = await db
+  .insert(publishers)
+  .values({
+    name: 'Sebastian',
+    slug: 'sebastian',
+    email: 'scout@example.com',
+    verified: true,
+    isPublisher: false,
+    isScout: true,
+  })
+  .returning()
+if (!scout) throw new Error('failed to insert seed scout')
+
 const [rso] = await db
   .insert(venues)
   .values({
@@ -88,6 +102,16 @@ type Seed = {
 }
 
 const seeds: Seed[] = [
+  {
+    title: 'Dub Techno Basement',
+    description:
+      'Deep, echo-heavy dub techno all night in the small room. Listed by a scout, not yet confirmed by the organizer.',
+    startsAt: at(3, 22),
+    endsAt: at(4, 5),
+    venueId: blank.id,
+    tags: ['techno', 'dub'],
+    creator: scout.id,
+  },
   {
     title: 'Ambient Sessions at the Field',
     description:
@@ -213,6 +237,7 @@ for (const s of seeds) {
     .returning()
   if (!event) throw new Error(`failed to insert seed event ${s.title}`)
 
+  if (s.creator === scout.id) continue
   await db.insert(eventOwners).values([
     { eventId: event.id, publisherId: s.creator, role: 'creator' },
     ...(s.coOwners ?? []).map((id) => ({
@@ -224,7 +249,7 @@ for (const s of seeds) {
 }
 
 console.log('Seed complete:')
-console.log(`  publishers: ${alice.slug}, ${bob.slug}`)
+console.log(`  publishers: ${alice.slug}, ${bob.slug} (scout: ${scout.slug})`)
 console.log(`  venues: ${rso.name}, ${blank.name}`)
 console.log(`  events: ${seeds.length}`)
 

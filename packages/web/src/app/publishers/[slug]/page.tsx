@@ -6,14 +6,14 @@ import { EventList } from '@/components/EventList'
 import { LinkButtons } from '@/components/LinkButtons'
 import { JsonLd } from '@/components/JsonLd'
 import { Headline } from '@/components/Headline'
-import { TickIcon } from '@/components/Icons'
 
 type Params = Promise<{ slug: string }>
 
 async function load(params: Params) {
   const { slug } = await params
   const publisher = await getPublisher(slug)
-  if (!publisher) notFound()
+  // Pure scouts own no events; their public profile page is a separate follow-up
+  if (!publisher || !publisher.is_publisher) notFound()
   return publisher
 }
 
@@ -48,15 +48,7 @@ export default async function PublisherPage({ params }: { params: Params }) {
 
       <header className="kk-intro" style={{ gap: 16 }}>
         <p className="kk-eyebrow">Publisher</p>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <Headline text={p.name} />
-          {p.verified && (
-            <span className="kk-badge kk-badge--verified" title="Verified publisher">
-              <TickIcon />
-              Verified
-            </span>
-          )}
-        </div>
+        <Headline text={p.name} />
         <LinkButtons links={p.links} />
       </header>
 

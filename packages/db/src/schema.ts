@@ -26,6 +26,7 @@ export const editHistoryAction = pgEnum('edit_history_action', [
   'updated',
   'cancelled',
   'ownership_changed',
+  'deleted',
 ])
 
 type Links = Record<string, string>
@@ -36,6 +37,10 @@ export const publishers = pgTable('publishers', {
   slug: text('slug').notNull().unique(),
   email: text('email').notNull().unique(),
   verified: boolean('verified').notNull().default(false),
+  /** Creates owned events. False for pure scouts. */
+  isPublisher: boolean('is_publisher').notNull().default(true),
+  /** Adds unclaimed events on behalf of organizers who aren't on the platform yet. */
+  isScout: boolean('is_scout').notNull().default(false),
   invitedBy: uuid('invited_by').references((): any => publishers.id, { onDelete: 'set null' }),
   apiKeyHash: text('api_key_hash'),
   links: jsonb('links').$type<Links>().notNull().default({}),
@@ -67,6 +72,7 @@ export const events = pgTable(
     city: text('city').notNull(),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     links: jsonb('links').$type<Links>().notNull().default({}),
+    /** Immutable "Added by": survives claims, so provenance is kept. Ownership lives in event_owners. */
     createdBy: uuid('created_by')
       .notNull()
       .references(() => publishers.id, { onDelete: 'restrict' }),
@@ -91,6 +97,7 @@ export const eventOwners = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.eventId, t.publisherId] }),
+    // At most one creator. An event without any owner row is unclaimed (added by a scout).
     uniqueIndex('event_owners_one_creator_per_event')
       .on(t.eventId)
       .where(sql`${t.role} = 'creator'`),
@@ -137,7 +144,8 @@ export const editHistory = pgTable('edit_history', {
     .notNull()
     .references(() => publishers.id, { onDelete: 'restrict' }),
   action: editHistoryAction('action').notNull(),
-  diff: jsonb('diff').$type<Record<string, { before: unknown; after: unknown }>>().notNull(),
+  // Field changes as { before, after }; CLI actions add `via: 'cli'`
+  diff: jsonb('diff').$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

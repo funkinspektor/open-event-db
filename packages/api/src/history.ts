@@ -4,7 +4,7 @@ type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
 export type DbOrTx = Db | Tx
 
 export type EntityType = 'event' | 'venue' | 'publisher' | 'invite'
-export type HistoryAction = 'created' | 'updated' | 'cancelled' | 'ownership_changed'
+export type HistoryAction = 'created' | 'updated' | 'cancelled' | 'ownership_changed' | 'deleted'
 export type Diff = Record<string, { before: unknown; after: unknown }>
 
 export function diff(before: Record<string, unknown> | null, after: Record<string, unknown>): Diff {

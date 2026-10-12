@@ -114,6 +114,8 @@ export async function authRoutes(app: FastifyInstance) {
         slug: p.slug,
         links: p.links,
         verified: p.verified,
+        is_publisher: p.isPublisher,
+        is_scout: p.isScout,
         created_at: p.createdAt.toISOString(),
         email: p.email,
         has_api_key: p.apiKeyHash !== null,

@@ -18,6 +18,7 @@ import { encodeCursor, decodeCursor } from '../cursor.js'
 import { badRequest, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, requireSession, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
+import { serializeSlimEvent, slimEventColumns } from '../queries/events.js'
 
 interface PublisherCursor extends Record<string, string> {
   name: string
@@ -33,6 +34,8 @@ function serializePublisher(p: Publisher) {
     slug: p.slug,
     links: p.links,
     verified: p.verified,
+    is_publisher: p.isPublisher,
+    is_scout: p.isScout,
     created_at: p.createdAt.toISOString(),
   }
 }
@@ -57,7 +60,8 @@ export async function publisherRoutes(app: FastifyInstance) {
 
     const decoded = cursor ? decodeCursor<PublisherCursor>(cursor) : null
 
-    const conditions = [eq(publishers.verified, true)]
+    // Scouts aren't publishers: they add events but don't organize them
+    const conditions = [eq(publishers.verified, true), eq(publishers.isPublisher, true)]
     if (q) conditions.push(ilike(publishers.name, `%${q}%`))
     if (decoded) {
       conditions.push(
@@ -152,21 +156,7 @@ export async function publisherRoutes(app: FastifyInstance) {
       .where(eq(eventOwners.publisherId, publisher.id))
 
     const upcoming = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        startsAt: events.startsAt,
-        endsAt: events.endsAt,
-        status: events.status,
-        tags: events.tags,
-        city: events.city,
-        locationText: events.locationText,
-        recurrence: events.recurrence,
-        venueId: venues.id,
-        venueName: venues.name,
-        venueCity: venues.city,
-      })
+      .select(slimEventColumns)
       .from(events)
       .leftJoin(venues, eq(events.venueId, venues.id))
       .where(
@@ -182,21 +172,7 @@ export async function publisherRoutes(app: FastifyInstance) {
     return {
       data: {
         ...serializePublisher(publisher),
-        upcoming_events: upcoming.map((r) => ({
-          id: r.id,
-          title: r.title,
-          description: r.description,
-          starts_at: r.startsAt.toISOString(),
-          ends_at: r.endsAt?.toISOString() ?? null,
-          status: r.status,
-          tags: r.tags,
-          city: r.city,
-          location_text: r.locationText,
-          recurrence: r.recurrence,
-          venue: r.venueId
-            ? { id: r.venueId, name: r.venueName!, city: r.venueCity! }
-            : null,
-        })),
+        upcoming_events: upcoming.map(serializeSlimEvent),
       },
     }
   })

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
+import type { EventDetail, EventStatus } from '@open-event-db/shared'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
@@ -14,7 +14,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 interface Props {
   mode: 'create' | 'edit'
   event?: EventDetail
-  role?: EventOwnerRole
+  /** Edit mode: whether the current account may set `cancelled` (creator, or a scout on an unclaimed event). */
+  canCancel?: boolean
   knownTags: string[]
 }
 
@@ -28,7 +29,7 @@ function toLocalInput(iso: string | null | undefined): string {
 }
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null)
 
-export function EventForm({ mode, event, role, knownTags }: Props) {
+export function EventForm({ mode, event, canCancel = false, knownTags }: Props) {
   const router = useRouter()
   const [title, setTitle] = useState(event?.title ?? '')
   const [startsAt, setStartsAt] = useState(toLocalInput(event?.starts_at))
@@ -47,7 +48,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const statusOptions: EventStatus[] =
-    role === 'creator' ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
+    canCancel ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
   // Co-owners can't cancel, but an event that's already cancelled must still show its real status.
   if (event?.status === 'cancelled' && !statusOptions.includes('cancelled')) statusOptions.push('cancelled')
 
@@ -204,12 +205,12 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
             Status
             <select value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className="kk-input">
               {statusOptions.map((s) => (
-                <option key={s} value={s} disabled={s === 'cancelled' && role !== 'creator'}>
+                <option key={s} value={s} disabled={s === 'cancelled' && !canCancel}>
                   {s}
                 </option>
               ))}
             </select>
-            {role === 'co_owner' && <span className="kk-hint">Only the event creator can cancel an event.</span>}
+            {!canCancel && <span className="kk-hint">Only the event creator can cancel an event.</span>}
           </label>
         )}
       </div>

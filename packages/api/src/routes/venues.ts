@@ -8,6 +8,7 @@ import { notFound } from '../errors.js'
 import { serializeCoordinates } from '../serializers.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
+import { serializeSlimEvent, slimEventColumns } from '../queries/events.js'
 
 interface VenueCursor extends Record<string, string> {
   name: string
@@ -82,19 +83,9 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!venue) throw notFound('Venue not found')
 
     const upcoming = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        startsAt: events.startsAt,
-        endsAt: events.endsAt,
-        status: events.status,
-        tags: events.tags,
-        city: events.city,
-        locationText: events.locationText,
-        recurrence: events.recurrence,
-      })
+      .select(slimEventColumns)
       .from(events)
+      .leftJoin(venues, eq(events.venueId, venues.id))
       .where(
         and(
           eq(events.venueId, id),
@@ -108,19 +99,7 @@ export async function venueRoutes(app: FastifyInstance) {
     return {
       data: {
         ...serializeVenue(venue),
-        upcoming_events: upcoming.map((r) => ({
-          id: r.id,
-          title: r.title,
-          description: r.description,
-          starts_at: r.startsAt.toISOString(),
-          ends_at: r.endsAt?.toISOString() ?? null,
-          status: r.status,
-          tags: r.tags,
-          city: r.city,
-          location_text: r.locationText,
-          recurrence: r.recurrence,
-          venue: { id: venue.id, name: venue.name, city: venue.city },
-        })),
+        upcoming_events: upcoming.map(serializeSlimEvent),
       },
     }
   })

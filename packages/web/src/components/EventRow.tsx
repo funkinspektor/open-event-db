@@ -57,6 +57,11 @@ export function EventRow({
       <div className="kk-event__aside">
         {running && <span className="kk-badge kk-badge--now">● Happening now</span>}
         <StatusBadge status={event.status} />
+        {!event.claimed && (
+          <span className="kk-badge kk-badge--unconfirmed" title="Added by a scout, not yet confirmed by the organizer">
+            Unconfirmed
+          </span>
+        )}
         {action ??
           (showTags &&
             event.tags.map((t) => (

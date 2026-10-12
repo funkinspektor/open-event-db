@@ -1,20 +1,34 @@
+import { createInterface } from 'node:readline/promises'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { createDb } from './index.js'
-import { editHistory, events, publishers } from './schema.js'
+import { editHistory, eventOwners, events, publishers } from './schema.js'
 import { generateApiKey } from './tokens.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
 const db = createDb(url)
 
-const [cmd, ...args] = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
+const argv = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
+const flags = new Set(argv.filter((a) => a.startsWith('--')))
+const [cmd, ...args] = argv.filter((a) => !a.startsWith('--'))
 
 function usage(): never {
   console.error(`Usage:
-  pnpm db:cli create-publisher <name> <slug> <email>   Create a verified seed publisher
+  pnpm db:cli create-publisher <name> <slug> <email> [--scout]
+                                                        Create a verified publisher (or, with --scout, a scout)
   pnpm db:cli set-email <slug> <email>                  Change a publisher's login email
   pnpm db:cli api-key <slug>                            Generate (or reset) the API key for a publisher
-  pnpm db:cli delete-event <id>                         Hard-delete an event incl. owners and edit history (dev/testing only)`)
+  pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
+  pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)`)
   process.exit(1)
+}
+
+const isUuid = (s: string | undefined): s is string => !!s && /^[0-9a-f-]{36}$/i.test(s)
+
+async function confirm(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const answer = await rl.question(`${question} y/N `)
+  rl.close()
+  return answer.trim().toLowerCase() === 'y'
 }
 
 function fail(message: string): never {
@@ -47,11 +61,14 @@ switch (cmd) {
     if (taken?.slug === slug) fail(`Slug "${slug}" is already taken`)
     if (taken) fail(`Email "${email}" is already used by publisher "${taken.slug}"`)
 
+    // Scouts curate events for organizers who aren't on the platform; they never own events.
+    // Scouts are always verified — the role is trust-gated by definition.
+    const scout = flags.has('--scout')
     const [p] = await db
       .insert(publishers)
-      .values({ name, slug, email, verified: true })
+      .values({ name, slug, email, verified: true, isPublisher: !scout, isScout: scout })
       .returning({ id: publishers.id, slug: publishers.slug })
-    console.log(`Created publisher ${p?.slug} (${p?.id})`)
+    console.log(`Created ${scout ? 'scout' : 'publisher'} ${p?.slug} (${p?.id})`)
     break
   }
   case 'set-email': {
@@ -90,20 +107,76 @@ switch (cmd) {
     console.log(key)
     break
   }
+  case 'claim-event': {
+    const [id, slug] = args
+    if (!isUuid(id) || !slug) usage()
+    const [event] = await db.select({ title: events.title }).from(events).where(eq(events.id, id)).limit(1)
+    if (!event) fail(`No event with id "${id}"`)
+    const [p] = await db
+      .select({ id: publishers.id, name: publishers.name, isPublisher: publishers.isPublisher })
+      .from(publishers)
+      .where(eq(publishers.slug, slug))
+      .limit(1)
+    if (!p) fail(`No publisher with slug "${slug}"`)
+    if (!p.isPublisher) fail(`"${slug}" is a scout account and cannot own events`)
+
+    const owners = await db
+      .select({ name: publishers.name })
+      .from(eventOwners)
+      .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
+      .where(eq(eventOwners.eventId, id))
+    if (owners.length) fail(`Event is already claimed by ${owners.map((o) => o.name).join(', ')}`)
+
+    await db.transaction(async (tx) => {
+      await tx.insert(eventOwners).values({ eventId: id, publisherId: p.id, role: 'creator' })
+      // CLI actions log the affected publisher as actor
+      await tx.insert(editHistory).values({
+        entityType: 'event',
+        entityId: id,
+        publisherId: p.id,
+        action: 'ownership_changed',
+        diff: { owners: { before: [], after: [p.id] }, via: 'cli' },
+      })
+    })
+    console.log(`"${event.title}" is now claimed by ${p.name}`)
+    break
+  }
   case 'delete-event': {
     const [id] = args
-    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) usage()
-    const [deleted] = await db.transaction(async (tx) => {
+    if (!isUuid(id)) usage()
+    const [event] = await db
+      .select({ title: events.title, createdBy: events.createdBy })
+      .from(events)
+      .where(eq(events.id, id))
+      .limit(1)
+    if (!event) fail(`No event with id "${id}"`)
+
+    const [creator] = await db
+      .select({ id: publishers.id, name: publishers.name })
+      .from(eventOwners)
+      .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
+      .where(and(eq(eventOwners.eventId, id), eq(eventOwners.role, 'creator')))
+      .limit(1)
+    if (creator && !flags.has('--yes')) {
+      const ok = await confirm(`Event "${event.title}" belongs to ${creator.name}. Delete anyway?`)
+      if (!ok) fail('Aborted')
+    }
+
+    await db.transaction(async (tx) => {
+      // Drop the content history too, otherwise the removed content would still be stored
       await tx
         .delete(editHistory)
         .where(and(eq(editHistory.entityType, 'event'), eq(editHistory.entityId, id)))
-      return tx.delete(events).where(eq(events.id, id)).returning({ title: events.title })
+      await tx.delete(events).where(eq(events.id, id))
+      await tx.insert(editHistory).values({
+        entityType: 'event',
+        entityId: id,
+        publisherId: creator?.id ?? event.createdBy,
+        action: 'deleted',
+        diff: { via: 'cli' },
+      })
     })
-    if (!deleted) {
-      console.error(`No event with id "${id}"`)
-      process.exit(1)
-    }
-    console.log(`Deleted event "${deleted.title}" (${id}) with its owners and edit history`)
+    console.log(`Deleted event "${event.title}" (${id}); only a "deleted" history entry remains`)
     break
   }
   default:

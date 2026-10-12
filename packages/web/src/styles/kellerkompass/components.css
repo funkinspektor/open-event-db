@@ -83,7 +83,8 @@ button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cu
 .kk-badge--now { background: var(--uv); color: var(--on-accent); box-shadow: var(--glow-md); }
 .kk-badge--cancelled { background: var(--ink); color: var(--ground); }
 .kk-badge--postponed { border: 1px solid var(--warn); color: var(--warn); }
-.kk-badge--verified { padding: 6px 12px; font-size: 14px; border: 1px solid var(--uv); color: var(--uv); box-shadow: var(--glow-soft); }
+.kk-badge--unconfirmed { border: 1px dashed var(--border); color: var(--muted); font-weight: 400; }
+.kk-badge--scout { border: 1px solid var(--border); color: var(--muted); }
 
 /* Section title */
 .kk-section-title { margin: 0 0 24px; display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-weight: 400; font-size: 40px; line-height: 1; }
