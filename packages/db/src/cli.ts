@@ -11,6 +11,7 @@ const [cmd, ...args] = process.argv.slice(2).filter((a, i) => !(i === 0 && a ===
 function usage(): never {
   console.error(`Usage:
   pnpm db:cli create-publisher <name> <slug> <email>   Create a verified seed publisher
+  pnpm db:cli set-email <slug> <email>                  Change a publisher's login email
   pnpm db:cli api-key <slug>                            Generate (or reset) the API key for a publisher
   pnpm db:cli delete-event <id>                         Hard-delete an event incl. owners and edit history (dev/testing only)`)
   process.exit(1)
@@ -21,6 +22,13 @@ function fail(message: string): never {
   process.exit(1)
 }
 
+// Stored lowercased: magic-link login matches emails case-insensitively
+function normalizeEmail(raw: string): string {
+  const email = raw.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(`Invalid email "${raw}"`)
+  return email
+}
+
 switch (cmd) {
   case 'create-publisher': {
     const [name, slug, rawEmail] = args
@@ -29,9 +37,7 @@ switch (cmd) {
     if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug) || slug.length > 100) {
       fail(`Invalid slug "${slug}": use lowercase letters, digits and hyphens (no leading/trailing hyphen)`)
     }
-    // Stored lowercased: magic-link login matches emails case-insensitively
-    const email = rawEmail.trim().toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(`Invalid email "${rawEmail}"`)
+    const email = normalizeEmail(rawEmail)
 
     const [taken] = await db
       .select({ slug: publishers.slug, email: publishers.email })
@@ -46,6 +52,25 @@ switch (cmd) {
       .values({ name, slug, email, verified: true })
       .returning({ id: publishers.id, slug: publishers.slug })
     console.log(`Created publisher ${p?.slug} (${p?.id})`)
+    break
+  }
+  case 'set-email': {
+    const [slug, rawEmail] = args
+    if (!slug || !rawEmail) usage()
+    const email = normalizeEmail(rawEmail)
+    const [taken] = await db
+      .select({ slug: publishers.slug })
+      .from(publishers)
+      .where(sql`lower(${publishers.email}) = ${email}`)
+      .limit(1)
+    if (taken && taken.slug !== slug) fail(`Email "${email}" is already used by publisher "${taken.slug}"`)
+    const [p] = await db
+      .update(publishers)
+      .set({ email, updatedAt: new Date() })
+      .where(eq(publishers.slug, slug))
+      .returning({ slug: publishers.slug })
+    if (!p) fail(`No publisher with slug "${slug}"`)
+    console.log(`Login email for ${p.slug} is now ${email}`)
     break
   }
   case 'api-key': {
