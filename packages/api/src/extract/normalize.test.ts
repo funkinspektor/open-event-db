@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Extraction, Weekday } from '@open-event-db/shared'
-import { isEmptyDraft, normalizeExtraction, parseTime, resolveDate } from './normalize.js'
+import { cleanAddress, cleanCity, isEmptyDraft, normalizeExtraction, parseTime, resolveDate } from './normalize.js'
 
 // Monday 12 October 2026, 14:00 in Berlin (CEST, UTC+2)
 const NOW = new Date('2026-10-12T12:00:00Z')
@@ -67,6 +67,25 @@ describe('parseTime', () => {
   it.each(['24:00', '11pm', 'late', '', null])('%s → null', (input) => expect(parseTime(input)).toBeNull())
 })
 
+describe('cleanCity / cleanAddress', () => {
+  it.each([
+    ['Berlin, Deutschland', 'Berlin'],
+    ['Berlin, Germany', 'Berlin'],
+    ['10439 Berlin', 'Berlin'],
+    ['Berlin DE', 'Berlin'],
+    ['Leipzig', 'Leipzig'],
+    [' ', null],
+  ])('city %s → %s', (input, out) => expect(cleanCity(input)).toBe(out))
+
+  it.each([
+    ['Dunckerstraße 64, 10439 Berlin, Deutschland', 'Dunckerstraße 64, 10439'],
+    ['Ritterstraße 24, 10969 Berlin', 'Ritterstraße 24, 10969'],
+    ['Am Flutgraben 2', 'Am Flutgraben 2'],
+    ['Berliner Str. 5', 'Berliner Str. 5'],
+    ['Uferpromenade', 'Uferpromenade'],
+  ])('address %s → %s', (input, out) => expect(cleanAddress(input, 'Berlin')).toBe(out))
+})
+
 describe('normalizeExtraction', () => {
   it('builds Berlin timestamps and rolls a night past midnight into the next day', () => {
     const d = normalizeExtraction({ ...empty, date: written(17, 10), start_time: '23:00', end_time: '06:00' }, NOW)
@@ -114,7 +133,7 @@ describe('normalizeExtraction', () => {
         ...empty,
         title: '  Keller Nacht ',
         venue_name: ' ',
-        lineup: ['DJ A', ' DJ A', 'B', ''],
+        lineup: ['DJ A', ' DJ A', 'B', '', 'Djs: Hanzel (Effetto Notte) IT/DE', 'Lavion FR'],
         tags: ['Techno', 'techno ', 'Open Air'],
       },
       NOW,
@@ -122,7 +141,7 @@ describe('normalizeExtraction', () => {
     expect(d.title).toBe('Keller Nacht')
     expect(d.venue_name).toBeNull()
     expect(d.city).toBe('Berlin')
-    expect(d.lineup).toEqual(['DJ A', 'B'])
+    expect(d.lineup).toEqual(['DJ A', 'B', 'Hanzel (Effetto Notte) IT/DE', 'Lavion FR'])
     expect(d.tags).toEqual(['techno', 'open air'])
   })
 

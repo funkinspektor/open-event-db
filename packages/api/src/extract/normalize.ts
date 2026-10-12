@@ -154,6 +154,30 @@ const text = (value: string | null, max: number): string | null => {
   return t ? t.slice(0, max) : null
 }
 
+const COUNTRY_SUFFIX = /(?:,\s*|\s+)(?:deutschland|germany|de)$/i
+
+/** "10439 Berlin, Deutschland" → "Berlin" */
+export function cleanCity(value: string | null): string | null {
+  const city = text(value, 100)
+    ?.replace(COUNTRY_SUFFIX, '')
+    .replace(/^\d{5}\s+/, '')
+    .trim()
+  return city || null
+}
+
+/** Street, number and postal code; a trailing city or country is dropped ("…, 10439 Berlin" → "…, 10439"). */
+export function cleanAddress(value: string | null, city: string | null): string | null {
+  let address = text(value, 300)?.replace(COUNTRY_SUFFIX, '').trim()
+  if (address && city) {
+    const escaped = city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    address = address.replace(new RegExp(`(,\\s*|\\s+)${escaped}$`, 'i'), '').trim()
+  }
+  return address || null
+}
+
+/** "DJs: Hanzel" → "Hanzel"; section labels the model sometimes keeps. */
+const LINEUP_LABEL = /^(djs?|live|line-?up|support|special guests?|b2b)\s*:\s*/i
+
 /** Model output → form draft, applying the PRD's input-handling rules. `now` decides "next occurrence". */
 export function normalizeExtraction(x: Extraction, now: Date): EventDraft {
   const today = berlinToday(now)
@@ -177,7 +201,8 @@ export function normalizeExtraction(x: Extraction, now: Date): EventDraft {
     }
   }
 
-  const lineup = [...new Set(x.lineup.map((n) => n.trim()).filter(Boolean))].slice(0, 50)
+  const lineup = [...new Set(x.lineup.map((n) => n.trim().replace(LINEUP_LABEL, '').trim()).filter(Boolean))].slice(0, 50)
+  const city = cleanCity(x.city) ?? 'Berlin'
   const tags = normalizeTags(x.tags)
     .filter((t) => t.length <= 50)
     .slice(0, 20)
@@ -188,8 +213,8 @@ export function normalizeExtraction(x: Extraction, now: Date): EventDraft {
     starts_at: startsAt ? berlinIso(startsAt) : null,
     ends_at: endsAt ? berlinIso(endsAt) : null,
     venue_name: text(x.venue_name, 200),
-    address: text(x.address, 300),
-    city: text(x.city, 100) ?? 'Berlin',
+    address: cleanAddress(x.address, city),
+    city,
     description: text(x.description, 10_000),
     lineup,
     tags,

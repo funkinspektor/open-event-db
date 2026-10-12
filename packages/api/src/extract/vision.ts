@@ -36,15 +36,17 @@ General rules:
 - Ignore platform UI: like/interested/going counts, comments and commenter names, ads, buttons, neighbouring posts.
 
 Fields:
-- title: the event's name or headline. Not the venue name, and not the poster's account name unless it is clearly the event name.
+- title: the event's name. On flyers it is usually the largest or most stylised lettering, not a slogan or tagline describing the party. Not the venue name, and not the poster's account name unless it is clearly the event name. Never put the event name into venue_name.
 - date: only an explicit calendar date such as "17.10.", "Sa 17 Okt", "Sat, Oct 17" or "17/10/2026". Report day and month as numbers, year only if it is written (otherwise null; two-digit years as written), and weekday (mon … sun) only if it is written next to the date. Numeric dates are day-month order unless the source is clearly American. Relative expressions are NOT dates: "tonight", "today", "tomorrow", "this Saturday", "next week", "in 3 days" → date = null.
 - start_time, end_time: 24-hour "HH:MM" ("23h" → "23:00", "11pm" → "23:00"). "Open end", "till late" or similar → end_time = null.
 - end_date: only when an explicit, different end date is written (e.g. a festival "17.–19.10."). For a night like "23:00–06:00" leave end_date null.
-- venue_name: the venue, club or location name. address: street and number if shown. city: only if shown.
-- description: a short summary (one to three sentences) of what the event is. Write it in the language the image's own text is written in: German text → German description, English text → English. Never translate into English. Do not copy long promo text, and leave out lineup, date and venue.
-- lineup: performer, artist and DJ names as written, one per entry.
+- venue_name: the venue, club or location name.
+- address: street, house number and postal code as shown, e.g. "Dunckerstraße 64, 10439". No city or country in this field.
+- city: only the city name if shown, e.g. "Berlin" — no postal code, no country.
+- description: one or two sentences, at most about 200 characters, saying what the event is, in your own words. Never copy sentences from the image. Write it in the language of the event's own text (the flyer, post or event description), not the language of the platform's buttons and menus: German event text → German, English event text → English. Leave out lineup, date and venue.
+- lineup: performer, artist and DJ names, one act per entry. Keep country codes written next to a name ("Lavion FR"), but leave out section labels such as "DJs:", "Live:" or "Line-up:".
 - tags: up to five lowercase genre or format keywords that are shown or clearly stated, e.g. "techno", "house", "queer", "open air", "concert", "workshop".
-- links: URLs or handles visible in the image, each with a kind. Write full URLs. An Instagram handle "@name" becomes "https://www.instagram.com/name".`
+- links: shop and ticket pages are kind "tickets". Only URLs and handles that are literally written in the image, each with a kind. Never build or guess a URL from the event, venue or platform name — if no URL is written, return an empty list. The page's own address counts only if a browser address bar is visible. Write full URLs. An Instagram handle "@name" becomes "https://www.instagram.com/name".`
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
 const nullableString = { type: ['string', 'null'] }
