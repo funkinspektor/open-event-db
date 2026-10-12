@@ -188,7 +188,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags }: Props) 
               className="kk-input"
             />
           )}
-          <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Line breaks are kept.</span>
+          <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Pasted URLs become links, line breaks are kept.</span>
         </div>
 
         <TagInput value={tags} onChange={setTags} knownTags={knownTags} />
