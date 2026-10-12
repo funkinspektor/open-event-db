@@ -67,6 +67,12 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
         const detail = await res.text().catch(() => '')
         throw new Error(`Scaleway TEM responded ${res.status}: ${detail.slice(0, 500)}`)
       }
+      // Accepted only means queued — the id lets you look up delivery status in the Scaleway console.
+      if (!isProduction) {
+        const json = (await res.json().catch(() => null)) as { emails?: { id: string; status: string }[] } | null
+        const sent = json?.emails?.[0]
+        console.log(`[email → ${to}] accepted by Scaleway TEM (id ${sent?.id ?? '?'}, status ${sent?.status ?? '?'})`)
+      }
     },
   }
 }
