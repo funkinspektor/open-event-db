@@ -3,6 +3,7 @@ import {
   and,
   arrayOverlaps,
   asc,
+  desc,
   eq,
   gt,
   gte,
@@ -50,7 +51,7 @@ async function loadEvent(id: string) {
 export async function eventRoutes(app: FastifyInstance) {
   app.get('/events', async (req) => {
     const query = eventListQuerySchema.parse(req.query)
-    const { limit, cursor, city, from, to, tags, venue_id, publisher_id, q } = query
+    const { limit, cursor, city, from, to, tags, venue_id, publisher_id, q, order } = query
     const status: EventStatus[] = query.status?.length
       ? query.status
       : ['scheduled', 'postponed']
@@ -74,10 +75,11 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     if (decoded) {
       const cursorDate = new Date(decoded.starts_at)
+      const after = order === 'desc' ? lt : gt
       conditions.push(
         or(
-          gt(events.startsAt, cursorDate),
-          and(eq(events.startsAt, cursorDate), gt(events.id, decoded.id)),
+          after(events.startsAt, cursorDate),
+          and(eq(events.startsAt, cursorDate), after(events.id, decoded.id)),
         )!,
       )
     }
@@ -101,7 +103,7 @@ export async function eventRoutes(app: FastifyInstance) {
       .from(events)
       .leftJoin(venues, eq(events.venueId, venues.id))
       .where(and(...conditions))
-      .orderBy(asc(events.startsAt), asc(events.id))
+      .orderBy(...(order === 'desc' ? [desc(events.startsAt), desc(events.id)] : [asc(events.startsAt), asc(events.id)]))
       .limit(limit + 1)
 
     const hasMore = rows.length > limit

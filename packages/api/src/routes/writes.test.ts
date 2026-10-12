@@ -299,3 +299,39 @@ describe('publisher profile', () => {
     expect(res.statusCode).toBe(403)
   })
 })
+
+describe('event list order', () => {
+  it('order=desc returns newest first and paginates with the cursor', async () => {
+    const starts = ['2020-01-01T20:00:00Z', '2020-02-01T20:00:00Z', '2020-03-01T20:00:00Z']
+    for (const [i, starts_at] of starts.entries()) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/events',
+        headers: auth(keyA),
+        payload: { title: `Order test ${i}`, starts_at, venue_id: venue.id },
+      })
+      expect(res.statusCode).toBe(201)
+    }
+
+    const page = async (cursor?: string) => {
+      const qs = new URLSearchParams({ venue_id: venue.id, to: '2021-01-01T00:00:00Z', order: 'desc', limit: '2' })
+      if (cursor) qs.set('cursor', cursor)
+      const res = await app.inject({ method: 'GET', url: `/api/v1/events?${qs}` })
+      expect(res.statusCode).toBe(200)
+      return res.json() as { data: { starts_at: string }[]; meta: { cursor: string | null; has_more: boolean } }
+    }
+
+    const first = await page()
+    expect(first.data.map((e) => e.starts_at)).toEqual(['2020-03-01T20:00:00.000Z', '2020-02-01T20:00:00.000Z'])
+    expect(first.meta.has_more).toBe(true)
+
+    const second = await page(first.meta.cursor!)
+    expect(second.data.map((e) => e.starts_at)).toEqual(['2020-01-01T20:00:00.000Z'])
+    expect(second.meta.has_more).toBe(false)
+  })
+
+  it('rejects an unknown order', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/events?order=sideways' })
+    expect(res.statusCode).toBe(400)
+  })
+})

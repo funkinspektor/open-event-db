@@ -36,12 +36,12 @@ export default async function VenuePage({ params }: { params: Params }) {
   const v = await load(params)
 
   const apiQuery = new URLSearchParams({ status: ALL_STATUSES, venue_id: v.id, limit: '20' })
-  // The API only sorts ascending, so past events are fetched in one page and reversed.
+  // Newest first, so very busy venues show their most recent past events.
   const pastQuery = new URLSearchParams({
     status: ALL_STATUSES,
     venue_id: v.id,
-    from: '2000-01-01T00:00:00Z',
     to: new Date().toISOString(),
+    order: 'desc',
     limit: '100',
   })
   const [events, pastEvents, me] = await Promise.all([
@@ -49,7 +49,7 @@ export default async function VenuePage({ params }: { params: Params }) {
     getEvents(pastQuery),
     getCurrentPublisher(),
   ])
-  const past = [...pastEvents.data].reverse()
+  const past = pastEvents.data
 
   const jsonLd = {
     '@context': 'https://schema.org',

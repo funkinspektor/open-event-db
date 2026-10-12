@@ -26,6 +26,8 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   publisher_id: z.string().uuid().optional(),
   status: csvOrArray(eventStatusSchema),
   q: z.string().min(1).optional(),
+  /** Sort by start time: `asc` (soonest first, default) or `desc` (newest first, e.g. for past events). */
+  order: z.enum(['asc', 'desc']).default('asc'),
 })
 
 export type EventListQuery = z.infer<typeof eventListQuerySchema>
