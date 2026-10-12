@@ -94,7 +94,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
         setError(json.error?.message ?? `Request failed (${res.status})`)
         return
       }
-      router.push(`/events/${json.data.id}`)
+      router.push(`/events/${json.data.id}?saved=${mode === 'create' ? 'created' : 'updated'}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')

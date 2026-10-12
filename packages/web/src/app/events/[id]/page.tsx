@@ -12,8 +12,15 @@ import { LinkButtons } from '@/components/LinkButtons'
 import { Map } from '@/components/Map'
 import { JsonLd } from '@/components/JsonLd'
 import { Headline } from '@/components/Headline'
+import { Toast } from '@/components/Toast'
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ saved?: string }>
+
+const SAVED_MESSAGES: Record<string, string> = {
+  created: 'Event created — it’s live now.',
+  updated: 'Changes saved.',
+}
 
 async function load(params: Params) {
   const { id } = await params
@@ -41,8 +48,9 @@ const SCHEMA_STATUS = {
   cancelled: 'https://schema.org/EventCancelled',
 } as const
 
-export default async function EventPage({ params }: { params: Params }) {
-  const [e, me] = await Promise.all([load(params), getCurrentPublisher()])
+export default async function EventPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
+  const [e, me, { saved }] = await Promise.all([load(params), getCurrentPublisher(), searchParams])
+  const savedMessage = saved ? SAVED_MESSAGES[saved] : undefined
   const canEdit = !!me && e.owners.some((o) => o.publisher_id === me.id)
 
   const jsonLd = {
@@ -80,6 +88,7 @@ export default async function EventPage({ params }: { params: Params }) {
   return (
     <article className="kk-container" style={{ gap: 52 }}>
       <JsonLd data={jsonLd} />
+      {savedMessage && canEdit && <Toast message={savedMessage} param="saved" />}
 
       <StatusBanner status={e.status} />
 

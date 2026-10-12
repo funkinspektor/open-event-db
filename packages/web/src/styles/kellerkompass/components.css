@@ -252,3 +252,9 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-prose pre code { padding: 0; background: transparent; }
 .kk-prose hr { margin: 1.6em 0; border: 0; border-top: 1px solid var(--line); }
 .kk-preview { min-height: 148px; padding: 14px 16px; border-radius: var(--radius-m); border: 1px dashed var(--border); box-sizing: border-box; font-weight: 400; }
+
+/* Toast: bottom-centre confirmation after saving */
+.kk-toast { position: fixed; left: 50%; bottom: 24px; z-index: 50; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 10px 10px 10px 16px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--uv); box-shadow: var(--glow-soft); color: var(--ink); font-size: 15px; font-weight: 500; animation: kk-toast-in 0.2s ease-out; }
+.kk-toast__dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-sm); }
+@keyframes kk-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .kk-toast { animation: none; } }
