@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getEvent, getTags, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { EventForm } from '@/components/EventForm'
+import { CoOwnersEditor } from '@/components/CoOwnersEditor'
 import { Headline } from '@/components/Headline'
 
 type Params = Promise<{ id: string }>
@@ -32,6 +33,11 @@ export default async function EditEventPage({ params }: { params: Params }) {
         </p>
       </section>
       <EventForm mode="edit" event={event} role={role} knownTags={tags} />
+      {role === 'creator' && (
+        <div className="mt-10">
+          <CoOwnersEditor eventId={event.id} owners={event.owners} />
+        </div>
+      )}
     </div>
   )
 }
