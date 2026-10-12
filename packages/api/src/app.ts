@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import { errorHandler } from './error-handler.js'
+import { notFound } from './errors.js'
 import { healthRoutes } from './routes/health.js'
 import { tagsRoutes } from './routes/tags.js'
 import { publisherRoutes } from './routes/publishers.js'
@@ -10,6 +11,9 @@ import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
 import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
+
+const UUID_PARAMS = ['id', 'publisher_id'] as const
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export interface AppOptions {
   logger?: boolean
@@ -19,6 +23,9 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
   const app = Fastify({ logger })
 
   app.setErrorHandler(errorHandler)
+  app.setNotFoundHandler((req, reply) => {
+    reply.status(404).send({ error: { code: 'not_found', message: `Route ${req.method} ${req.url} not found` } })
+  })
   app.decorateRequest('publisher', null)
   app.decorateRequest('authMethod', null)
 
@@ -39,6 +46,14 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
   await app.register(healthRoutes)
   await app.register(
     async (api) => {
+      // ID path params are UUIDs; anything else can't match a row, so answer 404
+      // before Postgres rejects the cast with a 500. Runs after auth (onRequest).
+      api.addHook('preValidation', async (req) => {
+        const params = req.params as Record<string, string>
+        for (const key of UUID_PARAMS) {
+          if (key in params && !UUID_RE.test(params[key]!)) throw notFound()
+        }
+      })
       await api.register(eventRoutes)
       await api.register(extractRoutes)
       await api.register(venueRoutes)

@@ -2,6 +2,13 @@ import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify'
 import { ZodError } from 'zod'
 import { ApiError } from './errors.js'
 
+const CLIENT_ERROR_CODES: Record<number, string> = {
+  400: 'bad_request',
+  404: 'not_found',
+  413: 'payload_too_large',
+  415: 'unsupported_media_type',
+}
+
 export function errorHandler(
   err: FastifyError | Error,
   req: FastifyRequest,
@@ -29,20 +36,17 @@ export function errorHandler(
     return
   }
 
-  // Fastify's own body errors (too large, unsupported Content-Type)
-  if ('statusCode' in err && (err.statusCode === 413 || err.statusCode === 415)) {
-    reply.status(err.statusCode).send({
-      error: {
-        code: err.statusCode === 413 ? 'payload_too_large' : 'unsupported_media_type',
-        message: err.message,
-      },
+  if ('validation' in err && err.validation) {
+    reply.status(400).send({
+      error: { code: 'validation_error', message: err.message ?? 'Validation failed' },
     })
     return
   }
 
-  if ('validation' in err && err.validation) {
-    reply.status(400).send({
-      error: { code: 'validation_error', message: err.message ?? 'Validation failed' },
+  // Fastify's own client errors: malformed JSON, empty body, too large, unsupported Content-Type
+  if ('statusCode' in err && err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+    reply.status(err.statusCode).send({
+      error: { code: CLIENT_ERROR_CODES[err.statusCode] ?? 'bad_request', message: err.message },
     })
     return
   }
