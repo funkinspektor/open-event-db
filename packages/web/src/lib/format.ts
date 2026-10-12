@@ -110,26 +110,3 @@ const LINK_LABELS: Record<string, string> = {
 export function linkLabel(key: string): string {
   return LINK_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1)
 }
-
-export function describeRecurrence(rrule: string): string {
-  const parts = Object.fromEntries(
-    rrule.split(';').map((kv) => kv.split('=') as [string, string]),
-  )
-  const days: Record<string, string> = {
-    MO: 'Monday',
-    TU: 'Tuesday',
-    WE: 'Wednesday',
-    TH: 'Thursday',
-    FR: 'Friday',
-    SA: 'Saturday',
-    SU: 'Sunday',
-  }
-  if (parts.FREQ === 'WEEKLY' && parts.BYDAY) {
-    const names = parts.BYDAY.split(',').map((d) => days[d] ?? d)
-    return `Repeats every ${names.join(', ')}`
-  }
-  if (parts.FREQ === 'DAILY') return 'Repeats daily'
-  if (parts.FREQ === 'MONTHLY') return 'Repeats monthly'
-  if (parts.FREQ === 'WEEKLY') return 'Repeats weekly'
-  return `Recurring (${rrule})`
-}

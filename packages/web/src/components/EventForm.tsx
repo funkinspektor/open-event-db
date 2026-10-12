@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
+import { RecurrenceInput } from './RecurrenceInput'
 import { TagInput } from './TagInput'
 import { VenuePicker, type VenueOption } from './VenuePicker'
 
@@ -167,17 +168,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
           <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
         </div>
 
-        <label className="kk-field">
-          <span>
-            Recurrence <span className="kk-field__opt">(optional iCal RRULE, e.g. FREQ=WEEKLY;BYDAY=FR)</span>
-          </span>
-          <input
-            value={recurrence}
-            onChange={(e) => setRecurrence(e.target.value)}
-            placeholder="FREQ=WEEKLY;BYDAY=FR"
-            className="kk-input kk-input--mono"
-          />
-        </label>
+        <RecurrenceInput value={recurrence} onChange={setRecurrence} startsAt={startsAt} />
 
         {mode === 'edit' && (
           <label className="kk-field">
