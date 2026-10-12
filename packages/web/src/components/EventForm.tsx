@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventOwnerRole, EventStatus } from '@open-event-db/shared'
+import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
 import { TagInput } from './TagInput'
@@ -37,6 +38,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
   const [locationText, setLocationText] = useState(event?.location_text ?? '')
   const [city, setCity] = useState(event?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? '')
+  const [previewing, setPreviewing] = useState(false)
   const [tags, setTags] = useState<string[]>(event?.tags ?? [])
   const [links, setLinks] = useState<LinkRow[]>(toLinkRows(event?.links))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
@@ -148,18 +150,45 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
           </div>
         )}
 
-        <label className="kk-field">
-          <span>
-            Description <span className="kk-field__opt">(optional)</span>
-          </span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={5}
-            placeholder="What to expect, line-up, door policy, accessibility…"
-            className="kk-input"
-          />
-        </label>
+        <div className="kk-field">
+          <div className="flex items-end justify-between gap-3">
+            <label htmlFor="event-description">
+              Description <span className="kk-field__opt">(optional, Markdown)</span>
+            </label>
+            <div className="flex gap-1.5" role="group" aria-label="Description view">
+              {(['Write', 'Preview'] as const).map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={previewing === (label === 'Preview')}
+                  onClick={() => setPreviewing(label === 'Preview')}
+                  className="kk-tag"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {previewing ? (
+            <div className="kk-preview">
+              {description.trim() ? (
+                <Markdown text={description} className="text-[16px] leading-[1.6] text-ink-soft" />
+              ) : (
+                <p className="m-0 font-normal text-faint">Nothing to preview yet.</p>
+              )}
+            </div>
+          ) : (
+            <textarea
+              id="event-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              placeholder="What to expect, line-up, door policy, accessibility…"
+              className="kk-input"
+            />
+          )}
+          <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Line breaks are kept.</span>
+        </div>
 
         <TagInput value={tags} onChange={setTags} knownTags={knownTags} />
 

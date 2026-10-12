@@ -231,3 +231,24 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
   .kk-event__title { font-size: 21px; }
   .kk-event__aside { margin-left: 0; justify-content: flex-start; }
 }
+
+/* Prose: Markdown event descriptions */
+.kk-prose { overflow-wrap: anywhere; }
+.kk-prose > :first-child { margin-top: 0; }
+.kk-prose > :last-child { margin-bottom: 0; }
+.kk-prose p, .kk-prose ul, .kk-prose ol, .kk-prose blockquote, .kk-prose pre { margin: 0 0 1em; }
+.kk-prose ul, .kk-prose ol { padding-left: 1.4em; }
+.kk-prose ul { list-style: disc; }
+.kk-prose ol { list-style: decimal; }
+.kk-prose li + li { margin-top: 0.25em; }
+.kk-prose h3, .kk-prose h4 { margin: 1.4em 0 0.5em; color: var(--ink); font-weight: 700; line-height: 1.3; }
+.kk-prose h3 { font-size: 1.15em; }
+.kk-prose h4 { font-size: 1em; }
+.kk-prose strong { color: var(--ink); font-weight: 700; }
+.kk-prose a { color: var(--uv); text-decoration: underline; text-underline-offset: 3px; }
+.kk-prose blockquote { padding-left: 1em; border-left: 2px solid var(--border); color: var(--muted); }
+.kk-prose code { padding: 0.1em 0.35em; border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); font-size: 0.88em; }
+.kk-prose pre { padding: 14px 16px; border-radius: var(--radius-m); background: var(--surface-1); border: 1px solid var(--line); overflow-x: auto; }
+.kk-prose pre code { padding: 0; background: transparent; }
+.kk-prose hr { margin: 1.6em 0; border: 0; border-top: 1px solid var(--line); }
+.kk-preview { min-height: 148px; padding: 14px 16px; border-radius: var(--radius-m); border: 1px dashed var(--border); box-sizing: border-box; font-weight: 400; }

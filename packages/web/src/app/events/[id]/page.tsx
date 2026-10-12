@@ -5,6 +5,8 @@ import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/format'
 import { describeRecurrence } from '@/lib/recurrence'
+import { markdownToPlainText } from '@/lib/plaintext'
+import { Markdown } from '@/components/Markdown'
 import { StatusBanner } from '@/components/StatusBadge'
 import { LinkButtons } from '@/components/LinkButtons'
 import { Map } from '@/components/Map'
@@ -47,7 +49,7 @@ export default async function EventPage({ params }: { params: Params }) {
     '@context': 'https://schema.org',
     '@type': 'Event',
     name: e.title,
-    description: e.description,
+    description: e.description ? markdownToPlainText(e.description) : undefined,
     startDate: e.starts_at,
     ...(e.ends_at ? { endDate: e.ends_at } : {}),
     eventStatus: SCHEMA_STATUS[e.status],
@@ -118,7 +120,7 @@ export default async function EventPage({ params }: { params: Params }) {
           {e.description && (
             <section>
               <h2 className="sr-only">Description</h2>
-              <p className="m-0 max-w-[680px] whitespace-pre-line text-body-long text-ink-soft">{e.description}</p>
+              <Markdown text={e.description} className="max-w-[680px] text-body-long text-ink-soft" />
             </section>
           )}
 
