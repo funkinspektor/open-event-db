@@ -50,17 +50,20 @@ interface Props {
   venue?: Venue
   /** Pre-filled name for a new venue — triggers an immediate map search. */
   initialName?: string
+  /** Pre-filled address and city for a new venue (image import). */
+  initialAddress?: string
+  initialCity?: string
   onCancel: () => void
   onSaved: (venue: Venue) => void
   /** Render as a nested box inside another form (event form) instead of a standalone card. */
   nested?: boolean
 }
 
-export function VenueForm({ venue, initialName = '', onCancel, onSaved, nested }: Props) {
+export function VenueForm({ venue, initialName = '', initialAddress = '', initialCity, onCancel, onSaved, nested }: Props) {
   const editing = !!venue
   const [name, setName] = useState(venue?.name ?? initialName)
-  const [city, setCity] = useState(venue?.city ?? 'Berlin')
-  const [address, setAddress] = useState(venue?.address ?? '')
+  const [city, setCity] = useState(venue?.city ?? initialCity ?? 'Berlin')
+  const [address, setAddress] = useState(venue?.address ?? initialAddress)
   const [links, setLinks] = useState<LinkRow[]>(toLinkRows(venue?.links))
   const [byAddress, setByAddress] = useState(false)
   const [places, setPlaces] = useState<Place[] | null>(null)

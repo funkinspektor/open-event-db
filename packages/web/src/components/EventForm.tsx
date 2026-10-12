@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventStatus } from '@open-event-db/shared'
+import { toLocalInput, type ImportResult } from '@/lib/draft'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
@@ -17,35 +18,45 @@ interface Props {
   /** Edit mode: whether the current account may set `cancelled` (creator, or a scout on an unclaimed event). */
   canCancel?: boolean
   knownTags: string[]
+  /** Create mode after an image import: pre-fills the form and marks what couldn't be read. */
+  imported?: ImportResult
 }
 
 const LINK_KEYS = ['website', 'tickets', 'ra', 'instagram', 'facebook', 'telegram', 'soundcloud']
 
-const pad = (n: number) => String(n).padStart(2, '0')
-function toLocalInput(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null)
 
-export function EventForm({ mode, event, canCancel = false, knownTags }: Props) {
+const formatDay = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Europe/Berlin',
+  })
+
+export function EventForm({ mode, event, canCancel = false, knownTags, imported }: Props) {
   const router = useRouter()
-  const [title, setTitle] = useState(event?.title ?? '')
-  const [startsAt, setStartsAt] = useState(toLocalInput(event?.starts_at))
-  const [endsAt, setEndsAt] = useState(toLocalInput(event?.ends_at))
-  const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? null)
-  const [creatingVenue, setCreatingVenue] = useState(false)
-  const [locationText, setLocationText] = useState(event?.location_text ?? '')
-  const [city, setCity] = useState(event?.city ?? 'Berlin')
-  const [description, setDescription] = useState(event?.description ?? '')
+  const pre = imported?.prefill
+  const [title, setTitle] = useState(event?.title ?? pre?.title ?? '')
+  const [startsAt, setStartsAt] = useState(event ? toLocalInput(event.starts_at) : (pre?.startsAt ?? ''))
+  const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : (pre?.endsAt ?? ''))
+  const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? imported?.venue ?? null)
+  const [creatingVenue, setCreatingVenue] = useState(!!imported?.newVenue)
+  const [locationText, setLocationText] = useState(event?.location_text ?? pre?.locationText ?? '')
+  const [city, setCity] = useState(event?.city ?? pre?.city ?? 'Berlin')
+  const [description, setDescription] = useState(event?.description ?? pre?.description ?? '')
   const [previewing, setPreviewing] = useState(false)
-  const [tags, setTags] = useState<string[]>(event?.tags ?? [])
-  const [links, setLinks] = useState<LinkRow[]>(toLinkRows(event?.links))
+  const [tags, setTags] = useState<string[]>(event?.tags ?? pre?.tags ?? [])
+  const [links, setLinks] = useState<LinkRow[]>(event ? toLinkRows(event.links) : (pre?.links ?? []))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // After an import, empty fields stay marked until filled: they're the ones the image didn't have
+  const missing = (empty: boolean) => (imported && empty ? ' kk-input--missing' : '')
+  const suggestedTags = (pre?.suggestedTags ?? []).filter((t) => !tags.includes(t))
 
   const statusOptions: EventStatus[] =
     canCancel ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
@@ -109,7 +120,12 @@ export function EventForm({ mode, event, canCancel = false, knownTags }: Props) 
       <div className="kk-panel">
         <label className="kk-field">
           Title
-          <input required value={title} onChange={(e) => setTitle(e.target.value)} className="kk-input kk-input--title" />
+          <input
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={'kk-input kk-input--title' + missing(!title.trim())}
+          />
         </label>
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
@@ -120,8 +136,13 @@ export function EventForm({ mode, event, canCancel = false, knownTags }: Props) 
               required
               value={startsAt}
               onChange={(e) => setStartsAt(e.target.value)}
-              className="kk-input"
+              className={'kk-input' + missing(!startsAt)}
             />
+            {pre?.startDateOnly && !startsAt && (
+              <span className="kk-hint kk-hint--warn">
+                The image says {formatDay(pre.startDateOnly)} but no start time — please add it.
+              </span>
+            )}
           </label>
           <label className="kk-field">
             <span>
@@ -131,7 +152,17 @@ export function EventForm({ mode, event, canCancel = false, knownTags }: Props) 
           </label>
         </div>
 
-        <VenuePicker value={venue} onChange={setVenue} onCreatingChange={setCreatingVenue} />
+        <VenuePicker
+          value={venue}
+          onChange={setVenue}
+          onCreatingChange={setCreatingVenue}
+          fromImage={
+            imported && !imported.venue
+              ? { name: imported.venueName, candidates: imported.candidates, create: imported.newVenue }
+              : undefined
+          }
+          missing={!!imported && !venue && !locationText.trim()}
+        />
 
         {!venue && !creatingVenue && (
           <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
@@ -183,15 +214,25 @@ export function EventForm({ mode, event, canCancel = false, knownTags }: Props) 
               id="event-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={5}
+              rows={imported ? 8 : 5}
               placeholder="What to expect, line-up, door policy, accessibility…"
-              className="kk-input"
+              className={'kk-input' + missing(!description.trim())}
             />
           )}
           <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Pasted URLs become links, line breaks are kept.</span>
         </div>
 
         <TagInput value={tags} onChange={setTags} knownTags={knownTags} />
+        {suggestedTags.length > 0 && (
+          <div className="-mt-2 flex flex-wrap items-center gap-2">
+            <span className="kk-hint">New tags from the image:</span>
+            {suggestedTags.map((t) => (
+              <button key={t} type="button" onClick={() => setTags([...tags, t])} className="kk-tag">
+                + {t}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="kk-field">
           Links

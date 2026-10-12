@@ -259,3 +259,17 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-toast__dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-sm); }
 @keyframes kk-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 @media (prefers-reduced-motion: reduce) { .kk-toast { animation: none; } }
+
+/* Event capture: image import above the create form */
+.kk-dropzone { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 22px 24px; border-radius: var(--radius-l); border: 1px dashed var(--uv); background: var(--uv-wash); transition: box-shadow 0.15s; }
+.kk-dropzone[data-dragging] { border-style: solid; box-shadow: var(--glow-soft); }
+.kk-dropzone__title { margin: 10px 0 6px; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.kk-notice { padding: 14px 18px; border-radius: var(--radius-m); border: 1px solid var(--uv); background: var(--uv-wash); color: var(--ink); font-size: 15px; font-weight: 500; line-height: 1.5; }
+/* A field the image didn't fill — the warn colour until it has a value */
+.kk-input--missing:not(:focus) { border-color: var(--warn); }
+.kk-hint--warn { color: var(--warn); font-weight: 500; }
+.kk-skeleton { display: block; border-radius: var(--radius-m); background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%); background-size: 200% 100%; animation: kk-shimmer 1.4s ease-in-out infinite; }
+.kk-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: kk-spin 0.8s linear infinite; }
+@keyframes kk-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes kk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .kk-skeleton, .kk-spinner { animation: none; } }

@@ -16,13 +16,22 @@ interface Props {
   value: VenueOption | null
   onChange: (venue: VenueOption | null) => void
   onCreatingChange?: (creating: boolean) => void
+  /** Image import without a unique match: possible venues to pick from, or a new venue to create. */
+  fromImage?: {
+    name: string | null
+    candidates: VenueOption[]
+    create: { name: string; address: string; city: string } | null
+  }
+  /** Marks the empty search field after an import. */
+  missing?: boolean
 }
 
-export function VenuePicker({ value, onChange, onCreatingChange }: Props) {
-  const [query, setQuery] = useState('')
+export function VenuePicker({ value, onChange, onCreatingChange, fromImage, missing }: Props) {
+  const create = fromImage?.create ?? null
+  const [query, setQuery] = useState(create?.name ?? '')
   const [results, setResults] = useState<VenueOption[]>([])
   const [open, setOpen] = useState(false)
-  const [creating, setCreatingState] = useState(false)
+  const [creating, setCreatingState] = useState(!!create)
   const setCreating = (next: boolean) => {
     setCreatingState(next)
     onCreatingChange?.(next)
@@ -88,6 +97,9 @@ export function VenuePicker({ value, onChange, onCreatingChange }: Props) {
       <VenueForm
         nested
         initialName={query.trim()}
+        // The address read from the image only belongs to the name read with it
+        initialAddress={create && query.trim() === create.name ? create.address : undefined}
+        initialCity={create && query.trim() === create.name ? create.city : undefined}
         onCancel={() => setCreating(false)}
         onSaved={(venue) => {
           setCreating(false)
@@ -97,8 +109,26 @@ export function VenuePicker({ value, onChange, onCreatingChange }: Props) {
     )
   }
 
+  const candidates = fromImage?.candidates ?? []
+
   return (
     <div className="kk-field">
+      {candidates.length > 0 && (
+        <div className="kk-subpanel !gap-2">
+          <span className="kk-hint">
+            The image says “{fromImage?.name}”. Is it one of these?
+          </span>
+          <ul className="kk-options">
+            {candidates.map((v) => (
+              <li key={v.id}>
+                <button type="button" onClick={() => onChange(v)} className="kk-option">
+                  {v.name} <span className="kk-option__meta">· {v.city}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div ref={boxRef} className="relative">
         <label className="kk-field">
           <span>
@@ -120,7 +150,7 @@ export function VenuePicker({ value, onChange, onCreatingChange }: Props) {
             }}
             placeholder="Search venues…"
             autoComplete="off"
-            className="kk-input"
+            className={'kk-input' + (missing ? ' kk-input--missing' : '')}
           />
         </label>
         {open && (

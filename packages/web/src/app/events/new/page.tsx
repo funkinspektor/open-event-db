@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getTags } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
-import { EventForm } from '@/components/EventForm'
+import { NewEventForm } from '@/components/NewEventForm'
 import { Headline } from '@/components/Headline'
 
 export const metadata: Metadata = { title: 'Create event' }
@@ -20,7 +20,7 @@ export default async function NewEventPage() {
         <Headline text="Create event" narrow />
         <p className="kk-lede max-w-none">Published as {me.name}. Live on the listing as soon as you save.</p>
       </section>
-      <EventForm mode="create" knownTags={tags} />
+      <NewEventForm knownTags={tags} />
     </div>
   )
 }
