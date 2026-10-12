@@ -3,7 +3,8 @@
  *
  *   pnpm --filter @open-event-db/api eval:extract <folder> [--models a,b,c]
  *
- * Images are downscaled like the web client does (1600px long edge, JPEG). If the folder has an
+ * Images are prepared like the web client does (tall captures cropped from the top to 1:2, then 1600px
+ * long edge, JPEG); HEIC is converted with macOS sips. If the folder has an
  * `expected.json`, title / start / venue are scored against it:
  *
  *   { "flyer-01.jpg": { "title": "Keller Nacht", "start": "2026-10-17T23:00", "venue": "Halle 4" } }
@@ -12,15 +13,18 @@
  * image deliberately has no value.) Results are written to `<folder>/results-<timestamp>.json`.
  * Keep the folder outside the repo — the images belong to other people.
  */
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { extname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import sharp from 'sharp'
-import { EXTRACT_MAX_EDGE_PX, type EventDraft } from '@open-event-db/shared'
+import { EXTRACT_MAX_ASPECT, EXTRACT_MAX_EDGE_PX, type EventDraft } from '@open-event-db/shared'
 import { normalizeExtraction } from './normalize.js'
 import { scalewayVision } from './vision.js'
 
 const DEFAULT_MODELS = ['pixtral-12b-2409', 'mistral-small-3.2-24b-instruct-2506', 'gemma-4-26b-a4b-it']
-const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp'])
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif'])
 
 interface Expected {
   title?: string | null
@@ -58,6 +62,8 @@ if (!SCW_SECRET_KEY || !SCW_DEFAULT_PROJECT_ID) {
 const loose = (s: string | null | undefined) =>
   (s ?? '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
+const compact = (s: string) => loose(s).replace(/ /g, '')
+
 /** Berlin wall-clock "YYYY-MM-DDTHH:MM" of a draft, as people would write it in expected.json. */
 const draftStart = (d: EventDraft) => d.starts_at?.slice(0, 16) ?? d.start_date
 
@@ -69,15 +75,35 @@ function score(draft: EventDraft, exp: Expected | undefined): Row['checks'] {
     return actual !== null && compare(actual, expected)
   }
   return {
-    title: check('title', draft.title, (a, e) => loose(a) === loose(e)),
+    // Extra words around the expected title ("… | Venue – Berlin") count as right; spacing and punctuation don't matter
+    title: check('title', draft.title, (a, e) => compact(a).includes(compact(e))),
     start: check('start', draftStart(draft), (a, e) => (e.length === 10 ? a.startsWith(e) : a === e)),
-    venue: check('venue', draft.venue_name, (a, e) => loose(a) === loose(e)),
+    venue: check('venue', draft.venue_name, (a, e) => compact(a) === compact(e)),
+  }
+}
+
+/** iPhone photos: sharp's prebuilt libvips can't decode HEVC, so let macOS convert them first. */
+async function heicToJpeg(path: string): Promise<Buffer> {
+  const dir = await mkdtemp(join(tmpdir(), 'oedb-eval-'))
+  try {
+    const out = join(dir, 'image.jpg')
+    await promisify(execFile)('sips', ['-s', 'format', 'jpeg', path, '--out', out])
+    return await readFile(out)
+  } catch (err) {
+    throw new Error(`Could not convert ${path} (HEIC needs macOS sips): ${(err as Error).message}`)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
   }
 }
 
 async function loadImage(path: string): Promise<Buffer> {
-  return sharp(await readFile(path))
-    .rotate() // honour EXIF orientation, like the browser does
+  const isHeic = /\.hei[cf]$/i.test(path)
+  // Bake in EXIF orientation first (like the browser does) so width/height below are the visible ones
+  const upright = await sharp(isHeic ? await heicToJpeg(path) : await readFile(path)).rotate().toBuffer()
+  const { width = 0, height = 0 } = await sharp(upright).metadata()
+  const maxHeight = Math.round(width * EXTRACT_MAX_ASPECT)
+  return sharp(upright)
+    .extract({ left: 0, top: 0, width, height: Math.min(height, maxHeight) })
     .resize(EXTRACT_MAX_EDGE_PX, EXTRACT_MAX_EDGE_PX, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 85 })
     .toBuffer()
@@ -87,7 +113,7 @@ const mark = (c: Check) => (c === null ? '·' : c ? '✓' : '✗')
 
 async function main() {
   const files = (await readdir(folder)).filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort()
-  if (!files.length) throw new Error(`No PNG/JPEG/WEBP images in ${folder}`)
+  if (!files.length) throw new Error(`No PNG/JPEG/WEBP/HEIC images in ${folder}`)
   const expected: Record<string, Expected> = await readFile(join(folder, 'expected.json'), 'utf8')
     .then((s) => JSON.parse(s) as Record<string, Expected>)
     .catch(() => ({}))

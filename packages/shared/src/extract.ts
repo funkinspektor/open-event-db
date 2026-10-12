@@ -7,6 +7,11 @@ export type ExtractImageType = (typeof EXTRACT_IMAGE_TYPES)[number]
 export const EXTRACT_MAX_BYTES = 10 * 1024 * 1024
 /** Clients downscale to this many pixels on the long edge before upload. */
 export const EXTRACT_MAX_EDGE_PX = 1600
+/**
+ * Taller images (full-page captures) are cropped from the top to this height:width ratio first —
+ * otherwise downscaling makes their text unreadable. Event pages put the key facts at the top.
+ */
+export const EXTRACT_MAX_ASPECT = 2
 /** Extractions per account per day; session and API key share the counter. */
 export const EXTRACT_DAILY_LIMIT = 30
 
