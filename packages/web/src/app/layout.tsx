@@ -4,6 +4,7 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import { Germania_One, JetBrains_Mono, Schibsted_Grotesk } from 'next/font/google'
 import { Header } from '@/components/Header'
+import { SITE_URL } from '@/lib/site'
 
 // Self-hosted at build time by next/font — visitors never request fonts from Google.
 const germaniaOne = Germania_One({ weight: '400', subsets: ['latin'], variable: '--font-germania-one' })
@@ -15,6 +16,7 @@ const schibstedGrotesk = Schibsted_Grotesk({
 const jetbrainsMono = JetBrains_Mono({ weight: '500', subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'Kellerkompass — Events in Berlin',
     template: '%s · Kellerkompass',

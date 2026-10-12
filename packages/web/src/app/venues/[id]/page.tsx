@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ALL_STATUSES, getEvents, getVenue, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
+import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { EventRow } from '@/components/EventRow'
 import { EventList } from '@/components/EventList'
 import { LinkButtons } from '@/components/LinkButtons'
@@ -27,8 +28,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: v.name,
     description,
-    openGraph: { title: v.name, description, type: 'website' },
-    twitter: { card: 'summary', title: v.name, description },
+    ...shareMetadata(`/venues/${v.id}`, v.name, description),
   }
 }
 
@@ -54,6 +54,7 @@ export default async function VenuePage({ params }: { params: Params }) {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Place',
+    url: absoluteUrl(`/venues/${v.id}`),
     name: v.name,
     address: {
       '@type': 'PostalAddress',

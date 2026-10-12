@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ALL_STATUSES, getEvents, getPublisher } from '@/lib/api'
+import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { EventList } from '@/components/EventList'
 import { LinkButtons } from '@/components/LinkButtons'
 import { JsonLd } from '@/components/JsonLd'
@@ -23,8 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: p.name,
     description,
-    openGraph: { title: p.name, description, type: 'website' },
-    twitter: { card: 'summary', title: p.name, description },
+    ...shareMetadata(`/publishers/${p.slug}`, p.name, description),
   }
 }
 
@@ -38,7 +38,7 @@ export default async function PublisherPage({ params }: { params: Params }) {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: p.name,
-    url: `/publishers/${p.slug}`,
+    url: absoluteUrl(`/publishers/${p.slug}`),
     sameAs: Object.values(p.links),
   }
 

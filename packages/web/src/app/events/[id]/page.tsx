@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
+import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/format'
 import { describeRecurrence } from '@/lib/recurrence'
 import { markdownToPlainText } from '@/lib/plaintext'
@@ -37,8 +38,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: e.title,
     description,
-    openGraph: { title: e.title, description, type: 'website' },
-    twitter: { card: 'summary', title: e.title, description },
+    ...shareMetadata(`/events/${e.id}`, e.title, description),
   }
 }
 
@@ -57,6 +57,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
     '@context': 'https://schema.org',
     '@type': 'Event',
     name: e.title,
+    url: absoluteUrl(`/events/${e.id}`),
     description: e.description ? markdownToPlainText(e.description) : undefined,
     startDate: e.starts_at,
     ...(e.ends_at ? { endDate: e.ends_at } : {}),
@@ -81,7 +82,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
     organizer: e.owners.map((o) => ({
       '@type': 'Organization',
       name: o.name,
-      url: `/publishers/${o.slug}`,
+      url: absoluteUrl(`/publishers/${o.slug}`),
     })),
   }
 

@@ -4,11 +4,12 @@ import { buildApiQuery, parseFilters } from '@/lib/filters'
 import { Filters } from '@/components/Filters'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
+import { shareMetadata } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: { absolute: 'Kellerkompass — Events in Berlin' },
   description: 'Discover events in Berlin.',
-  openGraph: { title: 'Kellerkompass — Events in Berlin', description: 'Discover events in Berlin' },
+  ...shareMetadata('/', 'Kellerkompass — Events in Berlin', 'Discover events in Berlin'),
 }
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>

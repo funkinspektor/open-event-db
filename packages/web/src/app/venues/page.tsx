@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getVenues } from '@/lib/api'
+import { shareMetadata } from '@/lib/site'
 import { Headline } from '@/components/Headline'
 import { NextIcon, SearchIcon } from '@/components/Icons'
 
 export const metadata: Metadata = {
   title: 'Venues',
   description: 'Clubs, bars and spaces on Kellerkompass.',
+  ...shareMetadata('/venues', 'Venues', 'Clubs, bars and spaces on Kellerkompass.'),
 }
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
