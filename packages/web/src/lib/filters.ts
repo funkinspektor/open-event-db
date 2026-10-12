@@ -85,7 +85,8 @@ export function rangeToDates(range: Range, now = new Date()): { from?: Date; to?
       return { from: now, to: new Date(today.getTime() + 7 * DAY) }
     case 'weekend': {
       const wd = berlinWeekday(now)
-      const daysToFriday = wd <= 5 ? 5 - wd : 6
+      // Sat/Sun belong to the weekend that started on the previous Friday.
+      const daysToFriday = wd === 6 ? -1 : wd === 0 ? -2 : 5 - wd
       const friday = new Date(today.getTime() + daysToFriday * DAY)
       const from = friday.getTime() < now.getTime() ? now : friday
       return { from, to: new Date(friday.getTime() + 3 * DAY) }

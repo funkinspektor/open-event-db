@@ -190,10 +190,8 @@ export function VenueForm({ venue, initialName = '', onCancel, onSaved, nested }
               Venue name
               <input
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  setPicked(null)
-                }}
+                // After a map pick this field adjusts the name; "Search map" starts a new search.
+                onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Berghain"
                 className="kk-input"
               />

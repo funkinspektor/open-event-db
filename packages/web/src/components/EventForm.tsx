@@ -44,6 +44,8 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
 
   const statusOptions: EventStatus[] =
     role === 'creator' ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
+  // Co-owners can't cancel, but an event that's already cancelled must still show its real status.
+  if (event?.status === 'cancelled' && !statusOptions.includes('cancelled')) statusOptions.push('cancelled')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -68,7 +70,9 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
       recurrence: recurrence || null,
     }
     if (!venue) payload.city = city
-    if (mode === 'edit') payload.status = status
+    // Only send the status when it changed: the API rejects `cancelled` from co-owners,
+    // so re-sending an unchanged `cancelled` would block co-owners from editing anything else.
+    if (mode === 'edit' && status !== event?.status) payload.status = status
 
     setBusy(true)
     try {
@@ -195,7 +199,7 @@ export function EventForm({ mode, event, role, knownTags }: Props) {
             Status
             <select value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className="kk-input">
               {statusOptions.map((s) => (
-                <option key={s} value={s}>
+                <option key={s} value={s} disabled={s === 'cancelled' && role !== 'creator'}>
                   {s}
                 </option>
               ))}

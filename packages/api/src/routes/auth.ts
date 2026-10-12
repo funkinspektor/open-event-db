@@ -58,9 +58,10 @@ export async function authRoutes(app: FastifyInstance) {
 
     const now = new Date()
     const sessionToken = await db.transaction(async (tx) => {
+      // Claim the token in one statement so two concurrent clicks can't both use it.
       const [t] = await tx
-        .select()
-        .from(magicLinkTokens)
+        .update(magicLinkTokens)
+        .set({ usedAt: now })
         .where(
           and(
             eq(magicLinkTokens.tokenHash, sha256(token)),
@@ -68,10 +69,8 @@ export async function authRoutes(app: FastifyInstance) {
             gt(magicLinkTokens.expiresAt, now),
           ),
         )
-        .limit(1)
+        .returning({ publisherId: magicLinkTokens.publisherId })
       if (!t) return null
-
-      await tx.update(magicLinkTokens).set({ usedAt: now }).where(eq(magicLinkTokens.id, t.id))
 
       const s = generateToken()
       await tx.insert(sessions).values({

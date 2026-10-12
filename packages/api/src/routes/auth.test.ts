@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq } from 'drizzle-orm'
-import { editHistory, events, magicLinkTokens, publishers, sessions } from '@open-event-db/db'
+import { editHistory, events, generateToken, magicLinkTokens, publishers, sessions } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { email } from '../email.js'
@@ -78,6 +78,20 @@ describe('magic link login', () => {
     const res = await app.inject({ method: 'GET', url: `${url.pathname}${url.search}` })
     expect(res.statusCode).toBe(302)
     expect(res.headers.location).toMatch(/login\?error=expired$/)
+  })
+
+  it('concurrent clicks on one magic link create only one session', async () => {
+    const { token, hash } = generateToken()
+    await db.insert(magicLinkTokens).values({
+      publisherId,
+      tokenHash: hash,
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+    const url = `/api/v1/auth/verify?token=${encodeURIComponent(token)}`
+    const results = await Promise.all([1, 2, 3].map(() => app.inject({ method: 'GET', url })))
+    const locations = results.map((r) => r.headers.location as string)
+    expect(locations.filter((l) => l.endsWith('/dashboard'))).toHaveLength(1)
+    expect(locations.filter((l) => l.endsWith('login?error=expired'))).toHaveLength(2)
   })
 
   it('/auth/me resolves the session', async () => {
