@@ -18,10 +18,13 @@ export default async function ProfilePage() {
       <section className="kk-intro" style={{ gap: 12 }}>
         <p className="kk-eyebrow">Profile</p>
         <Headline text={me.name} narrow />
-        <Link href={`/publishers/${me.slug}`} className="text-body text-muted">
-          View public profile
-          <NextIcon />
-        </Link>
+        {/* Pure scouts have no public profile page yet (Scout PRD P1) */}
+        {me.is_publisher && (
+          <Link href={`/publishers/${me.slug}`} className="text-body text-muted">
+            View public profile
+            <NextIcon />
+          </Link>
+        )}
       </section>
       <ProfileForm me={me} />
       <ApiKeySection hasApiKey={me.has_api_key} />
