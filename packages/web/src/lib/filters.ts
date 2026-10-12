@@ -1,7 +1,7 @@
 import { ALL_STATUSES } from './api'
 import { TZ } from './format'
 
-export type Range = 'upcoming' | 'today' | 'weekend' | 'week'
+export type Range = 'upcoming' | 'today' | 'weekend' | 'week' | 'custom'
 export const RANGES: { key: Range; label: string }[] = [
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'today', label: 'Today' },
@@ -13,26 +13,48 @@ export interface Filters {
   range: Range
   tags: string[]
   city: string
+  /** Custom range as Berlin calendar days (YYYY-MM-DD), both inclusive; only used when range is 'custom'. */
+  from?: string
+  to?: string
 }
 
 type SP = Record<string, string | string[] | undefined>
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
 
+const isDay = (v: string | undefined): v is string =>
+  !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`))
+
 export function parseFilters(sp: SP): Filters {
   const rangeRaw = first(sp.range)
-  const range = RANGES.some((r) => r.key === rangeRaw) ? (rangeRaw as Range) : 'upcoming'
   const tags = (first(sp.tags) ?? '')
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean)
   const city = first(sp.city) ?? 'Berlin'
+
+  // A custom range (?from=…&to=…) wins over the preset ranges.
+  let from = first(sp.from)
+  let to = first(sp.to)
+  if (isDay(from) || isDay(to)) {
+    from = isDay(from) ? from : undefined
+    to = isDay(to) ? to : undefined
+    if (from && to && from > to) [from, to] = [to, from]
+    return { range: 'custom', tags, city, from, to }
+  }
+
+  const range = RANGES.some((r) => r.key === rangeRaw) ? (rangeRaw as Range) : 'upcoming'
   return { range, tags, city }
 }
 
 export function filtersToHref(f: Filters): string {
   const qs = new URLSearchParams()
-  if (f.range !== 'upcoming') qs.set('range', f.range)
+  if (f.range === 'custom') {
+    if (f.from) qs.set('from', f.from)
+    if (f.to) qs.set('to', f.to)
+  } else if (f.range !== 'upcoming') {
+    qs.set('range', f.range)
+  }
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   if (f.city !== 'Berlin') qs.set('city', f.city)
   const s = qs.toString()
@@ -76,6 +98,22 @@ function berlinWeekday(date: Date): number {
 
 const DAY = 24 * 60 * 60 * 1000
 
+/** Midnight in Berlin at the start of a calendar day given as YYYY-MM-DD. */
+export function berlinDayStart(day: string): Date {
+  // Noon UTC falls on the same calendar day in Berlin, whatever the DST offset.
+  return startOfDayInBerlin(new Date(`${day}T12:00:00Z`))
+}
+
+const nextDay = (day: string) => new Date(Date.parse(`${day}T12:00:00Z`) + DAY).toISOString().slice(0, 10)
+
+/** Custom range → API bounds: `to` is inclusive for people, exclusive for the API. Open start means "from now". */
+export function customRangeToDates(from: string | undefined, to: string | undefined, now = new Date()) {
+  return {
+    from: from ? berlinDayStart(from) : now,
+    to: to ? berlinDayStart(nextDay(to)) : undefined,
+  }
+}
+
 export function rangeToDates(range: Range, now = new Date()): { from?: Date; to?: Date } {
   const today = startOfDayInBerlin(now)
   switch (range) {
@@ -102,7 +140,7 @@ export function buildApiQuery(f: Filters, limit = 20): URLSearchParams {
   qs.set('limit', String(limit))
   if (f.city) qs.set('city', f.city)
   if (f.tags.length) qs.set('tags', f.tags.join(','))
-  const { from, to } = rangeToDates(f.range)
+  const { from, to } = f.range === 'custom' ? customRangeToDates(f.from, f.to) : rangeToDates(f.range)
   if (from) qs.set('from', from.toISOString())
   if (to) qs.set('to', to.toISOString())
   return qs

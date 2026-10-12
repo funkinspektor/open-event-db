@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { RANGES, filtersToHref, type Filters as FilterState } from '@/lib/filters'
+import { DateRangeFilter } from './DateRangeFilter'
 import { TagFilter } from './TagFilter'
 
 interface Props {
@@ -7,7 +8,7 @@ interface Props {
   allTags: string[]
 }
 
-// Filter bar: city · date range · Tags dropdown.
+// Filter bar: city · date range (presets + custom) · Tags dropdown.
 export function Filters({ filters, allTags }: Props) {
   return (
     <section aria-label="Filters" className="relative z-[5]">
@@ -26,6 +27,7 @@ export function Filters({ filters, allTags }: Props) {
             {r.label}
           </Link>
         ))}
+        <DateRangeFilter filters={filters} />
         {allTags.length > 0 && (
           <>
             <span className="kk-pills__sep" aria-hidden />
