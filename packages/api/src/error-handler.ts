@@ -29,6 +29,17 @@ export function errorHandler(
     return
   }
 
+  // Fastify's own body errors (too large, unsupported Content-Type)
+  if ('statusCode' in err && (err.statusCode === 413 || err.statusCode === 415)) {
+    reply.status(err.statusCode).send({
+      error: {
+        code: err.statusCode === 413 ? 'payload_too_large' : 'unsupported_media_type',
+        message: err.message,
+      },
+    })
+    return
+  }
+
   if ('validation' in err && err.validation) {
     reply.status(400).send({
       error: { code: 'validation_error', message: err.message ?? 'Validation failed' },

@@ -9,6 +9,7 @@ import { publisherRoutes } from './routes/publishers.js'
 import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
 import { authRoutes } from './routes/auth.js'
+import { extractRoutes } from './routes/extract.js'
 
 export interface AppOptions {
   logger?: boolean
@@ -39,6 +40,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
   await app.register(
     async (api) => {
       await api.register(eventRoutes)
+      await api.register(extractRoutes)
       await api.register(venueRoutes)
       await api.register(publisherRoutes)
       await api.register(tagsRoutes)
