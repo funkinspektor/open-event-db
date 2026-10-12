@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import { magicLinkRequestSchema } from '@open-event-db/shared'
-import { generateToken, magicLinkTokens, publishers, sessions, sha256 } from '@open-event-db/db'
+import { generateToken, magicLinkTokens, publishers, sessions, sha256, type Publisher } from '@open-event-db/db'
 import { db } from '../db.js'
 import { email } from '../email.js'
 import { unauthorized } from '../errors.js'
@@ -27,6 +27,17 @@ const magicLinkRateLimit = {
   },
 }
 
+async function sendMagicLink(publisher: Publisher): Promise<void> {
+  const { token, hash } = generateToken()
+  await db.insert(magicLinkTokens).values({
+    publisherId: publisher.id,
+    tokenHash: hash,
+    expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+  })
+  const url = `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
+  await email.transport.sendMagicLink({ to: publisher.email, url })
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/magic-link', { config: { rateLimit: magicLinkRateLimit } }, async (req) => {
     const { email: address } = magicLinkRequestSchema.parse(req.body)
@@ -39,14 +50,9 @@ export async function authRoutes(app: FastifyInstance) {
       .limit(1)
 
     if (publisher?.verified) {
-      const { token, hash } = generateToken()
-      await db.insert(magicLinkTokens).values({
-        publisherId: publisher.id,
-        tokenHash: hash,
-        expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
-      })
-      const url = `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
-      await email.transport.sendMagicLink({ to: publisher.email, url })
+      // Issue and send in the background: if the response waited for this, its timing
+      // would reveal whether the email is registered.
+      void sendMagicLink(publisher).catch((err) => req.log.error({ err }, 'sending magic link failed'))
     }
 
     return { data: { message: "If this email is registered, you'll receive a login link." } }

@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { editHistory, events, generateToken, magicLinkTokens, publishers, sessions } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { email } from '../email.js'
+import { cleanupExpiredAuth } from '../cleanup.js'
 
 let app: FastifyInstance
 let publisherId: string
@@ -57,7 +58,8 @@ describe('magic link login', () => {
       payload: { email: address.toUpperCase() },
     })
     expect(res.statusCode).toBe(200)
-    expect(outbox).toHaveLength(1)
+    // sent in the background, after the response
+    await vi.waitFor(() => expect(outbox).toHaveLength(1))
     expect(outbox[0]!.to).toBe(address)
     expect(outbox[0]!.url).toContain('/api/v1/auth/verify?token=')
   })
@@ -137,5 +139,39 @@ describe('magic link login', () => {
       codes.push(res.statusCode)
     }
     expect(codes).toEqual([200, 200, 200, 429])
+  })
+})
+
+describe('auth cleanup', () => {
+  it('removes expired and used magic-link tokens and expired sessions, keeps live ones', async () => {
+    const now = Date.now()
+    const tokenRows = await db
+      .insert(magicLinkTokens)
+      .values([
+        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
+        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000), usedAt: new Date() },
+        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
+      ])
+      .returning({ id: magicLinkTokens.id })
+    const sessionRows = await db
+      .insert(sessions)
+      .values([
+        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
+        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
+      ])
+      .returning({ id: sessions.id })
+
+    await cleanupExpiredAuth()
+
+    const tokensLeft = await db
+      .select({ id: magicLinkTokens.id })
+      .from(magicLinkTokens)
+      .where(inArray(magicLinkTokens.id, tokenRows.map((r) => r.id)))
+    expect(tokensLeft.map((r) => r.id)).toEqual([tokenRows[2]!.id])
+    const sessionsLeft = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(inArray(sessions.id, sessionRows.map((r) => r.id)))
+    expect(sessionsLeft.map((r) => r.id)).toEqual([sessionRows[1]!.id])
   })
 })

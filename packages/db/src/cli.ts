@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import { createDb } from './index.js'
 import { editHistory, events, publishers } from './schema.js'
 import { generateApiKey } from './tokens.js'
@@ -16,10 +16,31 @@ function usage(): never {
   process.exit(1)
 }
 
+function fail(message: string): never {
+  console.error(message)
+  process.exit(1)
+}
+
 switch (cmd) {
   case 'create-publisher': {
-    const [name, slug, email] = args
-    if (!name || !slug || !email) usage()
+    const [name, slug, rawEmail] = args
+    if (!name || !slug || !rawEmail) usage()
+    // Same rule as slugSchema in @open-event-db/shared
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug) || slug.length > 100) {
+      fail(`Invalid slug "${slug}": use lowercase letters, digits and hyphens (no leading/trailing hyphen)`)
+    }
+    // Stored lowercased: magic-link login matches emails case-insensitively
+    const email = rawEmail.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(`Invalid email "${rawEmail}"`)
+
+    const [taken] = await db
+      .select({ slug: publishers.slug, email: publishers.email })
+      .from(publishers)
+      .where(or(eq(publishers.slug, slug), sql`lower(${publishers.email}) = ${email}`))
+      .limit(1)
+    if (taken?.slug === slug) fail(`Slug "${slug}" is already taken`)
+    if (taken) fail(`Email "${email}" is already used by publisher "${taken.slug}"`)
+
     const [p] = await db
       .insert(publishers)
       .values({ name, slug, email, verified: true })
