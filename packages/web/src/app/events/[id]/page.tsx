@@ -15,6 +15,7 @@ import { Map } from '@/components/Map'
 import { JsonLd } from '@/components/JsonLd'
 import { Headline } from '@/components/Headline'
 import { Toast } from '@/components/Toast'
+import { CONTACT_EMAIL } from '@/content/legal/operator'
 
 type Params = Promise<{ id: string }>
 type SearchParams = Promise<{ saved?: string }>
@@ -41,6 +42,21 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     description,
     ...shareMetadata(`/events/${e.id}`, e.title, description),
   }
+}
+
+function reportHref(title: string, url: string) {
+  const body = [
+    `Event: ${url}`,
+    '',
+    'Why is this content illegal or against the terms of use?',
+    '',
+    '',
+    'Your name:',
+    '',
+    'I confirm that the information in this notice is accurate and complete to the best of my knowledge.',
+  ].join('\n')
+  const params = `subject=${encodeURIComponent(`Report event: ${title}`)}&body=${encodeURIComponent(body)}`
+  return `mailto:${CONTACT_EMAIL}?${params}`
 }
 
 const SCHEMA_STATUS = {
@@ -179,6 +195,11 @@ export default async function EventPage({ params, searchParams }: { params: Para
               <p className="m-0 text-[14px] text-muted">Not yet confirmed by the organizer</p>
             </section>
           )}
+
+          {/* Notice mechanism (Art. 16 DSA): the prefilled body asks for what a valid notice needs */}
+          <a href={reportHref(e.title, absoluteUrl(`/events/${e.id}`))} className="self-start text-[14px] text-muted underline underline-offset-4">
+            Report event
+          </a>
         </div>
 
         <aside className="flex max-w-[380px] flex-col gap-3.5" style={{ flex: '1 1 300px' }}>

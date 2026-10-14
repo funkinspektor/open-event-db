@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { createDb } from './index.js'
-import { editHistory, eventOwners, events, publishers } from './schema.js'
+import { editHistory, eventOwners, events, invites, magicLinkTokens, publishers, sessions } from './schema.js'
 import { generateApiKey } from './tokens.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
@@ -18,7 +18,8 @@ function usage(): never {
   pnpm db:cli set-email <slug> <email>                  Change a publisher's login email
   pnpm db:cli api-key <slug>                            Generate (or reset) the API key for a publisher
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
-  pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)`)
+  pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
+  pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay`)
   process.exit(1)
 }
 
@@ -177,6 +178,66 @@ switch (cmd) {
       })
     })
     console.log(`Deleted event "${event.title}" (${id}); only a "deleted" history entry remains`)
+    break
+  }
+  case 'delete-publisher': {
+    const [slug] = args
+    if (!slug) usage()
+    const [p] = await db
+      .select({ id: publishers.id, name: publishers.name })
+      .from(publishers)
+      .where(eq(publishers.slug, slug))
+      .limit(1)
+    if (!p) fail(`No publisher with slug "${slug}"`)
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(events)
+      .where(eq(events.createdBy, p.id))
+    const count = row?.count ?? 0
+    if (!flags.has('--yes')) {
+      const ok = await confirm(`Delete the account of ${p.name}? Their ${count} event(s) stay, without their name.`)
+      if (!ok) fail('Aborted')
+    }
+
+    // Events and edit history reference the publisher row (onDelete: restrict), so the row stays as an
+    // anonymous placeholder: "Added by" then reads "Deleted account". Everything personal is removed.
+    await db.transaction(async (tx) => {
+      await tx.delete(sessions).where(eq(sessions.publisherId, p.id))
+      await tx.delete(magicLinkTokens).where(eq(magicLinkTokens.publisherId, p.id))
+      // Their events stay but lose them as owner; events they created alone become unclaimed
+      await tx.delete(eventOwners).where(eq(eventOwners.publisherId, p.id))
+      // Invites they sent hold other people's emails
+      await tx.delete(invites).where(eq(invites.invitedBy, p.id))
+      await tx.update(invites).set({ claimedBy: null }).where(eq(invites.claimedBy, p.id))
+      // Profile history holds their old names and links
+      await tx
+        .delete(editHistory)
+        .where(and(eq(editHistory.entityType, 'publisher'), eq(editHistory.entityId, p.id)))
+      await tx
+        .update(publishers)
+        .set({
+          name: 'Deleted account',
+          slug: `deleted-${p.id.slice(0, 8)}`,
+          // Unique and NOT NULL; the reserved .invalid TLD can never receive mail
+          email: `deleted-${p.id}@deleted.invalid`,
+          verified: false,
+          isPublisher: false,
+          isScout: false,
+          invitedBy: null,
+          apiKeyHash: null,
+          links: {},
+          updatedAt: new Date(),
+        })
+        .where(eq(publishers.id, p.id))
+      await tx.insert(editHistory).values({
+        entityType: 'publisher',
+        entityId: p.id,
+        publisherId: p.id,
+        action: 'deleted',
+        diff: { via: 'cli' },
+      })
+    })
+    console.log(`Deleted the account of ${p.name}; ${count} event(s) kept as "Deleted account"`)
     break
   }
   default:

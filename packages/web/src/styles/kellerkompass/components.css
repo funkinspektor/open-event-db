@@ -11,7 +11,10 @@
 /* Page frame */
 .kk-container { max-width: var(--content-max); margin: 0 auto; padding: 56px 24px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; }
 .kk-container--narrow { max-width: var(--form-max); gap: 36px; }
-.kk-footer { max-width: var(--content-max); margin: 0 auto; padding: 16px 24px 48px; box-sizing: border-box; font-size: 13px; color: var(--faint); }
+.kk-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; max-width: var(--content-max); margin: 0 auto; padding: 16px 24px 48px; box-sizing: border-box; font-size: 13px; color: var(--faint); }
+.kk-footer__links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.kk-footer__links a { color: var(--muted); }
+.kk-footer__links a:hover { color: var(--ink); }
 
 /* Chrome */
 .kk-chrome-text { color: var(--chrome-solid); background: var(--chrome); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -242,6 +245,7 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-prose ul { list-style: disc; }
 .kk-prose ol { list-style: decimal; }
 .kk-prose li + li { margin-top: 0.25em; }
+.kk-prose h2 { margin: 1.8em 0 0.6em; color: var(--ink); font-size: 1.3em; font-weight: 700; line-height: 1.3; }
 .kk-prose h3, .kk-prose h4 { margin: 1.4em 0 0.5em; color: var(--ink); font-weight: 700; line-height: 1.3; }
 .kk-prose h3 { font-size: 1.15em; }
 .kk-prose h4 { font-size: 1em; }

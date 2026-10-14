@@ -2,6 +2,7 @@ import '@/styles/kellerkompass/tokens.css'
 import '@/styles/kellerkompass/components.css'
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import Link from 'next/link'
 import { Germania_One, JetBrains_Mono, Schibsted_Grotesk } from 'next/font/google'
 import { Header } from '@/components/Header'
 import { SITE_URL } from '@/lib/site'
@@ -46,7 +47,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="kk-root flex min-h-full flex-col">
         <Header />
         <main className="flex-1">{children}</main>
-        <footer className="kk-footer w-full">Kellerkompass · community-owned, open source, EU-hosted.</footer>
+        <footer className="kk-footer w-full">
+          <span>Kellerkompass · community-owned, open source, EU-hosted.</span>
+          {/* German pages, linked under their German names as German law expects */}
+          <nav className="kk-footer__links" aria-label="Rechtliches" lang="de">
+            <Link href="/impressum">Impressum</Link>
+            <Link href="/datenschutz">Datenschutz</Link>
+            <Link href="/nutzungsbedingungen">Nutzungsbedingungen</Link>
+            <Link href="/lizenz">Datenlizenz &amp; API</Link>
+          </nav>
+        </footer>
       </body>
     </html>
   )
