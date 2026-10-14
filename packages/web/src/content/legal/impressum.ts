@@ -11,7 +11,7 @@ E-Mail: [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})
 
 ## Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
 
-${OPERATOR_NAME}, Anschrift wie oben
+${OPERATOR_ADDRESS ? `${OPERATOR_NAME}, Anschrift wie oben` : OPERATOR_NAME}
 
 ## Zentrale Kontaktstelle nach Art. 11 und 12 Digital Services Act (DSA)
 
