@@ -69,10 +69,12 @@ The API container applies pending migrations on every start (`dist/migrate.js`),
 step is needed. Keep the API at max. 1 instance while a deploy with a new migration rolls out.
 
 Accounts are created with the admin CLI from a laptop, pointed at the managed database (its public
-endpoint must allow your IP):
+endpoint must allow your IP). `scripts/prod-db.sh` reads host, port, user and database from `PROD_DB_*`
+in the local `.env`, asks for the password and runs the given command with `DATABASE_URL` set:
 
 ```bash
-DATABASE_URL='postgres://…?sslmode=require' pnpm db:cli create-publisher "Letzte Welle" letzte-welle kommunikation@letzte-welle.de
+scripts/prod-db.sh pnpm db:cli create-publisher "Letzte Welle" letzte-welle someone@example.org
+scripts/prod-db.sh pnpm db:migrate
 ```
 
 ## 4. Domains
