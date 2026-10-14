@@ -10,13 +10,18 @@ import type {
 export const API_URL =
   process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
+// Server-side only: exempts page rendering from the API's per-IP rate limit (see API_INTERNAL_TOKEN).
+const INTERNAL_HEADERS: Record<string, string> = process.env.API_INTERNAL_TOKEN
+  ? { 'x-internal-token': process.env.API_INTERNAL_TOKEN }
+  : {}
+
 export const ALL_STATUSES = 'scheduled,postponed,cancelled'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUuid = (s: string) => UUID_RE.test(s)
 
 async function get<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store' })
+  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store', headers: INTERNAL_HEADERS })
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`API ${res.status} for ${path}`)
   return (await res.json()) as T
@@ -59,7 +64,7 @@ export async function getTags(): Promise<string[]> {
 
 export async function getMe(cookieHeader: string): Promise<PublisherMe | null> {
   const res = await fetch(`${API_URL}/api/v1/auth/me`, {
-    headers: { cookie: cookieHeader },
+    headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
     cache: 'no-store',
   })
   if (!res.ok) return null

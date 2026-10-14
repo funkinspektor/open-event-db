@@ -178,9 +178,9 @@ const unavailable: VisionExtractor = {
 function extractorFromEnv(): VisionExtractor {
   // Automated tests never call the real provider; they install a stub via vision.setExtractor().
   if (isTestRun) return unavailable
-  const { SCW_SECRET_KEY, SCW_DEFAULT_PROJECT_ID, VISION_MODEL } = process.env
-  if (!SCW_SECRET_KEY || !SCW_DEFAULT_PROJECT_ID || !VISION_MODEL) return unavailable
-  return scalewayVision({ secretKey: SCW_SECRET_KEY, projectId: SCW_DEFAULT_PROJECT_ID, model: VISION_MODEL })
+  const { SCALEWAY_SECRET_KEY, SCALEWAY_PROJECT_ID, VISION_MODEL } = process.env
+  if (!SCALEWAY_SECRET_KEY || !SCALEWAY_PROJECT_ID || !VISION_MODEL) return unavailable
+  return scalewayVision({ secretKey: SCALEWAY_SECRET_KEY, projectId: SCALEWAY_PROJECT_ID, model: VISION_MODEL })
 }
 
 const defaultExtractor = extractorFromEnv()

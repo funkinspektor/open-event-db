@@ -53,9 +53,9 @@ if (!folderArg) {
 const folder = resolve(process.env.INIT_CWD ?? process.cwd(), folderArg)
 const models = args.includes('--models') && modelsArg ? modelsArg.split(',') : DEFAULT_MODELS
 
-const { SCW_SECRET_KEY, SCW_DEFAULT_PROJECT_ID } = process.env
-if (!SCW_SECRET_KEY || !SCW_DEFAULT_PROJECT_ID) {
-  console.error('SCW_SECRET_KEY and SCW_DEFAULT_PROJECT_ID must be set (repo-root .env)')
+const { SCALEWAY_SECRET_KEY, SCALEWAY_PROJECT_ID } = process.env
+if (!SCALEWAY_SECRET_KEY || !SCALEWAY_PROJECT_ID) {
+  console.error('SCALEWAY_SECRET_KEY and SCALEWAY_PROJECT_ID must be set (repo-root .env)')
   process.exit(1)
 }
 
@@ -123,7 +123,7 @@ async function main() {
   const rows: Row[] = []
 
   for (const model of models) {
-    const extractor = scalewayVision({ secretKey: SCW_SECRET_KEY!, projectId: SCW_DEFAULT_PROJECT_ID!, model, timeoutMs: 60_000 })
+    const extractor = scalewayVision({ secretKey: SCALEWAY_SECRET_KEY!, projectId: SCALEWAY_PROJECT_ID!, model, timeoutMs: 60_000 })
     console.log(`── ${model}`)
     for (const file of files) {
       const t0 = performance.now()

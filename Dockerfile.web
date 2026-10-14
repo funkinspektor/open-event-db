@@ -1,0 +1,33 @@
+# Web container: Next.js standalone server.
+# NEXT_PUBLIC_API_URL is compiled into the browser bundle, so it has to be known at build time:
+#   docker build -f Dockerfile.web --build-arg NEXT_PUBLIC_API_URL=https://api.kellerkompass.de -t kellerkompass-web .
+FROM node:24-alpine AS build
+RUN corepack enable
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/web/package.json packages/web/
+COPY packages/shared/package.json packages/shared/
+RUN pnpm install --frozen-lockfile --filter @open-event-db/web...
+COPY packages/web packages/web
+COPY packages/shared packages/shared
+ARG NEXT_PUBLIC_API_URL
+ARG WEB_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    WEB_URL=$WEB_URL \
+    NEXT_TELEMETRY_DISABLED=1
+RUN test -n "$NEXT_PUBLIC_API_URL" || (echo "--build-arg NEXT_PUBLIC_API_URL is required" && exit 1)
+# public/ may be empty and is then missing from a fresh clone
+RUN mkdir -p packages/web/public && pnpm --filter @open-event-db/web build
+
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+COPY --from=build /repo/packages/web/.next/standalone ./
+COPY --from=build /repo/packages/web/.next/static ./packages/web/.next/static
+COPY --from=build /repo/packages/web/public ./packages/web/public
+USER node
+EXPOSE 3000
+CMD ["node", "packages/web/server.js"]

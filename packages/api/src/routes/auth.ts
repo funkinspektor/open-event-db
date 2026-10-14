@@ -11,11 +11,14 @@ const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
 const API_PUBLIC_URL = process.env.API_PUBLIC_URL ?? 'http://localhost:3001'
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000
 
+// In production web and API run on sibling subdomains (kellerkompass.de / api.kellerkompass.de), so the
+// cookie needs COOKIE_DOMAIN=kellerkompass.de for the web server to see it. Locally host-only is fine.
 const cookieOptions = {
   path: '/',
   httpOnly: true,
   sameSite: 'lax' as const,
   secure: process.env.NODE_ENV === 'production',
+  domain: process.env.COOKIE_DOMAIN || undefined,
 }
 
 const magicLinkRateLimit = {

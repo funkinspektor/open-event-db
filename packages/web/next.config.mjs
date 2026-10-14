@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Monorepo: trace dependencies from the repo root so the standalone build includes the workspace packages.
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   reactStrictMode: true,
   transpilePackages: ['@open-event-db/shared'],
   webpack(config) {

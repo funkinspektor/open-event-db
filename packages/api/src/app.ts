@@ -19,8 +19,21 @@ export interface AppOptions {
   logger?: boolean
 }
 
+// Behind a load balancer every request arrives from the proxy, so per-IP rate limits would be shared by
+// everyone. TRUST_PROXY=true (or a hop count) takes the client address from X-Forwarded-For instead.
+function trustProxy(): boolean | number {
+  const v = process.env.TRUST_PROXY
+  if (v === 'true') return true
+  const hops = Number(v)
+  return Number.isInteger(hops) && hops > 0 ? hops : false
+}
+
+// The web server renders pages for all visitors from a single IP. It sends this shared secret and is
+// exempt from the global per-IP limit (per-route write limits still apply).
+const INTERNAL_TOKEN = process.env.API_INTERNAL_TOKEN
+
 export async function buildApp({ logger = true }: AppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger })
+  const app = Fastify({ logger, trustProxy: trustProxy() })
 
   app.setErrorHandler(errorHandler)
   app.setNotFoundHandler((req, reply) => {
@@ -41,6 +54,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     max: 100,
     timeWindow: '1 minute',
     hook: 'preHandler',
+    allowList: (req) => !!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN,
   })
 
   await app.register(healthRoutes)

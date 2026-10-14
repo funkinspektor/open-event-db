@@ -84,17 +84,17 @@ function transportFromEnv(): EmailTransport {
   if (provider !== 'scaleway') throw new Error(`Unknown EMAIL_PROVIDER "${provider}" (use console or scaleway)`)
 
   const env = {
-    SCW_SECRET_KEY: process.env.SCW_SECRET_KEY,
-    SCW_DEFAULT_PROJECT_ID: process.env.SCW_DEFAULT_PROJECT_ID,
+    SCALEWAY_SECRET_KEY: process.env.SCALEWAY_SECRET_KEY,
+    SCALEWAY_PROJECT_ID: process.env.SCALEWAY_PROJECT_ID,
     EMAIL_FROM: process.env.EMAIL_FROM,
   }
   const missing = Object.entries(env).filter(([, v]) => !v).map(([k]) => k)
   if (missing.length) throw new Error(`EMAIL_PROVIDER=scaleway needs ${missing.join(', ')}`)
 
   return scalewayTransport({
-    secretKey: env.SCW_SECRET_KEY!,
-    projectId: env.SCW_DEFAULT_PROJECT_ID!,
-    region: process.env.SCW_DEFAULT_REGION ?? 'fr-par',
+    secretKey: env.SCALEWAY_SECRET_KEY!,
+    projectId: env.SCALEWAY_PROJECT_ID!,
+    region: process.env.SCALEWAY_REGION ?? 'fr-par',
     fromEmail: env.EMAIL_FROM!,
     fromName: process.env.EMAIL_FROM_NAME ?? 'Kellerkompass',
   })

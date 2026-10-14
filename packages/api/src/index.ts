@@ -1,7 +1,8 @@
 import { buildApp } from './app.js'
 import { CLEANUP_INTERVAL_MS, cleanupExpiredAuth } from './cleanup.js'
 
-const port = Number(process.env.API_PORT ?? 3001)
+// Serverless platforms (Scaleway) inject PORT; API_PORT wins locally.
+const port = Number(process.env.API_PORT ?? process.env.PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
 
 const app = await buildApp()

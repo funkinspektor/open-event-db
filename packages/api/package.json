@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
-    "build": "tsc",
+    "build": "node build.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -21,9 +21,11 @@
     "@open-event-db/shared": "workspace:*",
     "drizzle-orm": "^0.36.4",
     "fastify": "^5.2.1",
+    "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "esbuild": "^0.27.7",
     "sharp": "^0.34.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
