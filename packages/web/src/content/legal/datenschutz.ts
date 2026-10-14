@@ -11,7 +11,7 @@ ${lines(OPERATOR_NAME, OPERATOR_ADDRESS, `E-Mail: [${CONTACT_EMAIL}](mailto:${CO
 
 Kellerkompass läuft bei der Scaleway SAS, 8 rue de la Ville l’Évêque, 75008 Paris, Frankreich, in der Region Paris (fr-par). Scaleway verarbeitet die Daten in unserem Auftrag nach Art. 28 DSGVO.
 
-Bei jedem Aufruf entstehen Server-Logs mit IP-Adresse, Zeitpunkt, aufgerufener Adresse, Referrer, Browser-Kennung und Statuscode. Wir brauchen sie für den sicheren Betrieb und zur Abwehr von Missbrauch. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Die Logs werden nach 14 Tagen gelöscht.
+Bei jedem Aufruf entstehen Server-Logs mit IP-Adresse, Zeitpunkt, aufgerufener Adresse, Referrer, Browser-Kennung und Statuscode. Wir brauchen sie für den sicheren Betrieb und zur Abwehr von Missbrauch. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Die Logs werden nach 7 Tagen gelöscht.
 
 ## 3. Events lesen
 
