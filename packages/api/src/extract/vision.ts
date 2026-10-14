@@ -6,7 +6,8 @@ export interface ExtractImage {
 }
 
 export interface VisionExtractor {
-  extract(image: ExtractImage): Promise<Extraction>
+  /** All images belong to one event post and go to the model in one request. */
+  extract(images: ExtractImage[]): Promise<Extraction>
 }
 
 export type ExtractionErrorKind = 'unavailable' | 'provider' | 'timeout' | 'invalid_output'
@@ -47,6 +48,18 @@ Fields:
 - lineup: performer, artist and DJ names, one act per entry. Keep country codes written next to a name ("Lavion FR"), but leave out section labels such as "DJs:", "Live:" or "Line-up:".
 - tags: up to five lowercase genre or format keywords that are shown or clearly stated, e.g. "techno", "house", "queer", "open air", "concert", "workshop".
 - links: shop and ticket pages are kind "tickets". Only URLs and handles that are literally written in the image, each with a kind. Never build or guess a URL from the event, venue or platform name — if no URL is written, return an empty list. The page's own address counts only if a browser address bar is visible. Write full URLs. An Instagram handle "@name" becomes "https://www.instagram.com/name".`
+
+/*
+ * Only added for several images, so single-image requests keep the prompt the eval was run with.
+ * Conflict rules follow the Multi-Image PRD (Decision 5): the first image defines the event.
+ */
+export function userPrompt(imageCount: number): string {
+  if (imageCount <= 1) return 'Extract the event from this image.'
+  return `These ${imageCount} images are consecutive parts of ONE event post, in order (for example scrolled screenshots of the same page), and may overlap. Combine them into one event:
+- Don't repeat overlapping text in description or lineup.
+- If the images give different values for a field, take the more complete explicit one (e.g. a date with a year over the same date without). If they truly contradict each other (two different dates), use null.
+- The event in the first image counts. Ignore images that show a different event.`
+}
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
 const nullableString = { type: ['string', 'null'] }
@@ -110,7 +123,7 @@ export function scalewayVision(config: ScalewayVisionConfig): VisionExtractor {
   const endpoint = `https://api.scaleway.ai/${config.projectId}/v1/chat/completions`
 
   return {
-    async extract(image) {
+    async extract(images) {
       let res: Response
       try {
         res = await fetch(endpoint, {
@@ -130,8 +143,11 @@ export function scalewayVision(config: ScalewayVisionConfig): VisionExtractor {
               {
                 role: 'user',
                 content: [
-                  { type: 'text', text: 'Extract the event from this image.' },
-                  { type: 'image_url', image_url: { url: `data:${image.type};base64,${image.data.toString('base64')}` } },
+                  { type: 'text', text: userPrompt(images.length) },
+                  ...images.map((image) => ({
+                    type: 'image_url',
+                    image_url: { url: `data:${image.type};base64,${image.data.toString('base64')}` },
+                  })),
                 ],
               },
             ],

@@ -3,18 +3,21 @@
  *
  *   pnpm --filter @open-event-db/api eval:extract <folder> [--models a,b,c]
  *
+ * Each image in the folder is one case. A subfolder is one multi-image case: its images (sorted by file
+ * name) go to the model together, like several screenshots of one event post.
  * Images are prepared like the web client does (tall captures cropped from the top to 1:2, then 1600px
  * long edge, JPEG); HEIC is converted with macOS sips. If the folder has an
- * `expected.json`, title / start / venue are scored against it:
+ * `expected.json`, title / start / venue are scored against it, keyed by file or subfolder name:
  *
- *   { "flyer-01.jpg": { "title": "Keller Nacht", "start": "2026-10-17T23:00", "venue": "Halle 4" } }
+ *   { "flyer-01.jpg": { "title": "Keller Nacht", "start": "2026-10-17T23:00", "venue": "Halle 4" },
+ *     "fb-event-02": { "title": "Hafenrauschen", "start": "2026-11-07" } }
  *
  * ("start" may also be a bare day, "2026-10-17"; leave a key out to skip that check, use null if the
  * image deliberately has no value.) Results are written to `<folder>/results-<timestamp>.json`.
  * Keep the folder outside the repo — the images belong to other people.
  */
 import { execFile } from 'node:child_process'
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -23,7 +26,7 @@ import { EXTRACT_MAX_ASPECT, EXTRACT_MAX_EDGE_PX, type EventDraft } from '@open-
 import { normalizeExtraction } from './normalize.js'
 import { scalewayVision } from './vision.js'
 
-const DEFAULT_MODELS = ['pixtral-12b-2409', 'mistral-small-3.2-24b-instruct-2506', 'gemma-4-26b-a4b-it']
+const DEFAULT_MODELS = [process.env.VISION_MODEL || 'mistral-medium-3.5-128b']
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif'])
 
 interface Expected {
@@ -36,7 +39,11 @@ type Check = boolean | null // null = not scored
 
 interface Row {
   model: string
+  /** File name, or subfolder name for a multi-image case */
   file: string
+  images: number
+  /** Prepared upload size of all images together */
+  bytes: number
   ms: number
   error?: string
   draft?: EventDraft
@@ -111,15 +118,38 @@ async function loadImage(path: string): Promise<Buffer> {
 
 const mark = (c: Check) => (c === null ? '·' : c ? '✓' : '✗')
 
+const isImage = (f: string) => IMAGE_EXT.has(extname(f).toLowerCase())
+
+/** Case name → image paths: single images directly in the folder, subfolders as multi-image cases. */
+async function findCases(): Promise<Map<string, string[]>> {
+  const cases = new Map<string, string[]>()
+  for (const entry of (await readdir(folder)).sort()) {
+    const path = join(folder, entry)
+    if ((await stat(path)).isDirectory()) {
+      const inner = (await readdir(path)).filter(isImage).sort()
+      if (inner.length) cases.set(entry, inner.map((f) => join(path, f)))
+    } else if (isImage(entry)) {
+      cases.set(entry, [path])
+    }
+  }
+  return cases
+}
+
 async function main() {
-  const files = (await readdir(folder)).filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort()
+  const cases = await findCases()
+  const files = [...cases.keys()]
   if (!files.length) throw new Error(`No PNG/JPEG/WEBP/HEIC images in ${folder}`)
   const expected: Record<string, Expected> = await readFile(join(folder, 'expected.json'), 'utf8')
     .then((s) => JSON.parse(s) as Record<string, Expected>)
     .catch(() => ({}))
-  const images = new Map(await Promise.all(files.map(async (f) => [f, await loadImage(join(folder, f))] as const)))
+  const images = new Map(
+    await Promise.all([...cases].map(async ([name, paths]) => [name, await Promise.all(paths.map(loadImage))] as const)),
+  )
+  const multi = files.filter((f) => images.get(f)!.length > 1).length
 
-  console.log(`${files.length} images, ${Object.keys(expected).length} with expectations, models: ${models.join(', ')}\n`)
+  console.log(
+    `${files.length} cases (${multi} multi-image), ${Object.keys(expected).length} with expectations, models: ${models.join(', ')}\n`,
+  )
   const rows: Row[] = []
 
   for (const model of models) {
@@ -127,9 +157,11 @@ async function main() {
     console.log(`── ${model}`)
     for (const file of files) {
       const t0 = performance.now()
-      const row: Row = { model, file, ms: 0 }
+      const caseImages = images.get(file)!
+      const bytes = caseImages.reduce((sum, b) => sum + b.length, 0)
+      const row: Row = { model, file, images: caseImages.length, bytes, ms: 0 }
       try {
-        const extraction = await extractor.extract({ data: images.get(file)!, type: 'image/jpeg' })
+        const extraction = await extractor.extract(caseImages.map((data) => ({ data, type: 'image/jpeg' as const })))
         row.draft = normalizeExtraction(extraction, new Date())
         row.checks = score(row.draft, expected[file])
       } catch (err) {
@@ -140,10 +172,11 @@ async function main() {
 
       const d = row.draft
       const c = row.checks
+      const label = row.images > 1 ? `${file} (${row.images} images, ${(row.bytes / 1024 / 1024).toFixed(1)} MiB)` : file
       console.log(
         row.error
-          ? `  ${file}  ${row.ms}ms  ERROR ${row.error.slice(0, 160)}`
-          : `  ${file}  ${row.ms}ms\n` +
+          ? `  ${label}  ${row.ms}ms  ERROR ${row.error.slice(0, 160)}`
+          : `  ${label}  ${row.ms}ms\n` +
               `    ${mark(c!.title)} title  ${d!.title ?? '—'}\n` +
               `    ${mark(c!.start)} start  ${draftStart(d!) ?? '—'}${d!.ends_at ? ` → ${d!.ends_at.slice(0, 16)}` : ''}\n` +
               `    ${mark(c!.venue)} venue  ${d!.venue_name ?? '—'}`,

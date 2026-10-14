@@ -36,10 +36,11 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [imports, setImports] = useState(0)
+  const [imageCount, setImageCount] = useState(1)
   const [duplicates, setDuplicates] = useState<EventSlim[]>([])
 
   const onImported = useCallback(
-    async (draft: EventDraft) => {
+    async (draft: EventDraft, count: number) => {
       let venue: VenueMatchable | null = null
       let candidates: VenueMatchable[] = []
       if (draft.venue_name) {
@@ -57,6 +58,7 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
             : null,
       })
       setImports((n) => n + 1)
+      setImageCount(count)
       setDuplicates([])
       if (venue && draft.start_date) {
         findPossibleDuplicates(venue.id, draft.start_date).then(setDuplicates, () => {})
@@ -71,7 +73,7 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
 
       {result && !busy && (
         <div className="kk-notice" role="status">
-          Extracted from your image — please check every field before publishing. Fields marked in yellow
+          Extracted from your {imageCount > 1 ? 'images' : 'image'} — please check every field before publishing. Fields marked in yellow
           couldn’t be read.
         </div>
       )}

@@ -4,7 +4,13 @@ import { linksSchema } from './links.js'
 /** Image types accepted by `POST /events/extract`. */
 export const EXTRACT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 export type ExtractImageType = (typeof EXTRACT_IMAGE_TYPES)[number]
-export const EXTRACT_MAX_BYTES = 10 * 1024 * 1024
+/**
+ * Request body limit for all images of one extraction together (raw body or multipart). 6 MiB is safe
+ * whether or not Scaleway Serverless Containers still cap request payloads at that size.
+ */
+export const EXTRACT_MAX_BYTES = 6 * 1024 * 1024
+/** Images per extraction — the Scaleway Generative APIs limit per request. */
+export const EXTRACT_MAX_IMAGES = 12
 /** Clients downscale to this many pixels on the long edge before upload. */
 export const EXTRACT_MAX_EDGE_PX = 1600
 /**

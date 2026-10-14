@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { inArray } from 'drizzle-orm'
 import { generateApiKey, publishers, type Publisher } from '@open-event-db/db'
-import { EXTRACT_DAILY_LIMIT, type Extraction } from '@open-event-db/shared'
+import { EXTRACT_DAILY_LIMIT, EXTRACT_MAX_IMAGES, type Extraction } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { ExtractionError, vision, type ExtractImage } from '../extract/vision.js'
@@ -14,6 +14,8 @@ const stamp = Date.now()
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)])
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(32)])
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(32)])
+const MiB = 1024 * 1024
 
 const extraction: Extraction = {
   title: 'Keller Nacht',
@@ -30,11 +32,12 @@ const extraction: Extraction = {
   links: [{ kind: 'instagram', url: '@keller' }],
 }
 
-let received: ExtractImage[] = []
+/** One entry per extractor call: the images of that request. */
+let received: ExtractImage[][] = []
 const stub = (result: () => Promise<Extraction>) =>
   vision.setExtractor({
-    async extract(image) {
-      received.push(image)
+    async extract(images) {
+      received.push(images)
       return result()
     },
   })
@@ -46,6 +49,22 @@ const post = (key: string | null, payload: Buffer | string, contentType = 'image
     headers: { 'content-type': contentType, ...(key ? { authorization: `Bearer ${key}` } : {}) },
     payload,
   })
+
+/** Multipart body with one part per entry; strings become text parts. */
+async function multipart(parts: [name: string, value: Buffer | string][]) {
+  const form = new FormData()
+  for (const [name, value] of parts) {
+    if (typeof value === 'string') form.append(name, value)
+    else form.append(name, new Blob([value]), 'image')
+  }
+  const res = new Response(form)
+  return { payload: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type')! }
+}
+
+const postParts = async (key: string | null, parts: [string, Buffer | string][]) => {
+  const { payload, contentType } = await multipart(parts)
+  return post(key, payload, contentType)
+}
 
 beforeAll(async () => {
   app = await buildApp({ logger: false })
@@ -103,7 +122,7 @@ describe('POST /events/extract', () => {
 
   it('passes the sniffed image type, not the claimed one', async () => {
     await post(keys.publisher, WEBP, 'image/png')
-    expect(received[0]?.type).toBe('image/webp')
+    expect(received[0]?.[0]?.type).toBe('image/webp')
   })
 
   it('rejects bodies that are not images', async () => {
@@ -114,10 +133,76 @@ describe('POST /events/extract', () => {
     expect(received).toHaveLength(0)
   })
 
-  it('rejects images over 10 MB', async () => {
-    const res = await post(keys.publisher, Buffer.concat([PNG, Buffer.alloc(10 * 1024 * 1024)]))
+  it('rejects bodies over 6 MiB', async () => {
+    const res = await post(keys.publisher, Buffer.concat([PNG, Buffer.alloc(6 * MiB)]))
     expect(res.statusCode).toBe(413)
     expect(res.json().error.code).toBe('payload_too_large')
+  })
+
+  describe('multipart', () => {
+    it('sends all images to the model in one call, in order', async () => {
+      const res = await postParts(keys.publisher, [['image', PNG], ['image', JPEG], ['image', WEBP]])
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.title).toBe('Keller Nacht')
+      expect(received).toHaveLength(1)
+      expect(received[0]!.map((i) => i.type)).toEqual(['image/png', 'image/jpeg', 'image/webp'])
+    })
+
+    it('accepts a single image', async () => {
+      expect((await postParts(keys.publisher, [['image', JPEG]])).statusCode).toBe(200)
+      expect(received[0]).toHaveLength(1)
+    })
+
+    it(`allows ${EXTRACT_MAX_IMAGES} images, not more`, async () => {
+      const ok = await postParts(keys.publisher, Array.from({ length: EXTRACT_MAX_IMAGES }, () => ['image', JPEG]))
+      expect(ok.statusCode).toBe(200)
+      const tooMany = await postParts(keys.publisher, Array.from({ length: EXTRACT_MAX_IMAGES + 1 }, () => ['image', JPEG]))
+      expect(tooMany.statusCode).toBe(400)
+      expect(tooMany.json().error.code).toBe('too_many_images')
+      expect(received).toHaveLength(1)
+    })
+
+    it('checks every part by its signature', async () => {
+      const res = await postParts(keys.publisher, [['image', PNG], ['image', Buffer.from('not an image at all')]])
+      expect(res.statusCode).toBe(415)
+      expect(res.json().error.code).toBe('unsupported_media_type')
+      expect(received).toHaveLength(0)
+    })
+
+    it('needs at least one part named image', async () => {
+      const res = await postParts(keys.publisher, [['file', PNG], ['note', 'hello']])
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe('no_images')
+    })
+
+    it('rejects text parts named image', async () => {
+      expect((await postParts(keys.publisher, [['image', 'hello']])).statusCode).toBe(415)
+    })
+
+    it('limits the whole body to 6 MiB', async () => {
+      const big = Buffer.concat([JPEG, Buffer.alloc(2 * MiB)])
+      const res = await postParts(keys.publisher, [['image', big], ['image', big], ['image', big]])
+      expect(res.statusCode).toBe(413)
+      expect(res.json().error.code).toBe('payload_too_large')
+      expect(received).toHaveLength(0)
+    })
+
+    it('rejects a malformed body', async () => {
+      const res = await post(keys.publisher, 'garbage', 'multipart/form-data; boundary=xyz')
+      expect(res.statusCode).toBe(400)
+      expect(received).toHaveLength(0)
+    })
+
+    it('needs authentication', async () => {
+      expect((await postParts(null, [['image', PNG]])).statusCode).toBe(401)
+    })
+
+    it('counts as one extraction against the daily limit', async () => {
+      const parts = Array.from({ length: 4 }, () => ['image', JPEG] as [string, Buffer])
+      const remaining = async () => Number((await postParts(keys.scout, parts)).headers['x-ratelimit-remaining'])
+      const first = await remaining()
+      expect(await remaining()).toBe(first - 1)
+    })
   })
 
   it.each([

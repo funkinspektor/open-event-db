@@ -268,6 +268,13 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-dropzone { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 22px 24px; border-radius: var(--radius-l); border: 1px dashed var(--uv); background: var(--uv-wash); transition: box-shadow 0.15s; }
 .kk-dropzone[data-dragging] { border-style: solid; box-shadow: var(--glow-soft); }
 .kk-dropzone__title { margin: 10px 0 6px; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.kk-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.kk-thumb { position: relative; display: flex; align-items: center; justify-content: center; width: 72px; height: 96px; border-radius: var(--radius-s); border: 1px solid var(--border); background: var(--surface-2); overflow: hidden; }
+.kk-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.kk-thumb__remove { position: absolute; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--radius-pill); background: #0c0c0dcc; color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+.kk-thumb__remove:hover, .kk-thumb__remove:focus-visible { background: var(--ground); box-shadow: var(--focus-ring); }
+.kk-thumb--add { border-style: dashed; border-color: var(--uv); background: transparent; color: var(--uv); font: inherit; font-size: 28px; cursor: pointer; }
+.kk-thumb--add:hover, .kk-thumb--add:focus-visible { box-shadow: var(--glow-soft); }
 .kk-notice { padding: 14px 18px; border-radius: var(--radius-m); border: 1px solid var(--uv); background: var(--uv-wash); color: var(--ink); font-size: 15px; font-weight: 500; line-height: 1.5; }
 /* A field the image didn't fill — the warn colour until it has a value */
 .kk-input--missing:not(:focus) { border-color: var(--warn); }
