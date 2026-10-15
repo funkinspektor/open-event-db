@@ -51,7 +51,7 @@
   --chrome-dark: linear-gradient(100deg, #0E0E10 0%, #26262E 24%, #4A4262 40%, #3A5864 53%, #1C1C22 66%, #33333B 100%);
   --content-max: 1200px;
   --form-max: 760px;
-  --header-h: 108px;
+  --header-h: 64px; /* app: sticky header bar (design system: 108px) */
   --header-h-mobile: 56px; /* app: sticky phone header */
   --font-display: var(--font-germania-one), "Germania One", "UnifrakturMaguntia", Georgia, serif;
   --font-sans: var(--font-schibsted-grotesk), "Schibsted Grotesk", system-ui, sans-serif;
