@@ -12,6 +12,23 @@ doesn't matter. (Managed PostgreSQL creation in `fr-par` was disabled on 2026-10
 
 Web and API run on sibling subdomains so the session cookie can be shared via `COOKIE_DOMAIN`.
 
+## Automatic deploys
+
+`.github/workflows/deploy.yml` builds and rolls out on every push to `main`. It rebuilds only the image whose
+sources changed (API first, because it runs the migrations), tags it `:latest` and with the commit SHA, points
+the container at the SHA tag and waits until the container is ready again. "Run workflow" in the Actions tab
+rebuilds both. To roll back, point the container at an earlier SHA tag in the Scaleway console.
+
+It needs three repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `SCW_SECRET_KEY` | secret key of the IAM application `kellerkompass-deploy`; its policy needs `ContainerRegistryFullAccess` and `ContainersFullAccess` in the project |
+| `SCW_WEB_CONTAINER_ID` | ID of the web container (Scaleway console → Serverless Containers → container → Settings) |
+| `SCW_API_CONTAINER_ID` | ID of the API container |
+
+The manual steps below still work, for example from a laptop when Actions is down.
+
 ## 1. Build and push the images
 
 Serverless Containers run `linux/amd64`, so build for that platform on Apple Silicon.
