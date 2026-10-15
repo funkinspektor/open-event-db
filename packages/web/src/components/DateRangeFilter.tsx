@@ -9,7 +9,7 @@ import { ChevronIcon } from './Icons'
 const fmt = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
 
 /** "16.10 – 19.10", "From 16.10", "Until 19.10" */
-function label(f: Filters): string {
+export function dateRangeLabel(f: Pick<Filters, 'from' | 'to'>): string {
   if (f.from && f.to) return f.from === f.to ? fmt(f.from) : `${fmt(f.from)} – ${fmt(f.to)}`
   if (f.from) return `From ${fmt(f.from)}`
   if (f.to) return `Until ${fmt(f.to)}`
@@ -78,7 +78,7 @@ export function DateRangeFilter({ filters }: { filters: Filters }) {
           setOpen(!open)
         }}
       >
-        {active ? label(filters) : 'Dates'}
+        {active ? dateRangeLabel(filters) : 'Dates'}
         <ChevronIcon className="kk-icon kk-pill__chev" />
       </button>
       {open && (
