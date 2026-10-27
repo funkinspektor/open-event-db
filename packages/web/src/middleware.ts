@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { canonicalHostRedirect } from '@/lib/canonical-host'
 
 // Must match SESSION_COOKIE / SESSION_TTL_MS in packages/api/src/auth.ts.
 const SESSION_COOKIE = 'oedb_session'
@@ -18,6 +19,11 @@ function unauthorized(req: NextRequest): NextResponse | null {
 }
 
 export function middleware(req: NextRequest) {
+  // Redirect before the auth gate so the browser only asks for credentials once, on the bare domain.
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
+  const canonical = canonicalHostRedirect(host, req.nextUrl.pathname, req.nextUrl.search)
+  if (canonical) return NextResponse.redirect(canonical, 308)
+
   const denied = unauthorized(req)
   if (denied) return denied
 
