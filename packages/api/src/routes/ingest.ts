@@ -16,6 +16,7 @@ import { diff, logEdit } from '../history.js'
 import { cancelEvent, eventSnapshot } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
+import { berlinInstant, berlinToday } from '../extract/normalize.js'
 
 const read = { onRequest: requireAuth }
 const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
@@ -29,7 +30,14 @@ function requireScout(req: FastifyRequest) {
 
 const draftStartsAt = sql`(${ingestItems.draft}->>'starts_at')::timestamptz`
 
-const isNew = and(eq(ingestItems.status, 'pending'), isNull(ingestItems.goneAt))
+const draftEndsAt = sql`coalesce((${ingestItems.draft}->>'ends_at')::timestamptz, ${draftStartsAt})`
+
+/** Midnight in Berlin today: items that ended before it are over and no longer worth a decision. */
+const startOfToday = () => berlinInstant(berlinToday(new Date()), 0).toISOString()
+const notOver = () => sql`${draftEndsAt} >= ${startOfToday()}::timestamptz`
+
+// Pending items still in the feed that are not over yet (a running exhibition stays until its end).
+const isNew = () => and(eq(ingestItems.status, 'pending'), isNull(ingestItems.goneAt), notOver())
 // Accepted items that left their feed and still wait for a decision. Detached items (claimed, edited by a
 // human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(
@@ -42,7 +50,7 @@ const isGone = and(
 )
 
 async function counts(): Promise<{ new: number; gone: number }> {
-  const [n] = await db.select({ n: sql<number>`count(*)::int` }).from(ingestItems).where(isNew)
+  const [n] = await db.select({ n: sql<number>`count(*)::int` }).from(ingestItems).where(isNew())
   const [g] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(ingestItems)
@@ -58,7 +66,7 @@ async function listItems(view: 'new' | 'gone'): Promise<IngestItemView[]> {
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
   const rows =
     view === 'new'
-      ? await base.where(isNew).orderBy(asc(draftStartsAt), asc(ingestItems.id))
+      ? await base.where(isNew()).orderBy(asc(draftStartsAt), asc(ingestItems.id))
       : await base
           .innerJoin(events, eq(events.id, ingestItems.eventId))
           .where(isGone)
@@ -111,12 +119,15 @@ export async function ingestRoutes(app: FastifyInstance) {
       const [item] = await tx
         .update(ingestItems)
         .set({ status: 'accepted', decidedBy: me.id, decidedAt: new Date() })
-        .where(and(eq(ingestItems.id, req.params.id), eq(ingestItems.status, 'pending')))
+        .where(and(eq(ingestItems.id, req.params.id), eq(ingestItems.status, 'pending'), notOver()))
         .returning()
       if (!item) {
-        const [exists] = await tx.select({ id: ingestItems.id }).from(ingestItems).where(eq(ingestItems.id, req.params.id))
+        const [exists] = await tx
+          .select({ status: ingestItems.status })
+          .from(ingestItems)
+          .where(eq(ingestItems.id, req.params.id))
         if (!exists) throw notFound('Inbox item not found')
-        throw conflict('Item has already been decided')
+        throw conflict(exists.status === 'pending' ? 'Item is already over' : 'Item has already been decided')
       }
 
       const [source] = await tx.select().from(ingestSources).where(eq(ingestSources.id, item.sourceId))

@@ -180,6 +180,39 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(count.json().data.new).toBeGreaterThanOrEqual(before.new + 3)
   })
 
+  it('leaves out pending items that are over, but keeps running ones', async () => {
+    const hour = 60 * 60 * 1000
+    const day = 24 * hour
+    const iso = (ms: number) => new Date(Date.now() + ms).toISOString()
+    // Ended yesterday (25 h ago is before the start of today in Berlin)
+    const ended = await newItem({}, draftOf({ starts_at: iso(-28 * hour), ends_at: iso(-25 * hour) }))
+    const startedYesterday = await newItem({}, draftOf({ starts_at: iso(-25 * hour), ends_at: null }))
+    // A running exhibition: started months ago, ends next month
+    const running = await newItem({}, draftOf({ starts_at: iso(-90 * day), ends_at: iso(30 * day) }))
+
+    const ids = await listIds('new')
+    expect(ids).toContain(running.id)
+    expect(ids).not.toContain(ended.id)
+    expect(ids).not.toContain(startedYesterday.id)
+
+    // The count uses the same filter as the list (retried: other test files add items in parallel)
+    let consistent = false
+    for (let i = 0; i < 5 && !consistent; i++) {
+      const res = await app.inject({ method: 'GET', url: '/api/v1/ingest/items?view=new', headers: auth(keyScout) })
+      const body = res.json()
+      consistent = body.meta.counts.new === body.data.length
+    }
+    expect(consistent).toBe(true)
+
+    const accept = await post(`/items/${ended.id}/accept`, keyScout)
+    expect(accept.statusCode).toBe(409)
+    expect(accept.json().error.code).toBe('conflict')
+    expect((await itemRow(ended.id)).status).toBe('pending')
+    const ok = await post(`/items/${running.id}/accept`, keyScout)
+    expect(ok.statusCode).toBe(200)
+    eventIds.push(ok.json().data.event_id)
+  })
+
   it('defaults to the new view and rejects an unknown view', async () => {
     const def = await app.inject({ method: 'GET', url: '/api/v1/ingest/items', headers: auth(keyScout) })
     expect(def.statusCode).toBe(200)
