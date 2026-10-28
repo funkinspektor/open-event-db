@@ -334,6 +334,25 @@ describe('POST /ingest/items/:id/link', () => {
     expect(detail.json().data.synced_from).toBeNull()
   })
 
+  it('detaches the item the event was synced from, so it never shows up as gone', async () => {
+    // Event E came from item A; the source re-posts it under a new id (item B), which a scout links to E
+    const a = await newItem()
+    const accepted = await post(`/items/${a.id}/accept`, keyScout)
+    const eventId = accepted.json().data.event_id as string
+    eventIds.push(eventId)
+    const b = await newItem()
+
+    const res = await post(`/items/${b.id}/link`, keyScout, { event_id: eventId })
+    expect(res.statusCode).toBe(200)
+    expect((await itemRow(a.id)).detachedAt).not.toBeNull()
+
+    // The next run misses A
+    await db.update(ingestItems).set({ goneAt: new Date() }).where(eq(ingestItems.id, a.id))
+    expect(await listIds('gone')).not.toContain(a.id)
+    expect((await post(`/items/${a.id}/gone`, keyScout, { action: 'cancel' })).statusCode).toBe(409)
+    expect((await eventRow(eventId)).status).toBe('scheduled')
+  })
+
   it('404s for an unknown event and 409s for a decided item', async () => {
     const item = await newItem()
     const missing = await post(`/items/${item.id}/link`, keyScout, { event_id: '00000000-0000-4000-8000-000000000000' })

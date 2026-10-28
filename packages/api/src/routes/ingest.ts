@@ -15,6 +15,7 @@ import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { cancelEvent, eventSnapshot } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
+import { detachIngest } from '../ingest/detach.js'
 
 const read = { onRequest: requireAuth }
 const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
@@ -182,10 +183,12 @@ export async function ingestRoutes(app: FastifyInstance) {
     const me = requireScout(req)
     const { event_id } = ingestLinkSchema.parse(req.body)
 
-    const [target] = await db.select({ id: events.id }).from(events).where(eq(events.id, event_id))
-    if (!target) throw notFound('Event not found')
-
     await db.transaction(async (tx) => {
+      // Event first, then items: the lock order of PUT/DELETE /events/:id and the sync run
+      const [target] = await tx.select({ id: events.id }).from(events).where(eq(events.id, event_id)).for('update')
+      if (!target) throw notFound('Event not found')
+      // An item the event was synced from (re-posted under a new id) must not later offer it as gone
+      await detachIngest(tx, event_id)
       // Detached from the start: the linked event is a human's, the feed must not overwrite it
       const [item] = await tx
         .update(ingestItems)
