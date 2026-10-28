@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import {
   ingestDraftSchema,
@@ -59,7 +59,7 @@ async function counts(): Promise<{ new: number; gone: number }> {
   return { new: n?.n ?? 0, gone: g?.n ?? 0 }
 }
 
-async function listItems(view: 'new' | 'gone'): Promise<IngestItemView[]> {
+async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<IngestItemView[]> {
   const base = db
     .select({ item: ingestItems, source: { slug: ingestSources.slug, name: ingestSources.name } })
     .from(ingestItems)
@@ -72,9 +72,16 @@ async function listItems(view: 'new' | 'gone'): Promise<IngestItemView[]> {
           .where(isGone)
           .orderBy(asc(draftStartsAt), asc(ingestItems.id))
 
+  // A broken stored draft must not take the inbox down for every scout: skip it and log it
+  const valid = rows.flatMap(({ item, source }) => {
+    const parsed = ingestDraftSchema.safeParse(item.draft)
+    if (parsed.success) return [{ item, source, draft: parsed.data }]
+    log.warn({ itemId: item.id, issues: parsed.error.issues }, 'skipping ingest item with an invalid draft')
+    return []
+  })
+
   return Promise.all(
-    rows.map(async ({ item, source }) => {
-      const draft = ingestDraftSchema.parse(item.draft)
+    valid.map(async ({ item, source, draft }) => {
       const duplicates =
         view === 'new'
           ? await findDuplicateCandidates({
@@ -102,7 +109,7 @@ export async function ingestRoutes(app: FastifyInstance) {
   app.get('/ingest/items', read, async (req) => {
     requireScout(req)
     const { view } = ingestListQuerySchema.parse(req.query)
-    const [data, itemCounts] = await Promise.all([listItems(view), counts()])
+    const [data, itemCounts] = await Promise.all([listItems(view, req.log), counts()])
     return { data, meta: { counts: itemCounts } }
   })
 

@@ -73,7 +73,8 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
   const endsAt = endOf(ev, extraction, startDay, startsAt)
 
   const website = httpUrl(ev.url)
-  const venueId = ev.locationRoom ? (config.venues[ev.locationRoom] ?? null) : null
+  const room = ev.locationRoom
+  const venueId = room && Object.hasOwn(config.venues, room) ? (config.venues[room] ?? null) : null
 
   return {
     title: ev.summary,

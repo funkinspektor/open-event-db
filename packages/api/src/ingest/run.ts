@@ -9,6 +9,7 @@ import {
   type IngestSource,
 } from '@open-event-db/db'
 import {
+  ingestDraftSchema,
   ingestSourceConfigSchema,
   type Extraction,
   type IngestDraft,
@@ -160,7 +161,8 @@ async function ingestEvent(
   }
 
   const { extraction, failed } = await extractTimes(ev, config)
-  const draft = normalizeFeedEvent(ev, config, extraction)
+  // Checked before it is stored: an invalid draft fails the source instead of breaking the inbox later
+  const draft = ingestDraftSchema.parse(normalizeFeedEvent(ev, config, extraction))
   const contentHash = failed ? null : ev.hash
 
   if (!item) {

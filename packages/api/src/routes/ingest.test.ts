@@ -213,6 +213,20 @@ describe('GET /ingest/items and /ingest/count', () => {
     eventIds.push(ok.json().data.event_id)
   })
 
+  it('skips an item whose stored draft is broken instead of failing the list', async () => {
+    const valid = await newItem()
+    const { title: _title, ...withoutTitle } = draftOf()
+    const broken = await newItem({}, withoutTitle as ReturnType<typeof draftOf>)
+
+    try {
+      const ids = await listIds('new')
+      expect(ids).toContain(valid.id)
+      expect(ids).not.toContain(broken.id)
+    } finally {
+      await db.delete(ingestItems).where(eq(ingestItems.id, broken.id))
+    }
+  })
+
   it('defaults to the new view and rejects an unknown view', async () => {
     const def = await app.inject({ method: 'GET', url: '/api/v1/ingest/items', headers: auth(keyScout) })
     expect(def.statusCode).toBe(200)

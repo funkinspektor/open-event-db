@@ -148,6 +148,13 @@ describe('normalizeFeedEvent', () => {
     expect(club.location_text).toBe('Club, 21 Veteranenstrasse, Berlin')
   })
 
+  it('does not look up venue rooms on the object prototype', () => {
+    const room = { ...feed('Psychopomp'), locationRoom: 'constructor', locationText: 'constructor, Somewhere' }
+    const draft = normalize(room, acud, null)
+    expect(draft.venue_id).toBeNull()
+    expect(draft.location_text).toBe('constructor, Somewhere')
+  })
+
   it('uses the city from the source config', () => {
     const leipzig = ingestSourceConfigSchema.parse({ city: 'Leipzig' })
     expect(normalize(feed('Psychopomp'), leipzig, null).city).toBe('Leipzig')
