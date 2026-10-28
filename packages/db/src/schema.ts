@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -28,6 +29,9 @@ export const editHistoryAction = pgEnum('edit_history_action', [
   'ownership_changed',
   'deleted',
 ])
+
+export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical'])
+export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accepted', 'rejected'])
 
 type Links = Record<string, string>
 
@@ -149,6 +153,53 @@ export const editHistory = pgTable('edit_history', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const ingestSources = pgTable('ingest_sources', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  kind: ingestSourceKind('kind').notNull(),
+  url: text('url').notNull(),
+  /** Scout publisher that sync edits are attributed to. */
+  publisherId: uuid('publisher_id')
+    .notNull()
+    .references(() => publishers.id, { onDelete: 'restrict' }),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  enabled: boolean('enabled').notNull().default(true),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  lastItemCount: integer('last_item_count'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const ingestItems = pgTable(
+  'ingest_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => ingestSources.id, { onDelete: 'cascade' }),
+    externalId: text('external_id').notNull(),
+    status: ingestItemStatus('status').notNull().default('pending'),
+    draft: jsonb('draft').$type<Record<string, unknown>>().notNull(),
+    raw: text('raw').notNull(),
+    /** Null means extraction must be retried on the next run. */
+    contentHash: text('content_hash'),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    goneAt: timestamp('gone_at', { withTimezone: true }),
+    goneResolvedAt: timestamp('gone_resolved_at', { withTimezone: true }),
+    decidedBy: uuid('decided_by').references(() => publishers.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
+    detachedAt: timestamp('detached_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('ingest_items_source_external').on(t.sourceId, t.externalId),
+    index('ingest_items_event_idx').on(t.eventId),
+  ],
+)
+
 export type Publisher = typeof publishers.$inferSelect
 export type NewPublisher = typeof publishers.$inferInsert
 export type Venue = typeof venues.$inferSelect
@@ -165,3 +216,7 @@ export type MagicLinkToken = typeof magicLinkTokens.$inferSelect
 export type NewMagicLinkToken = typeof magicLinkTokens.$inferInsert
 export type EditHistoryEntry = typeof editHistory.$inferSelect
 export type NewEditHistoryEntry = typeof editHistory.$inferInsert
+export type IngestSource = typeof ingestSources.$inferSelect
+export type NewIngestSource = typeof ingestSources.$inferInsert
+export type IngestItem = typeof ingestItems.$inferSelect
+export type NewIngestItem = typeof ingestItems.$inferInsert
