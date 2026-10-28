@@ -19,6 +19,8 @@ import {
   canEdit,
   canManageOwners,
   duplicateQuerySchema,
+  EVENT_IMAGE_MAX_BYTES,
+  EXTRACT_IMAGE_TYPES,
   eventCreateSchema,
   eventListQuerySchema,
   eventUpdateSchema,
@@ -28,11 +30,14 @@ import {
 import { eventOwners, events, publishers, venues, type Publisher } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
-import { badRequest, forbidden, notFound } from '../errors.js'
+import { ApiError, badRequest, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
+import { replaceEventImage } from '../images/events.js'
+import { sniffImageType } from '../images/sniff.js'
+import { imageStore } from '../images/store.js'
 import {
   cancelEvent,
   eventSnapshot,
@@ -63,7 +68,25 @@ async function loadEvent(id: string) {
 
 const actor = (p: Publisher) => ({ id: p.id, is_scout: p.isScout })
 
+/** The event, if `me` may edit it; the same rule and messages as PUT /events/:id. */
+async function editableEvent(id: string, me: Publisher) {
+  const current = await loadEvent(id)
+  if (!canEdit(current, actor(me))) {
+    throw forbidden(current.owners.length ? 'Only event owners can edit this event' : 'Only scouts can edit unclaimed events')
+  }
+  return current
+}
+
+const imagesUnavailable = () => new ApiError(503, 'images_unavailable', 'Event images are not available right now')
+
 export async function eventRoutes(app: FastifyInstance) {
+  // Image uploads arrive as the raw body; the signature, not this header, decides what they are
+  app.addContentTypeParser(
+    [...EXTRACT_IMAGE_TYPES],
+    { parseAs: 'buffer', bodyLimit: EVENT_IMAGE_MAX_BYTES },
+    (_req, body, done) => done(null, body),
+  )
+
   app.get('/events', async (req) => {
     const query = eventListQuerySchema.parse(req.query)
     const { limit, cursor, city, from, to, tags, venue_id, publisher_id, added_by, q, order } = query
@@ -192,15 +215,7 @@ export async function eventRoutes(app: FastifyInstance) {
   app.put<{ Params: { id: string } }>('/events/:id', write, async (req) => {
     const me = currentPublisher(req)
     const body = eventUpdateSchema.parse(req.body)
-    const current = await loadEvent(req.params.id)
-
-    if (!canEdit(current, actor(me))) {
-      throw forbidden(
-        current.owners.length
-          ? 'Only event owners can edit this event'
-          : 'Only scouts can edit unclaimed events',
-      )
-    }
+    const current = await editableEvent(req.params.id, me)
     if (body.status === 'cancelled' && !canCancel(current, actor(me))) {
       throw forbidden('Only the event creator can cancel an event')
     }
@@ -248,6 +263,24 @@ export async function eventRoutes(app: FastifyInstance) {
       await detachIngest(tx, current.id)
     })
 
+    return { data: await getEventDetail(current.id) }
+  })
+
+  app.put<{ Params: { id: string } }>('/events/:id/image', { ...write, bodyLimit: EVENT_IMAGE_MAX_BYTES }, async (req) => {
+    const me = currentPublisher(req)
+    const current = await editableEvent(req.params.id, me)
+    if (!imageStore.store) throw imagesUnavailable()
+    const type = Buffer.isBuffer(req.body) ? sniffImageType(req.body) : null
+    if (!type) throw new ApiError(415, 'unsupported_media_type', 'Send one PNG, JPEG or WEBP image as the request body')
+    await replaceEventImage(current.id, { data: req.body as Buffer, type }, { publisherId: me.id, detach: true })
+    return { data: await getEventDetail(current.id) }
+  })
+
+  app.delete<{ Params: { id: string } }>('/events/:id/image', write, async (req) => {
+    const me = currentPublisher(req)
+    const current = await editableEvent(req.params.id, me)
+    if (!imageStore.store) throw imagesUnavailable()
+    await replaceEventImage(current.id, null, { publisherId: me.id, detach: true })
     return { data: await getEventDetail(current.id) }
   })
 
