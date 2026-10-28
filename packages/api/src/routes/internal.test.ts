@@ -117,3 +117,26 @@ describe('POST /internal/ingest/run', () => {
     }
   })
 })
+
+// Scaleway container cron triggers POST to the root path
+describe('POST /', () => {
+  const postRoot = (payload?: object) => app.inject({ method: 'POST', url: '/', payload })
+
+  it('runs the pipeline for the secret in the JSON body', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    const res = await postRoot({ secret: 'right-secret' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: RESULT })
+    expect(runs).toBe(1)
+  })
+
+  it('is 403 without the secret and 404 when none is configured', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    expect((await postRoot({ secret: 'wrong-secret' })).statusCode).toBe(403)
+    delete process.env.INGEST_CRON_SECRET
+    expect((await postRoot({ secret: 'right-secret' })).statusCode).toBe(404)
+    expect(runs).toBe(0)
+  })
+})

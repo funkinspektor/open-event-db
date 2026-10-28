@@ -92,11 +92,10 @@ The API container gets a Scaleway cron trigger that runs every enabled ingest so
 | Schedule | `0 4 * * *` — cron triggers run in UTC: 05:00 Berlin in winter, 06:00 in summer |
 | Args | `{"secret":"<INGEST_CRON_SECRET>"}` |
 
-Cron triggers can't set headers; Scaleway POSTs the args as the JSON body and the API reads the secret from
-there (`X-Ingest-Secret` works too, for a manual `curl`).
-
-> **Open:** Scaleway's docs say a container cron trigger POSTs to the root path `/`, while the API serves the
-> run at `/internal/ingest/run`. Check the request path the trigger actually uses before relying on it.
+Cron triggers can't set headers or a path: Scaleway POSTs the args as the JSON body to `/`. The API serves
+the run at both `POST /` and `POST /internal/ingest/run` and reads the secret from the body
+(`X-Ingest-Secret` works too, for a manual `curl`). After the first scheduled run, `pnpm db:cli ingest-list`
+(via `prod-db.sh`) shows the new `last run` time; the API container log shows the request.
 
 The run is synchronous inside the request: fetching every feed and extracting the times of new events can
 take minutes, so it must finish within the container's request timeout. Do the first production run, which

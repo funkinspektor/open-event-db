@@ -20,7 +20,13 @@ describe('ingestSourceConfigSchema', () => {
       venues: {},
       extract_from_text: false,
       city: 'Berlin',
+      rooms: null,
     })
+  })
+
+  it('accepts a list of rooms and rejects an empty one', () => {
+    expect(ingestSourceConfigSchema.parse({ rooms: ['Club'] }).rooms).toEqual(['Club'])
+    expect(() => ingestSourceConfigSchema.parse({ rooms: [] })).toThrow()
   })
 
   it('accepts a pattern that compiles and venue uuids', () => {

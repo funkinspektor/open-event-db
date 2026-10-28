@@ -537,6 +537,39 @@ describe('runIngest', () => {
     expect((await itemOf(source.id, PERSIAN)).contentHash).not.toBeNull()
   })
 
+  it('imports only events from the listed rooms', async () => {
+    stubExtractor()
+    const source = await newSource({ ...ACUD, rooms: ['club'] })
+    const result = await run(source, fixture, NOW)
+    expect(result.sources).toEqual([{ slug: source.slug, ok: true, seen: 3, created: 3, updated: 0, synced: 0, gone: 0 }])
+    expect((await itemsOf(source.id)).map((i) => i.externalId).sort()).toEqual(['2386', '2390', '2391'])
+    // The empty-feed guard counts the whole feed, not only the listed rooms
+    expect((await sourceRow(source.id)).lastItemCount).toBe(5)
+  })
+
+  it('marks items from rooms that are no longer listed as gone', async () => {
+    stubExtractor()
+    const source = await newSource()
+    // Orbital Decay (Galerie) moved into the run window; Tenants (Galerie) started before it
+    const feed = fixture.replace('DTSTART;TZID=:20261001T180000', 'DTSTART;TZID=:20261105T180000')
+    await run(source, feed, NOW)
+    await db.update(ingestSources).set({ config: { ...ACUD, rooms: ['Club'] } }).where(eq(ingestSources.id, source.id))
+    const result = await run(source, feed, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 3, gone: 1 })
+    expect((await itemOf(source.id, '2379')).goneAt?.getTime()).toBe(LATER.getTime())
+    expect((await itemOf(source.id, '2331')).goneAt).toBeNull()
+    expect((await itemOf(source.id, PERSIAN)).goneAt).toBeNull()
+  })
+
+  it('does not treat a feed without events in the listed rooms as empty', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    await db.update(ingestSources).set({ config: { ...ACUD, rooms: ['Studio'] } }).where(eq(ingestSources.id, source.id))
+    const result = await run(source, fixture, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 0, created: 0 })
+  })
+
   it('skips a run while another one holds the lock', async () => {
     stubExtractor()
     const source = await newSource()

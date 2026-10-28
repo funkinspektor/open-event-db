@@ -35,9 +35,12 @@ export async function internalRoutes(app: FastifyInstance) {
   })
 
   // Called once a day by a Scaleway cron trigger; no secret configured means the endpoint doesn't exist
-  app.post('/internal/ingest/run', async (req) => {
+  const run = async (req: FastifyRequest) => {
     if (!process.env.INGEST_CRON_SECRET) throw notFound()
     if (!hasIngestSecret(req)) throw forbidden()
     return { data: await ingestRunner.run() }
-  })
+  }
+  app.post('/internal/ingest/run', run)
+  // Scaleway container cron triggers always POST to the root path
+  app.post('/', run)
 }

@@ -218,12 +218,17 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
       )
     }
 
+    const rooms = config.rooms?.map((room) => room.toLowerCase())
+    const listed = rooms ? feed.filter((ev) => rooms.includes(ev.locationRoom?.toLowerCase() ?? '')) : feed
+    result.seen = listed.length
+
     const byExternalId = new Map(existing.map((item) => [item.externalId, item]))
-    for (const ev of feed) {
+    for (const ev of listed) {
       await ingestEvent(source, config, ev, byExternalId.get(ev.externalId), now, result)
     }
 
-    // Items not in the feed although they start inside the window it was asked for are gone.
+    // Items not in the feed (or no longer in a listed room) although they start inside the window it was
+    // asked for are gone.
     const { from, to } = runWindow(config, now)
     const startsAt = sql`(${ingestItems.draft}->>'starts_at')::timestamptz`
     const conditions: SQL[] = [
@@ -232,7 +237,7 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
       sql`${startsAt} >= ${berlinInstant(from, 0).toISOString()}::timestamptz`,
       sql`${startsAt} < ${berlinInstant(nextDay(to), 0).toISOString()}::timestamptz`,
     ]
-    if (feed.length > 0) conditions.push(notInArray(ingestItems.externalId, feed.map((ev) => ev.externalId)))
+    if (listed.length > 0) conditions.push(notInArray(ingestItems.externalId, listed.map((ev) => ev.externalId)))
     const gone = await db
       .update(ingestItems)
       .set({ goneAt: now })

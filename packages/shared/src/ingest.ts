@@ -31,6 +31,8 @@ export const ingestSourceConfigSchema = z.object({
   venues: z.record(z.string().min(1), uuid).default({}),
   extract_from_text: z.boolean().default(false),
   city: z.string().min(1).default('Berlin'),
+  /** Only feed events in these rooms (first part of LOCATION, case-insensitive) are imported; null = all. */
+  rooms: z.array(z.string().min(1)).min(1).nullable().default(null),
 })
 
 export type IngestSourceConfig = z.infer<typeof ingestSourceConfigSchema>
