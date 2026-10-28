@@ -1,6 +1,7 @@
 export * from './errors.js'
 export * from './events.js'
 export * from './extract.js'
+export * from './ingest.js'
 export * from './links.js'
 export * from './pagination.js'
 export * from './permissions.js'

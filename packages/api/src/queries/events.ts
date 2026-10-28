@@ -110,6 +110,7 @@ function serializeEventDetail(
       name: o.name,
       role: o.role,
     })),
+    synced_from: null,
   }
 }
 

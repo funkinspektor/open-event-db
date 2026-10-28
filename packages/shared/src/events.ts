@@ -103,6 +103,8 @@ export const eventDetailSchema = eventSlimSchema
     updated_at: z.string().datetime({ offset: true }),
     venue: venueDetailEmbedSchema.nullable(),
     owners: z.array(eventOwnerSchema),
+    /** Set while a feed keeps this event in sync; editing detaches it. */
+    synced_from: z.object({ source_name: z.string(), source_url: z.string().url().nullable() }).nullable(),
   })
 
 export type EventDetail = z.infer<typeof eventDetailSchema>
