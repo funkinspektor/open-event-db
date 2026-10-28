@@ -10,7 +10,7 @@ import {
 const TZ = 'Europe/Berlin'
 const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
-interface CalendarDay {
+export interface CalendarDay {
   year: number
   month: number
   day: number
@@ -19,7 +19,7 @@ interface CalendarDay {
 const pad = (n: number) => String(n).padStart(2, '0')
 const fmtDay = (d: CalendarDay) => `${d.year}-${pad(d.month)}-${pad(d.day)}`
 
-function berlinParts(instant: Date) {
+export function berlinParts(instant: Date) {
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ,
     hourCycle: 'h23',
@@ -86,7 +86,7 @@ export function parseTime(value: string | null): number | null {
 }
 
 /** Wall-clock time in Berlin → instant. Handles DST by correcting the offset once. */
-function berlinInstant(day: CalendarDay, minutes: number): Date {
+export function berlinInstant(day: CalendarDay, minutes: number): Date {
   const wallAsUtc = Date.UTC(day.year, day.month - 1, day.day, Math.floor(minutes / 60), minutes % 60)
   const offsetAt = (instant: number) => {
     const p = berlinParts(new Date(instant))
@@ -97,7 +97,7 @@ function berlinInstant(day: CalendarDay, minutes: number): Date {
 }
 
 /** ISO 8601 with the Berlin offset, e.g. 2026-10-17T23:00:00+02:00. */
-function berlinIso(instant: Date): string {
+export function berlinIso(instant: Date): string {
   const p = berlinParts(instant)
   const offsetMin = Math.round(
     (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - instant.getTime()) / 60_000,

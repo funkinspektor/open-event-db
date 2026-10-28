@@ -21,6 +21,7 @@
     "@open-event-db/shared": "workspace:*",
     "drizzle-orm": "^0.36.4",
     "fastify": "^5.2.1",
+    "ical.js": "^2.2.1",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
