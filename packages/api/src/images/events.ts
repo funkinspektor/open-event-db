@@ -65,12 +65,13 @@ export async function replaceEventImage(
         .returning()
       if (!updated) throw new Error('update returned no row')
       previous = current.imageKey
+      const changes = diff(eventSnapshot(current), eventSnapshot(updated))
       await logEdit(tx, {
         entityType: 'event',
         entityId: eventId,
         publisherId: opts.publisherId,
         action: 'updated',
-        diff: { ...diff(eventSnapshot(current), eventSnapshot(updated)), ...(opts.ingestItem ? { via: 'ingest' } : {}) },
+        diff: opts.ingestItem ? { ...changes, via: 'ingest' } : changes,
       })
       if (opts.detach) await detachIngest(tx, eventId)
       return true
