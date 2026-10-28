@@ -108,12 +108,30 @@ describe('parseIcal (edge cases)', () => {
     expect(e.description).toBe('')
   })
 
-  it('falls back to the UID when the pattern does not match', () => {
-    const e = only(parseIcal(
-      calendar(vevent('UID:no-number@x', 'SUMMARY:A', 'DTSTART:20261101T190000Z')),
-      ingestSourceConfigSchema.parse({ external_id_pattern: '-(\\d+)@' }),
-    ))
-    expect(e.externalId).toBe('no-number@x')
+  it('throws when the pattern does not match a UID instead of falling back to it', () => {
+    const text = calendar(
+      vevent('UID:1-100@x', 'SUMMARY:A', 'DTSTART:20261101T190000Z'),
+      vevent('UID:no-number@x', 'SUMMARY:B', 'DTSTART:20261101T190000Z'),
+    )
+    const cfg = ingestSourceConfigSchema.parse({ external_id_pattern: '-(\\d+)@' })
+    expect(() => parseIcal(text, cfg)).toThrow(FeedParseError)
+    expect(() => parseIcal(text, cfg)).toThrow(/-\(\\d\+\)@.*no-number@x/)
+  })
+
+  it('throws when the pattern yields an empty id', () => {
+    const text = calendar(vevent('UID:abc@x', 'SUMMARY:A', 'DTSTART:20261101T190000Z'))
+    expect(() => parseIcal(text, ingestSourceConfigSchema.parse({ external_id_pattern: '(\\d*)' }))).toThrow(FeedParseError)
+  })
+
+  it('throws when two different UIDs map to the same external id', () => {
+    const text = calendar(
+      vevent('UID:20261101T190000-20261101T230000-100@x', 'SUMMARY:A', 'DTSTART:20261101T190000Z'),
+      vevent('UID:20261108T190000-20261108T230000-200@x', 'SUMMARY:B', 'DTSTART:20261108T190000Z'),
+    )
+    // Too broad: captures the year, which both UIDs share
+    const cfg = ingestSourceConfigSchema.parse({ external_id_pattern: '^(\\d{4})' })
+    expect(() => parseIcal(text, cfg)).toThrow(FeedParseError)
+    expect(() => parseIcal(text, cfg)).toThrow(/2026/)
   })
 
   it('returns a VEVENT that appears twice once, last wins', () => {

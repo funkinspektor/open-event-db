@@ -75,10 +75,16 @@ function toMoment(prop: ICAL.Property): FeedMoment {
   return { date: `${p.year}-${pad(p.month)}-${pad(p.day)}`, time: `${pad(p.hour)}:${pad(p.minute)}`, iso: berlinIso(instant) }
 }
 
+/**
+ * The stable id inside the UID. A pattern that does not match fails the feed: falling back to the full
+ * UID would turn every changed event into a new item and mark the old one gone.
+ */
 function externalIdOf(uid: string, pattern: string | null): string {
   if (!pattern) return uid
   const match = new RegExp(pattern).exec(uid)
-  return match ? (match[1] ?? match[0]) : uid
+  const id = match ? (match[1] ?? match[0]) : ''
+  if (!id) throw new FeedParseError(`external_id_pattern ${pattern} yields no id for UID ${uid}`)
+  return id
 }
 
 /** First ATTACH that points at an image, with WordPress thumbnail suffixes (`-150x150`) removed. */
@@ -119,7 +125,7 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
   const raws = rawEvents(text)
   if (raws.length !== vevents.length) throw new FeedParseError('Could not match VEVENTs to their source text')
 
-  // Keyed by externalId: if a feed repeats an event, the last one wins.
+  // Keyed by externalId: if a feed repeats an event (same UID), the last one wins.
   const events = new Map<string, FeedEvent>()
   vevents.forEach((vevent, i) => {
     const uid = stringOf(vevent, 'uid')
@@ -134,6 +140,12 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
     const location = stringOf(vevent, 'location')
     const raw = raws[i] ?? ''
     const externalId = externalIdOf(uid, config.external_id_pattern)
+    const earlier = events.get(externalId)
+    if (earlier && earlier.uid !== uid) {
+      throw new FeedParseError(
+        `external_id_pattern ${config.external_id_pattern} maps UIDs ${earlier.uid} and ${uid} to the same id ${externalId}`,
+      )
+    }
     events.set(externalId, {
       externalId,
       uid,

@@ -405,6 +405,29 @@ describe('runIngest', () => {
     expect((await sourceRow(source.id)).lastError).toBeNull()
   })
 
+  it('fails the whole source when the id pattern stops matching, and marks nothing gone', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    const event = await accept(await itemOf(source.id, PERSIAN))
+
+    // A pattern that no longer fits the UIDs must not turn every event into a new item
+    await db
+      .update(ingestSources)
+      .set({ config: { ...ACUD, external_id_pattern: '-(\\d+)@nowhere\\.test$' } })
+      .where(eq(ingestSources.id, source.id))
+    const result = await run(source, movePersian(fixture), LATER)
+    expect(result.sources[0]).toMatchObject({ ok: false, created: 0, updated: 0, gone: 0 })
+    expect(result.sources[0]!.error).toMatch(/nowhere/)
+    expect((await sourceRow(source.id)).lastError).toMatch(/acudmachtneu\.de/)
+
+    const items = await itemsOf(source.id)
+    expect(items).toHaveLength(5)
+    expect(items.every((i) => i.goneAt === null)).toBe(true)
+    expect((await itemOf(source.id, PERSIAN)).eventId).toBe(event.id)
+    expect((await eventRow(event.id)).startsAt.getTime()).toBe(event.startsAt.getTime())
+  })
+
   it('fails a source with an invalid config', async () => {
     const source = await newSource({ external_id_pattern: '(' })
     const result = await run(source, fixture, NOW)
