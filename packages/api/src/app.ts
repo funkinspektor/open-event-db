@@ -11,6 +11,7 @@ import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
 import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
+import { hasIngestSecret, internalRoutes } from './routes/internal.js'
 
 const UUID_PARAMS = ['id', 'publisher_id'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -54,10 +55,14 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     max: 100,
     timeWindow: '1 minute',
     hook: 'preHandler',
-    allowList: (req) => !!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN,
+    // The cron call is exempt too, but only with the right secret, so guessing it stays rate limited
+    allowList: (req) =>
+      (!!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN) ||
+      hasIngestSecret(req.headers['x-ingest-secret']),
   })
 
   await app.register(healthRoutes)
+  await app.register(internalRoutes)
   await app.register(
     async (api) => {
       // ID path params are UUIDs; anything else can't match a row, so answer 404

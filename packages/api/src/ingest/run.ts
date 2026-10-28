@@ -271,3 +271,22 @@ export async function runIngest(opts: RunIngestOptions = {}): Promise<{ skipped:
     conn.release()
   }
 }
+
+/**
+ * The pipeline call the cron endpoint makes, behind a holder so route tests install a stub and never
+ * run the real pipeline (which takes the global advisory lock that run.test.ts also uses).
+ */
+type IngestRunFn = () => Promise<{ skipped: boolean; sources: SourceRunResult[] }>
+
+const defaultRun: IngestRunFn = () => runIngest()
+let currentRun: IngestRunFn = defaultRun
+
+export const ingestRunner = {
+  run: () => currentRun(),
+  setRunner(fn: IngestRunFn) {
+    currentRun = fn
+  },
+  reset() {
+    currentRun = defaultRun
+  },
+}

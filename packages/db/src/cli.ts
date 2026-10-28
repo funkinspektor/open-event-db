@@ -1,13 +1,28 @@
 import { createInterface } from 'node:readline/promises'
 import { and, eq, isNull, or, sql } from 'drizzle-orm'
+import { ingestSourceConfigSchema } from '@open-event-db/shared'
 import { createDb } from './index.js'
-import { editHistory, eventOwners, events, ingestItems, invites, magicLinkTokens, publishers, sessions } from './schema.js'
+import {
+  editHistory,
+  eventOwners,
+  events,
+  ingestItems,
+  ingestSources,
+  invites,
+  magicLinkTokens,
+  publishers,
+  sessions,
+} from './schema.js'
 import { generateApiKey } from './tokens.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
 const db = createDb(url)
 
-const argv = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
+const rawArgv = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
+// --config takes the next argument as its value (JSON), so it is pulled out before the bare flags are sorted
+const configAt = rawArgv.indexOf('--config')
+const configArg = configAt === -1 ? undefined : rawArgv[configAt + 1]
+const argv = configAt === -1 ? rawArgv : rawArgv.filter((_, i) => i !== configAt && i !== configAt + 1)
 const flags = new Set(argv.filter((a) => a.startsWith('--')))
 const [cmd, ...args] = argv.filter((a) => !a.startsWith('--'))
 
@@ -19,7 +34,12 @@ function usage(): never {
   pnpm db:cli api-key <slug>                            Generate (or reset) the API key for a publisher
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
-  pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay`)
+  pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
+  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--config '<json>']
+                                                        Add an iCal feed source whose events a scout reviews
+  pnpm db:cli ingest-list                               List feed sources: last run, last error, items per status
+  pnpm db:cli ingest-disable <slug>                     Stop the daily run from fetching a source
+  pnpm db:cli ingest-enable <slug>                      Let the daily run fetch a source again`)
   process.exit(1)
 }
 
@@ -243,6 +263,86 @@ switch (cmd) {
       })
     })
     console.log(`Deleted the account of ${p.name}; ${count} event(s) kept as "Deleted account"`)
+    break
+  }
+  case 'ingest-add-source': {
+    const [slug, name, feedUrl, scoutSlug] = args
+    if (!slug || !name || !feedUrl || !scoutSlug) usage()
+    if (configAt !== -1 && configArg === undefined) fail('--config needs a JSON value')
+    // Same rule as slugSchema in @open-event-db/shared
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug) || slug.length > 100) {
+      fail(`Invalid slug "${slug}": use lowercase letters, digits and hyphens (no leading/trailing hyphen)`)
+    }
+    try {
+      const protocol = new URL(feedUrl.replaceAll('{from}', '2000-01-01').replaceAll('{to}', '2000-01-02')).protocol
+      if (protocol !== 'http:' && protocol !== 'https:') throw new Error('not http(s)')
+    } catch {
+      fail(`Invalid feed URL "${feedUrl}": it must be an http(s) URL ({from} and {to} are replaced by dates)`)
+    }
+
+    let config: Record<string, unknown> = {}
+    if (configArg !== undefined) {
+      let json: unknown
+      try {
+        json = JSON.parse(configArg)
+      } catch {
+        fail(`--config is not valid JSON: ${configArg}`)
+      }
+      const parsed = ingestSourceConfigSchema.safeParse(json)
+      if (!parsed.success) {
+        fail(`Invalid --config:\n${parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n')}`)
+      }
+      // Stored as given: the pipeline fills in the defaults when it reads the config
+      config = json as Record<string, unknown>
+    }
+
+    const [scout] = await db
+      .select({ id: publishers.id, isScout: publishers.isScout })
+      .from(publishers)
+      .where(eq(publishers.slug, scoutSlug))
+      .limit(1)
+    if (!scout) fail(`No publisher with slug "${scoutSlug}"`)
+    if (!scout.isScout) fail(`"${scoutSlug}" is not a scout; sync edits must be attributed to a scout account`)
+
+    const [taken] = await db.select({ id: ingestSources.id }).from(ingestSources).where(eq(ingestSources.slug, slug)).limit(1)
+    if (taken) fail(`Source "${slug}" already exists`)
+
+    await db.insert(ingestSources).values({ slug, name, kind: 'ical', url: feedUrl, publisherId: scout.id, config })
+    console.log(`Added source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
+    break
+  }
+  case 'ingest-list': {
+    const sources = await db.select().from(ingestSources).orderBy(ingestSources.slug)
+    if (!sources.length) {
+      console.log('No feed sources yet. Add one with ingest-add-source.')
+      break
+    }
+    const counts = await db
+      .select({ sourceId: ingestItems.sourceId, status: ingestItems.status, count: sql<number>`count(*)::int` })
+      .from(ingestItems)
+      .groupBy(ingestItems.sourceId, ingestItems.status)
+    for (const s of sources) {
+      const byStatus = new Map(counts.filter((c) => c.sourceId === s.id).map((c) => [c.status, c.count]))
+      const items = (['pending', 'accepted', 'rejected'] as const).map((st) => `${st} ${byStatus.get(st) ?? 0}`).join(', ')
+      console.log(`${s.slug}  ${s.enabled ? 'enabled' : 'disabled'}  "${s.name}"`)
+      console.log(`  last run:   ${s.lastRunAt ? s.lastRunAt.toISOString() : 'never'}`)
+      console.log(`  last error: ${s.lastError ?? '-'}`)
+      console.log(`  items:      ${items}`)
+    }
+    break
+  }
+  case 'ingest-disable':
+  case 'ingest-enable': {
+    const [slug] = args
+    if (!slug) usage()
+    const enabled = cmd === 'ingest-enable'
+    const [s] = await db
+      .update(ingestSources)
+      .set({ enabled, updatedAt: new Date() })
+      .where(eq(ingestSources.slug, slug))
+      .returning({ slug: ingestSources.slug })
+    if (!s) fail(`No source with slug "${slug}"`)
+    console.log(`Source ${s.slug} is now ${enabled ? 'enabled' : 'disabled'}`)
     break
   }
   default:

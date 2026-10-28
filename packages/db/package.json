@@ -18,6 +18,7 @@
     "cli": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@open-event-db/shared": "workspace:*",
     "drizzle-orm": "^0.36.4",
     "postgres": "^3.4.5"
   },
