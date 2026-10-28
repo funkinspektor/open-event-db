@@ -22,7 +22,7 @@ export class ExtractionError extends Error {
   }
 }
 
-const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
+export const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
 
 /*
  * No "today" in the prompt on purpose: the model reports dates exactly as written and the API resolves
@@ -111,76 +111,90 @@ export const EXTRACTION_JSON_SCHEMA = {
   },
 } as const
 
-export interface ScalewayVisionConfig {
+export interface ScalewayConfig {
   secretKey: string
   projectId: string
   model: string
   timeoutMs?: number
 }
 
-/** Scaleway Generative APIs (OpenAI-compatible chat completions with image input). */
-export function scalewayVision(config: ScalewayVisionConfig): VisionExtractor {
+/** One chat message; `content` is plain text or OpenAI-style parts (text, image_url). */
+export interface ChatMessage {
+  role: 'system' | 'user'
+  content: string | Record<string, unknown>[]
+}
+
+/**
+ * Scaleway Generative APIs (OpenAI-compatible chat completions) with structured output → validated
+ * `Extraction`. `label` only names the model kind in error messages ("Vision model did not answer…").
+ */
+export async function callScaleway(config: ScalewayConfig, messages: ChatMessage[], label = 'Vision'): Promise<Extraction> {
   const endpoint = `https://api.scaleway.ai/${config.projectId}/v1/chat/completions`
 
+  let res: Response
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${config.secretKey}` },
+      signal: AbortSignal.timeout(config.timeoutMs ?? 30_000),
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0,
+        max_tokens: 2000,
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'event_extraction', strict: true, schema: EXTRACTION_JSON_SCHEMA },
+        },
+        messages,
+      }),
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ExtractionError('timeout', `${label} model did not answer in time`)
+    }
+    throw new ExtractionError('provider', `${label} request failed: ${(err as Error).message}`)
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new ExtractionError('provider', `Scaleway responded ${res.status}: ${detail.slice(0, 500)}`)
+  }
+
+  const json = (await res.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null
+  const content = json?.choices?.[0]?.message?.content
+  if (!content) throw new ExtractionError('invalid_output', `${label} model returned no content`)
+
+  let parsed: unknown
+  try {
+    // Some models wrap JSON in a code fence even in structured-output mode
+    parsed = JSON.parse(content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ''))
+  } catch {
+    throw new ExtractionError('invalid_output', `${label} model returned invalid JSON`)
+  }
+  const result = extractionSchema.safeParse(parsed)
+  if (!result.success) {
+    throw new ExtractionError('invalid_output', `${label} output failed validation: ${result.error.message.slice(0, 500)}`)
+  }
+  return result.data
+}
+
+/** Scaleway Generative APIs with image input. */
+export function scalewayVision(config: ScalewayConfig): VisionExtractor {
   return {
     async extract(images) {
-      let res: Response
-      try {
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${config.secretKey}` },
-          signal: AbortSignal.timeout(config.timeoutMs ?? 30_000),
-          body: JSON.stringify({
-            model: config.model,
-            temperature: 0,
-            max_tokens: 2000,
-            response_format: {
-              type: 'json_schema',
-              json_schema: { name: 'event_extraction', strict: true, schema: EXTRACTION_JSON_SCHEMA },
-            },
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: userPrompt(images.length) },
-                  ...images.map((image) => ({
-                    type: 'image_url',
-                    image_url: { url: `data:${image.type};base64,${image.data.toString('base64')}` },
-                  })),
-                ],
-              },
-            ],
-          }),
-        })
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'TimeoutError') {
-          throw new ExtractionError('timeout', 'Vision model did not answer in time')
-        }
-        throw new ExtractionError('provider', `Vision request failed: ${(err as Error).message}`)
-      }
-
-      if (!res.ok) {
-        const detail = await res.text().catch(() => '')
-        throw new ExtractionError('provider', `Scaleway responded ${res.status}: ${detail.slice(0, 500)}`)
-      }
-
-      const json = (await res.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null
-      const content = json?.choices?.[0]?.message?.content
-      if (!content) throw new ExtractionError('invalid_output', 'Vision model returned no content')
-
-      let parsed: unknown
-      try {
-        // Some models wrap JSON in a code fence even in structured-output mode
-        parsed = JSON.parse(content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ''))
-      } catch {
-        throw new ExtractionError('invalid_output', 'Vision model returned invalid JSON')
-      }
-      const result = extractionSchema.safeParse(parsed)
-      if (!result.success) {
-        throw new ExtractionError('invalid_output', `Vision output failed validation: ${result.error.message.slice(0, 500)}`)
-      }
-      return result.data
+      return callScaleway(config, [
+        { role: 'system', content: SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt(images.length) },
+            ...images.map((image) => ({
+              type: 'image_url',
+              image_url: { url: `data:${image.type};base64,${image.data.toString('base64')}` },
+            })),
+          ],
+        },
+      ])
     },
   }
 }

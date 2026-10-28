@@ -17,7 +17,7 @@ export interface CalendarDay {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const fmtDay = (d: CalendarDay) => `${d.year}-${pad(d.month)}-${pad(d.day)}`
+export const fmtDay = (d: CalendarDay) => `${d.year}-${pad(d.month)}-${pad(d.day)}`
 
 export function berlinParts(instant: Date) {
   const dtf = new Intl.DateTimeFormat('en-US', {
@@ -51,7 +51,7 @@ const weekdayOf = ({ year, month, day }: CalendarDay): Weekday =>
 
 const before = (a: CalendarDay, b: CalendarDay) => fmtDay(a) < fmtDay(b)
 
-function nextDay({ year, month, day }: CalendarDay): CalendarDay {
+export function nextDay({ year, month, day }: CalendarDay): CalendarDay {
   const d = new Date(Date.UTC(year, month - 1, day + 1))
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }
 }
@@ -134,9 +134,10 @@ function normalizeUrl(kind: ExtractedLinkKind, raw: string): string | null {
   }
 }
 
-function normalizeLinks(links: Extraction['links']): Record<string, string> {
-  const out: Record<string, string> = {}
-  const seen = new Set<string>()
+/** Extracted links → `{ key: url }`. Entries of `base` come first; their URLs are not added again. */
+export function normalizeLinks(links: Extraction['links'], base: Record<string, string> = {}): Record<string, string> {
+  const out: Record<string, string> = { ...base }
+  const seen = new Set(Object.values(base))
   for (const { kind, url: raw } of links) {
     const url = normalizeUrl(kind, raw)
     if (!url || seen.has(url)) continue

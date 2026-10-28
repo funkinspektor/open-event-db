@@ -1,0 +1,92 @@
+import type { Extraction, IngestDraft, IngestSourceConfig } from '@open-event-db/shared'
+import {
+  berlinInstant,
+  berlinIso,
+  fmtDay,
+  nextDay,
+  normalizeLinks,
+  parseTime,
+  resolveDate,
+  type CalendarDay,
+} from '../extract/normalize.js'
+import type { FeedEvent } from './adapters/ical.js'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function calendarDay(date: string): CalendarDay {
+  const [year, month, day] = date.split('-').map(Number)
+  return { year: year!, month: month!, day: day! }
+}
+
+/** http(s) URLs only: the inbox renders these as links and images. */
+function httpUrl(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const { protocol } = new URL(value)
+    return protocol === 'http:' || protocol === 'https:' ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** Single newlines become Markdown hard breaks; blank lines stay paragraph breaks. */
+const markdownBreaks = (text: string) => text.replace(/(?<!\n)\n(?!\n)/g, '  \n')
+
+/**
+ * The end, in order of preference: an explicit later end date from the text; an end time from the text
+ * (the next day for nights past midnight); the feed's own end if it is a plausible one; otherwise none.
+ */
+function endOf(ev: FeedEvent, extraction: Extraction | null, startDay: CalendarDay, startsAt: Date): Date | null {
+  const extractedEnd = parseTime(extraction?.end_time ?? null)
+  const feedEndTime = parseTime(ev.end?.time ?? null)
+
+  // A missing year is filled so the end date is on or after the feed start date.
+  const endDay = resolveDate(extraction?.end_date ?? null, startDay)
+  const endMinutes = extractedEnd ?? feedEndTime
+  if (endDay && fmtDay(endDay) > fmtDay(startDay) && endMinutes !== null) {
+    return berlinInstant(endDay, endMinutes)
+  }
+
+  if (extractedEnd !== null) {
+    const sameDay = berlinInstant(startDay, extractedEnd)
+    // Next calendar day, not +24 h, so the wall-clock time survives a DST switch.
+    return sameDay > startsAt ? sameDay : berlinInstant(nextDay(startDay), extractedEnd)
+  }
+
+  if (ev.end) {
+    const feedEnd = new Date(ev.end.iso)
+    const length = feedEnd.getTime() - startsAt.getTime()
+    if (length > 0 && length <= DAY_MS) return feedEnd
+  }
+  return null
+}
+
+/**
+ * Feed event (+ what the text extractor read from its description) → the draft a scout reviews.
+ * The feed decides the day; the extraction only corrects the times, which feeds often get wrong.
+ */
+export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, extraction: Extraction | null): IngestDraft {
+  const startDay = calendarDay(ev.start.date)
+  const extractedStart = parseTime(extraction?.start_time ?? null)
+  const startMinutes = extractedStart ?? parseTime(ev.start.time) ?? 0
+  const startsAt = berlinInstant(startDay, startMinutes)
+  const endsAt = endOf(ev, extraction, startDay, startsAt)
+
+  const website = httpUrl(ev.url)
+  const venueId = ev.locationRoom ? (config.venues[ev.locationRoom] ?? null) : null
+
+  return {
+    title: ev.summary,
+    description: markdownBreaks(ev.description),
+    starts_at: berlinIso(startsAt),
+    ends_at: endsAt ? berlinIso(endsAt) : null,
+    venue_id: venueId,
+    location_text: venueId ? null : ev.locationText,
+    city: config.city,
+    links: normalizeLinks(extraction?.links ?? [], website ? { website } : {}),
+    image_url: httpUrl(ev.imageUrl),
+    source_url: website,
+    // An unreadable start time counts as missing: the feed time was used.
+    times_unverified: extractedStart === null,
+  }
+}
