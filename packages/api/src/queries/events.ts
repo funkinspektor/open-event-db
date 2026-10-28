@@ -14,6 +14,13 @@ import { db } from '../db.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
 import { serializeCoordinates } from '../serializers.js'
+import { imageStore } from '../images/store.js'
+
+/** The public URL of a stored image; null without a key or while images are off. */
+export function imageUrlOf(key: string | null): string | null {
+  const store = imageStore.store
+  return key && store ? store.url(key) : null
+}
 
 export function eventSnapshot(e: Event): Record<string, unknown> {
   return {
@@ -28,6 +35,7 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
     links: e.links,
     status: e.status,
     recurrence: e.recurrence,
+    image_key: e.imageKey,
   }
 }
 
@@ -43,6 +51,7 @@ export const slimEventColumns = {
   city: events.city,
   locationText: events.locationText,
   recurrence: events.recurrence,
+  imageKey: events.imageKey,
   venueId: venues.id,
   venueName: venues.name,
   venueCity: venues.city,
@@ -61,6 +70,7 @@ interface SlimEventRow {
   city: string
   locationText: string | null
   recurrence: string | null
+  imageKey: string | null
   venueId: string | null
   venueName: string | null
   venueCity: string | null
@@ -80,6 +90,7 @@ export function serializeSlimEvent(r: SlimEventRow): EventSlim {
     location_text: r.locationText,
     recurrence: r.recurrence,
     venue: r.venueId ? { id: r.venueId, name: r.venueName!, city: r.venueCity! } : null,
+    image_url: imageUrlOf(r.imageKey),
     claimed: r.claimed,
   }
 }
@@ -103,6 +114,7 @@ function serializeEventDetail(
     recurrence: e.recurrence,
     location_text: e.locationText,
     city: e.city,
+    image_url: imageUrlOf(e.imageKey),
     added_by: addedBy,
     claimed: owners.length > 0,
     created_at: e.createdAt.toISOString(),

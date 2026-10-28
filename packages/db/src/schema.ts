@@ -82,6 +82,8 @@ export const events = pgTable(
       .references(() => publishers.id, { onDelete: 'restrict' }),
     status: eventStatus('status').notNull().default('scheduled'),
     recurrence: text('recurrence'),
+    /** Object key in the image store (`events/<id>/<uuid>.jpg`); the API turns it into `image_url`. */
+    imageKey: text('image_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -193,6 +195,8 @@ export const ingestItems = pgTable(
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
     detachedAt: timestamp('detached_at', { withTimezone: true }),
+    /** The feed image URL the event's current image was copied from; differs from the draft's until synced. */
+    imageSourceUrl: text('image_source_url'),
   },
   (t) => [
     uniqueIndex('ingest_items_source_external').on(t.sourceId, t.externalId),

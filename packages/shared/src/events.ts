@@ -56,6 +56,7 @@ export const eventSlimSchema = z.object({
   location_text: z.string().nullable(),
   recurrence: z.string().nullable(),
   venue: venueSummarySchema.nullable(),
+  image_url: z.string().url().nullable(),
   /** False while the event has no owner (added by a scout, not yet confirmed by the organizer). */
   claimed: z.boolean(),
 })
