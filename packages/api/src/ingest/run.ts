@@ -16,6 +16,7 @@ import {
 } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { textExtraction } from '../extract/text.js'
+import { ExtractionError } from '../extract/vision.js'
 import { berlinInstant, berlinToday, fmtDay, nextDay, type CalendarDay } from '../extract/normalize.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
@@ -69,12 +70,18 @@ export function feedUrl(source: IngestSource, now: Date): string {
   return source.url.replaceAll('{from}', fmtDay(from)).replaceAll('{to}', fmtDay(to))
 }
 
-/** Times from the description text, if the source asks for it. Null on failure, so the next run retries. */
+/**
+ * Times from the description text, if the source asks for it. A failed call yields null, so the next run
+ * retries. Extraction that is not configured at all fails the source: it would never succeed.
+ */
 async function extractTimes(ev: FeedEvent, config: IngestSourceConfig): Promise<{ extraction: Extraction | null; failed: boolean }> {
   if (!config.extract_from_text || !ev.description.trim()) return { extraction: null, failed: false }
   try {
     return { extraction: await textExtraction.extractor.extract(ev.description), failed: false }
-  } catch {
+  } catch (err) {
+    if (err instanceof ExtractionError && err.kind === 'unavailable') {
+      throw new Error(`Source sets extract_from_text, but text extraction is unavailable: ${err.message}`)
+    }
     return { extraction: null, failed: true }
   }
 }
@@ -184,8 +191,9 @@ async function ingestEvent(
       .set({ draft, raw: ev.raw, contentHash, lastSeenAt: now, ...reappeared(item) })
       .where(eq(ingestItems.id, item.id))
       .returning()
-    // Pending items only get the new draft; rejected and detached ones stay as decided.
-    if (current?.status === 'accepted' && current.eventId && !current.detachedAt) {
+    // Pending items only get the new draft; rejected and detached ones stay as decided. Without a
+    // successful extraction the times are the feed's unverified ones: they wait for the next run.
+    if (!failed && current?.status === 'accepted' && current.eventId && !current.detachedAt) {
       if (await syncEvent(tx, source, current.eventId, draft)) result.synced++
     }
   })

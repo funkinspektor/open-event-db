@@ -16,6 +16,7 @@ import {
 import type { Extraction } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { textExtraction } from '../extract/text.js'
+import { ExtractionError } from '../extract/vision.js'
 import { feedUrl, runIngest } from './run.js'
 
 const fixture = readFileSync(fileURLToPath(new URL('./fixtures/acud.ics', import.meta.url)), 'utf8')
@@ -456,6 +457,44 @@ describe('runIngest', () => {
     const retried = await itemOf(source.id, PERSIAN)
     expect(retried.contentHash).not.toBeNull()
     expect(retried.draft).toMatchObject({ times_unverified: false, ends_at: '2026-10-31T04:00:00+01:00' })
+  })
+
+  it('does not push unverified feed times onto an accepted event when extraction fails', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    const event = await accept(await itemOf(source.id, PERSIAN))
+
+    textExtraction.setExtractor({
+      async extract() {
+        throw new Error('provider down')
+      },
+    })
+    const failed = await run(source, movePersian(fixture), LATER)
+    expect(failed.sources[0]).toMatchObject({ ok: true, updated: 1, synced: 0 })
+    const after = await eventRow(event.id)
+    expect(after.startsAt.getTime()).toBe(event.startsAt.getTime())
+    expect(await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))).toHaveLength(0)
+    expect((await itemOf(source.id, PERSIAN)).contentHash).toBeNull()
+
+    // The next run with a working extractor retries and syncs
+    stubExtractor()
+    const retried = await run(source, movePersian(fixture), LATEST)
+    expect(retried.sources[0]).toMatchObject({ ok: true, synced: 1 })
+    expect((await eventRow(event.id)).startsAt.toISOString()).toBe('2026-11-06T21:00:00.000Z')
+  })
+
+  it('fails the source when it asks for text extraction but none is configured', async () => {
+    textExtraction.setExtractor({
+      async extract() {
+        throw new ExtractionError('unavailable', 'Text extraction is not configured on this server')
+      },
+    })
+    const source = await newSource()
+    const result = await run(source, fixture, NOW)
+    expect(result.sources[0]).toMatchObject({ ok: false })
+    expect(result.sources[0]!.error).toMatch(/extract_from_text.*not configured/)
+    expect((await sourceRow(source.id)).lastError).toMatch(/not configured/)
   })
 
   it('does not extract when the source does not ask for it', async () => {
