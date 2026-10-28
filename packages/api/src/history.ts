@@ -25,7 +25,8 @@ export async function logEdit(
     entityId: string
     publisherId: string
     action: HistoryAction
-    diff: Diff
+    /** Field changes; a non-HTTP writer adds a top-level `via` ('cli', 'ingest'). */
+    diff: Diff | (Record<string, unknown> & { via: string })
   },
 ): Promise<void> {
   await tx.insert(editHistory).values(entry)
