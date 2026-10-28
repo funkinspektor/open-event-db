@@ -15,3 +15,9 @@ export const getCurrentPublisher = cache(async (): Promise<PublisherMe | null> =
     return null
   }
 })
+
+/** Cookie header to forward on server-side calls that need the logged-in scout, or null. */
+export async function getSessionCookieHeader(): Promise<string | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value
+  return token ? `${SESSION_COOKIE}=${token}` : null
+}

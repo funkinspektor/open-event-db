@@ -1,6 +1,7 @@
 import type {
   EventDetail,
   EventSlim,
+  IngestItemView,
   Meta,
   PublisherMe,
   PublisherPublic,
@@ -69,4 +70,31 @@ export async function getMe(cookieHeader: string): Promise<PublisherMe | null> {
   })
   if (!res.ok) return null
   return ((await res.json()) as { data: PublisherMe }).data
+}
+
+async function getScout<T>(path: string, cookieHeader: string): Promise<T> {
+  const res = await fetch(`${API_URL}/api/v1${path}`, {
+    headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`API ${res.status} for ${path}`)
+  return (await res.json()) as T
+}
+
+export interface IngestCounts {
+  new: number
+  gone: number
+}
+
+export type IngestView = 'new' | 'gone'
+
+export async function getIngestItems(
+  view: IngestView,
+  cookieHeader: string,
+): Promise<{ data: IngestItemView[]; meta: { counts: IngestCounts } }> {
+  return getScout(`/ingest/items?view=${view}`, cookieHeader)
+}
+
+export async function getIngestCount(cookieHeader: string): Promise<IngestCounts> {
+  return (await getScout<{ data: IngestCounts }>('/ingest/count', cookieHeader)).data
 }

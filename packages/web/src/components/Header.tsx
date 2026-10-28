@@ -1,12 +1,26 @@
 import Link from 'next/link'
-import { getCurrentPublisher } from '@/lib/session'
+import { getIngestCount } from '@/lib/api'
+import { getCurrentPublisher, getSessionCookieHeader } from '@/lib/session'
 import { Logo } from './Logo'
 import { LogoutButton } from './LogoutButton'
 import { NavLink } from './NavLink'
 import { UserMenu } from './UserMenu'
 
+// Pending items awaiting review; the nav link still renders if the count can't be loaded.
+async function loadInboxCount(): Promise<number | null> {
+  try {
+    const cookie = await getSessionCookieHeader()
+    if (!cookie) return null
+    const { new: pending, gone } = await getIngestCount(cookie)
+    return pending + gone
+  } catch {
+    return null
+  }
+}
+
 export async function Header() {
   const me = await getCurrentPublisher()
+  const inboxCount = me?.is_scout ? await loadInboxCount() : null
 
   return (
     <header className="kk-header w-full">
@@ -14,6 +28,12 @@ export async function Header() {
       <nav className="kk-nav" aria-label="Main">
         <NavLink href="/">Events</NavLink>
         <NavLink href="/venues">Venues</NavLink>
+        {me?.is_scout && (
+          <NavLink href="/ingest">
+            Inbox
+            {inboxCount ? <span className="kk-pill__count">{inboxCount}</span> : null}
+          </NavLink>
+        )}
         {me ? (
           <>
             <Link href="/events/new" className="kk-btn kk-btn--primary whitespace-nowrap">
