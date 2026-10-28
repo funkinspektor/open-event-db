@@ -23,6 +23,8 @@ type SearchParams = Promise<{ saved?: string }>
 const SAVED_MESSAGES: Record<string, string> = {
   created: 'Event created — it’s live now.',
   updated: 'Changes saved.',
+  created_image_failed: 'Event created, but the image couldn’t be saved. Edit the event to try again.',
+  updated_image_failed: 'Changes saved, but the image couldn’t be saved. Try again.',
 }
 
 async function load(params: Params) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { EventDetail, EventStatus } from '@open-event-db/shared'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import type { DuplicateDraft } from '@/lib/duplicates'
+import { EventImageInput, type ImageChange } from './EventImageInput'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
@@ -23,6 +24,21 @@ interface Props {
   imported?: ImportResult
   /** Create mode: called with the fields the duplicate lookup needs, on mount and whenever one of them changes. Pass a stable callback. */
   onDraftChange?: (d: DuplicateDraft) => void
+}
+
+/** Sends the image change for a saved event; false when the image request failed. */
+async function saveImage(eventId: string, change: ImageChange): Promise<boolean> {
+  if (change.kind === 'keep') return true
+  try {
+    const res = await fetch(`${API_URL}/api/v1/events/${eventId}/image`, {
+      method: change.kind === 'replace' ? 'PUT' : 'DELETE',
+      credentials: 'include',
+      ...(change.kind === 'replace' ? { headers: { 'content-type': change.blob.type || 'image/jpeg' }, body: change.blob } : {}),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 const LINK_KEYS = ['website', 'tickets', 'ra', 'instagram', 'facebook', 'telegram', 'soundcloud']
@@ -59,6 +75,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
   const [links, setLinks] = useState<LinkRow[]>(event ? toLinkRows(event.links) : (pre?.links ?? []))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
+  const [image, setImage] = useState<ImageChange>({ kind: 'keep' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -126,7 +143,10 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
         setError(json.error?.message ?? `Request failed (${res.status})`)
         return
       }
-      router.push(`/events/${json.data.id}?saved=${mode === 'create' ? 'created' : 'updated'}`)
+      // The event is saved either way; a failed image only changes the message on the event page
+      const imageSaved = await saveImage(json.data.id, image)
+      const saved = mode === 'create' ? 'created' : 'updated'
+      router.push(`/events/${json.data.id}?saved=${imageSaved ? saved : `${saved}_image_failed`}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
@@ -253,6 +273,8 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
             ))}
           </div>
         )}
+
+        <EventImageInput current={event?.image_url ?? null} value={image} onChange={setImage} />
 
         <div className="kk-field">
           Links
