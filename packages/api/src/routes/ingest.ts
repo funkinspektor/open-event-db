@@ -16,6 +16,7 @@ import { diff, logEdit } from '../history.js'
 import { cancelEvent, eventSnapshot } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
+import { syncItemImage } from '../ingest/image.js'
 import { berlinInstant, berlinToday } from '../extract/normalize.js'
 
 const read = { onRequest: requireAuth }
@@ -128,7 +129,7 @@ export async function ingestRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/ingest/items/:id/accept', write, async (req) => {
     const me = requireScout(req)
 
-    const eventId = await db.transaction(async (tx) => {
+    const accepted = await db.transaction(async (tx) => {
       // The status guard is the lock: of two concurrent accepts the second waits, then matches no row.
       const [item] = await tx
         .update(ingestItems)
@@ -185,11 +186,13 @@ export async function ingestRoutes(app: FastifyInstance) {
         action: 'created',
         diff: { ...diff(null, eventSnapshot(event)), via: 'ingest' },
       })
-      await tx.update(ingestItems).set({ eventId: event.id }).where(eq(ingestItems.id, item.id))
-      return event.id
+      const [linked] = await tx.update(ingestItems).set({ eventId: event.id }).where(eq(ingestItems.id, item.id)).returning()
+      return { item: linked!, draft }
     })
 
-    return { data: { event_id: eventId } }
+    // After the commit: the event is live even if the feed image cannot be fetched
+    await syncItemImage(accepted.item, accepted.draft, me.id)
+    return { data: { event_id: accepted.item.eventId! } }
   })
 
   // Static path: registered next to '/ingest/items/:id/*'; find-my-way prefers the static segment

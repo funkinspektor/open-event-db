@@ -24,6 +24,7 @@ import { eventSnapshot } from '../queries/events.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
 import { normalizeFeedEvent } from './normalize.js'
+import { syncItemImage } from './image.js'
 
 export interface SourceRunResult {
   slug: string
@@ -158,6 +159,9 @@ async function ingestEvent(
       .update(ingestItems)
       .set({ lastSeenAt: now, ...reappeared(item) })
       .where(eq(ingestItems.id, item.id))
+    // An unchanged feed still retries an image that could not be fetched before
+    const stored = ingestDraftSchema.safeParse(item.draft)
+    if (stored.success) await syncItemImage(item, stored.data, source.publisherId)
     return
   }
 
@@ -182,7 +186,7 @@ async function ingestEvent(
     return
   }
 
-  await db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     // `item` was read before this run's extractions, so a human edit may have landed since. Lock the
     // event first, then the item: the same order as PUT/DELETE /events/:id (event update, then
     // detachIngest), so the two serialize instead of deadlocking, and the item row read below is current.
@@ -201,7 +205,10 @@ async function ingestEvent(
     if (!failed && current?.status === 'accepted' && current.eventId && !current.detachedAt) {
       if (await syncEvent(tx, source, current.eventId, draft)) result.synced++
     }
+    return current
   })
+  // Outside the transaction: fetching the image must not hold the event and item locks
+  if (updated) await syncItemImage(updated, draft, source.publisherId)
   result.updated++
 }
 

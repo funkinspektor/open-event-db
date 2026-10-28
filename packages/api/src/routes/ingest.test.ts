@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
@@ -16,6 +16,10 @@ import {
 } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { imageStore, memoryImageStore } from '../images/store.js'
+import { ingestImages } from '../ingest/image.js'
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9])
 
 let app: FastifyInstance
 let scout: Publisher
@@ -259,6 +263,43 @@ describe('public visibility', () => {
 })
 
 describe('POST /ingest/items/:id/accept', () => {
+  afterEach(() => {
+    imageStore.reset()
+    ingestImages.reset()
+  })
+
+  it('copies the feed image into the store', async () => {
+    const store = memoryImageStore()
+    imageStore.setStore(store)
+    const fetched: string[] = []
+    ingestImages.setFetch((async (url: URL) => {
+      fetched.push(String(url))
+      return new Response(PNG)
+    }) as unknown as typeof fetch)
+    const item = await newItem({}, draftOf({ image_url: 'https://feed.test/flyer.png' }))
+    const res = await post(`/items/${item.id}/accept`, keyScout)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+    expect(fetched).toEqual(['https://feed.test/flyer.png'])
+    const event = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
+    expect(event.image_url).toMatch(new RegExp(`^https://images\\.test/events/${eventId}/[0-9a-f-]{36}\\.png$`))
+    expect([...store.objects.values()].map((o) => o.data)).toEqual([PNG])
+    expect((await itemRow(item.id)).imageSourceUrl).toBe('https://feed.test/flyer.png')
+  })
+
+  it('accepts without an image when the feed image cannot be fetched', async () => {
+    imageStore.setStore(memoryImageStore())
+    ingestImages.setFetch((async () => new Response('gone', { status: 404 })) as unknown as typeof fetch)
+    const item = await newItem({}, draftOf({ image_url: 'https://feed.test/missing.png' }))
+    const res = await post(`/items/${item.id}/accept`, keyScout)
+    expect(res.statusCode).toBe(200)
+    eventIds.push(res.json().data.event_id)
+    const event = (await app.inject({ method: 'GET', url: `/api/v1/events/${res.json().data.event_id}` })).json().data
+    expect(event.image_url).toBeNull()
+    expect((await itemRow(item.id)).imageSourceUrl).toBeNull()
+  })
+
   it('publishes the draft as an unclaimed scout event', async () => {
     const item = await newItem({}, draftOf({ venue_id: venue.id, ends_at: '2031-03-01T23:00:00.000Z', location_text: 'Back room' }))
     const draft = item.draft as ReturnType<typeof draftOf>

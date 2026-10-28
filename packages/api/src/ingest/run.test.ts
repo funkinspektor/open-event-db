@@ -18,6 +18,8 @@ import { db } from '../db.js'
 import { textExtraction } from '../extract/text.js'
 import { ExtractionError } from '../extract/vision.js'
 import { feedUrl, runIngest } from './run.js'
+import { imageStore, memoryImageStore } from '../images/store.js'
+import { ingestImages } from './image.js'
 
 const fixture = readFileSync(fileURLToPath(new URL('./fixtures/acud.ics', import.meta.url)), 'utf8')
 const EMPTY_FEED = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nEND:VCALENDAR\r\n'
@@ -618,5 +620,91 @@ describe('runIngest (Dunckerclub page)', () => {
     const result = await run(source, withoutSamhain, LATER)
     expect(result.sources[0]).toMatchObject({ ok: true, seen: 10, created: 0, updated: 0, gone: 1 })
     expect((await itemOf(source.id, '2026-10-31')).goneAt?.getTime()).toBe(LATER.getTime())
+  })
+})
+
+describe('runIngest (event images)', () => {
+  const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
+  const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])
+  let store: ReturnType<typeof memoryImageStore>
+  let fetched: string[]
+  let failing: boolean
+
+  function install() {
+    store = memoryImageStore()
+    imageStore.setStore(store)
+    fetched = []
+    failing = false
+    ingestImages.setFetch((async (url: URL) => {
+      fetched.push(String(url))
+      return failing ? new Response(null, { status: 503 }) : new Response(JPEG(fetched.length))
+    }) as unknown as typeof fetch)
+  }
+
+  afterEach(() => {
+    imageStore.reset()
+    ingestImages.reset()
+  })
+
+  async function acceptedPersian() {
+    stubExtractor()
+    install()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    const item = await itemOf(source.id, PERSIAN)
+    const event = await accept(item)
+    return { source, item, event }
+  }
+
+  it('copies the image of an accepted item on the next run', async () => {
+    const { source, event } = await acceptedPersian()
+    await run(source, fixture, LATER)
+    expect(fetched).toEqual([PERSIAN_IMAGE])
+    expect((await eventRow(event.id)).imageKey).toMatch(new RegExp(`^events/${event.id}/`))
+    expect((await itemOf(source.id, PERSIAN)).imageSourceUrl).toBe(PERSIAN_IMAGE)
+    // Nothing changed: no second fetch
+    await run(source, fixture, LATEST)
+    expect(fetched).toHaveLength(1)
+  })
+
+  it('replaces the image when the feed image changes', async () => {
+    const { source, event } = await acceptedPersian()
+    await run(source, fixture, LATER)
+    const first = (await eventRow(event.id)).imageKey
+    await run(source, fixture.replace('blurred-frame-4-150x150.jpg', 'blurred-frame-9-150x150.jpg'), LATEST)
+    const second = (await eventRow(event.id)).imageKey
+    expect(second).not.toBe(first)
+    expect([...store.objects.keys()]).toEqual([second])
+    expect((await itemOf(source.id, PERSIAN)).imageSourceUrl).toBe(PERSIAN_IMAGE.replace('frame-4', 'frame-9'))
+  })
+
+  it('removes it when the feed drops it', async () => {
+    const { source, event } = await acceptedPersian()
+    await run(source, fixture, LATER)
+    await run(source, fixture.replace(/ATTACH:[^\r\n]*blurred-frame-4-150x150\.jpg\r\n/, ''), LATEST)
+    expect((await eventRow(event.id)).imageKey).toBeNull()
+    expect(store.objects.size).toBe(0)
+  })
+
+  it('retries the image on the next run', async () => {
+    const { source, event } = await acceptedPersian()
+    failing = true
+    await run(source, fixture, LATER)
+    expect((await eventRow(event.id)).imageKey).toBeNull()
+    failing = false
+    await run(source, fixture, LATEST)
+    expect((await eventRow(event.id)).imageKey).not.toBeNull()
+    expect(fetched).toHaveLength(2)
+  })
+
+  it("leaves a detached event's image alone", async () => {
+    stubExtractor()
+    install()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    const event = await accept(await itemOf(source.id, PERSIAN), { detachedAt: NOW })
+    await run(source, fixture.replace('blurred-frame-4-150x150.jpg', 'blurred-frame-9-150x150.jpg'), LATER)
+    expect(fetched).toEqual([])
+    expect((await eventRow(event.id)).imageKey).toBeNull()
   })
 })
