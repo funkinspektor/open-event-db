@@ -9,7 +9,7 @@
 .kk-root :focus-visible { outline: 2px solid var(--uv); outline-offset: 2px; }
 
 /* Page frame */
-.kk-container { max-width: var(--content-max); margin: 0 auto; padding: 56px 24px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; }
+.kk-container { max-width: var(--content-max); margin: 0 auto; padding: 48px 24px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; }
 .kk-container--narrow { max-width: var(--form-max); gap: 36px; }
 .kk-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; max-width: var(--content-max); margin: 0 auto; padding: 16px 24px 48px; box-sizing: border-box; font-size: 13px; color: var(--faint); }
 .kk-footer__links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -23,9 +23,13 @@
 
 /* Header */
 /* The header's content box is exactly as wide as .kk-container's, so the logo lines up with the page content. */
-.kk-header { max-width: var(--content-max); margin: 0 auto; min-height: var(--header-h); padding: 28px 24px 0; /* app: min-height so the nav can wrap on phones */ box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.kk-logo { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-size: 30px; line-height: 1; }
-.kk-logo .kk-mark { --kk-mark-size: 40px; }
+/* app: one sticky bar over the scrolling page — logo, Events/Venues centred as a segmented control, account */
+.kk-header { position: sticky; top: 0; z-index: 25; padding-top: env(safe-area-inset-top, 0px); background: var(--glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.kk-header__inner { max-width: var(--content-max); height: var(--header-h); margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+.kk-header__end { justify-self: end; display: flex; align-items: center; gap: 8px; }
+.kk-header .kk-btn--light { min-height: 40px; padding: 0 18px; }
+.kk-logo { justify-self: start; display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 24px; line-height: 1; }
+.kk-logo .kk-mark { --kk-mark-size: 36px; }
 
 /* Logo mark: one Germania One K, optically centred on a holo-chrome squircle.
    Default = light (holo chrome, dark K); kk-mark--dark = gunmetal holo, light K.
@@ -35,17 +39,17 @@
 .kk-mark--dark { background: var(--chrome-dark); box-shadow: var(--mark-edge); color: var(--ink); }
 .kk-mark--lg { --kk-mark-size: 64px; }
 .kk-mark--xl { --kk-mark-size: 160px; }
-.kk-nav { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
-.kk-nav__link { padding: 10px 14px; border-radius: var(--radius-pill); color: var(--muted); }
-.kk-nav__link[aria-current] { background: var(--surface-3); color: var(--ink); }
+.kk-nav { display: flex; align-items: center; padding: 3px; border-radius: var(--radius-pill); background: var(--surface-1); border: 1px solid var(--line); font-size: 15px; font-weight: 500; } /* app: segmented control */
+.kk-nav__link { display: inline-flex; align-items: center; height: 36px; padding: 0 18px; border-radius: var(--radius-pill); color: var(--muted); }
+.kk-nav__link[aria-current] { background: var(--surface-3); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
 .kk-user { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: transparent; color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
 .kk-user__avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-3); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 16px; }
 
 /* Headline block */
-.kk-intro { display: flex; flex-direction: column; gap: 18px; }
-.kk-headline { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(68px, 10.3vw, 143px); line-height: 0.88; }
+.kk-intro { display: flex; flex-direction: column; gap: 16px; }
+.kk-headline { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(54px, 7.5vw, 96px); line-height: 0.9; } /* app: was up to 143px */
 .kk-headline--narrow { font-size: clamp(56px, 12vw, 96px); }
-.kk-lede { margin: 0; max-width: 520px; font-size: 18px; line-height: 1.5; color: var(--muted); }
+.kk-lede { margin: 0; max-width: 520px; font-size: 17px; line-height: 1.5; color: var(--muted); }
 .kk-eyebrow { margin: 0; font-size: 13px; font-weight: 700; line-height: 1; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .kk-eyebrow--live { color: var(--uv); }
 
@@ -94,7 +98,7 @@ button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cu
 .kk-live-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--uv); box-shadow: var(--glow-pin); }
 
 /* Event list */
-.kk-day { margin: 0; padding: 40px 0 16px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; font-family: var(--font-display); font-weight: 400; font-size: 49px; line-height: 1; }
+.kk-day { margin: 0; padding: 40px 0 16px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; font-family: var(--font-display); font-weight: 400; font-size: 40px; line-height: 1; } /* app: was 49px */
 .kk-day__label { font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .kk-day__label--today { color: var(--uv); }
 .kk-event { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; padding: var(--space-row) 0; border-bottom: 1px solid var(--line); }
@@ -224,15 +228,26 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-map .kk-map__pin { top: 50%; z-index: 1; }
 
 @media (max-width: 560px) {
-  .kk-header { gap: 12px; padding-top: 20px; }
-  .kk-nav { flex-wrap: wrap; gap: 4px; }
-  .kk-nav__link { padding: 10px 12px; }
-  .kk-container { padding-top: 40px; }
+  /* app: the bar shrinks to the mark, a smaller segmented control and the avatar */
+  .kk-header__inner { height: var(--header-h-mobile); padding: 0 16px; gap: 12px; }
+  .kk-logo .kk-mark { --kk-mark-size: 32px; }
+  .kk-logo__word { display: none; }
+  .kk-nav { font-size: 14px; }
+  .kk-nav__link { height: 32px; padding: 0 14px; }
+  .kk-header .kk-btn--light { min-height: 36px; padding: 0 14px; font-size: 14px; }
+  .kk-user { padding: 0; gap: 0; border: 0; }
+  .kk-user .kk-icon { display: none; }
+  .kk-user__avatar { width: 36px; height: 36px; box-sizing: border-box; border: 1px solid var(--border); font-size: 18px; }
+  .kk-container { padding: 20px 16px 40px; gap: 32px; }
+  .kk-footer { padding-left: 16px; padding-right: 16px; }
+  .kk-intro { gap: 14px; }
+  .kk-headline, .kk-headline--narrow { font-size: 54px; line-height: 0.92; }
+  .kk-lede { font-size: 15px; line-height: 1.45; }
   .kk-panel { padding: 20px; }
   .kk-linkrow .kk-input:first-child { width: 104px; }
-  .kk-day { font-size: 40px; }
+  .kk-day { font-size: 30px; padding-top: 36px; }
   .kk-event__when { flex-basis: 100%; flex-direction: row; gap: 10px; align-items: baseline; }
-  .kk-event__title { font-size: 21px; }
+  .kk-event__title { font-size: 20px; }
   .kk-event__aside { margin-left: 0; justify-content: flex-start; }
 }
 
@@ -284,3 +299,37 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 @keyframes kk-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes kk-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .kk-skeleton, .kk-spinner { animation: none; } }
+
+/* app: event list toolbar (filter button + Create event) sticking under the header, and its filter panel —
+   a dropdown on desktop, a bottom sheet on phones */
+.kk-toolbar { position: sticky; top: calc(var(--header-h) + env(safe-area-inset-top, 0px)); z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 28px -24px 0; padding: 14px 24px; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+/* Glass only once it sticks, so it never shows as a box over the page ground */
+.kk-toolbar--stuck { background: var(--glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom-color: var(--line); }
+.kk-toolbar .kk-btn { flex: none; }
+.kk-icon--btn { width: 18px; height: 18px; stroke-width: 2.4; }
+.kk-filterbtn { min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px 0 16px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; box-sizing: border-box; }
+@media (max-width: 560px) {
+  .kk-toolbar { top: calc(var(--header-h-mobile) + env(safe-area-inset-top, 0px)); margin: 24px -16px 0; padding: 12px 16px; }
+  .kk-toolbar > .kk-dropdown { flex: 1 1 auto; }
+  .kk-toolbar .kk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+  .kk-filterbtn { width: 100%; height: 40px; padding: 0 14px; font-size: 14px; }
+}
+.kk-filterbtn[aria-pressed="true"] { border-color: var(--uv); background: var(--uv-wash); }
+.kk-filterbtn__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kk-filterbtn .kk-pill__count { margin-left: 0; }
+.kk-scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); animation: kk-fade-in 0.2s ease-out; }
+.kk-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 8px 16px 0; border-radius: 24px 24px 0 0; background: var(--surface-1); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; animation: kk-sheet-in 0.25s ease-out; }
+.kk-sheet:focus { outline: none; }
+.kk-sheet__grip { align-self: center; width: 40px; height: 4px; flex: none; border-radius: 2px; background: var(--border); }
+.kk-sheet__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.kk-sheet__title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 30px; line-height: 1; }
+.kk-sheet__section { display: flex; flex-direction: column; gap: 10px; }
+.kk-sheet__label { font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.kk-sheet .kk-pills { gap: 6px; }
+.kk-sheet .kk-pill { padding: 9px 14px; font-size: 14px; }
+.kk-sheet__foot { position: sticky; bottom: 0; margin: 0 -16px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--surface-1); border-top: 1px solid var(--line); }
+.kk-sheet--dropdown { position: absolute; top: calc(100% + 8px); left: 0; right: auto; bottom: auto; width: 440px; max-width: calc(100vw - 48px); max-height: none; overflow: visible; padding: 20px 20px 0; border: 1px solid var(--border); border-radius: var(--radius-l); gap: 18px; animation: none; box-shadow: 0 16px 40px #00000099; }
+.kk-sheet--dropdown .kk-sheet__foot { position: static; margin: 0 -20px; padding: 14px 20px 20px; border-radius: 0 0 var(--radius-l) var(--radius-l); }
+@keyframes kk-fade-in { from { opacity: 0; } }
+@keyframes kk-sheet-in { from { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) { .kk-toolbar { transition: none; } .kk-scrim, .kk-sheet { animation: none; } }

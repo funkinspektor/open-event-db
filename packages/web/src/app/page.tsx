@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getEvents, getTags } from '@/lib/api'
 import { buildApiQuery, parseFilters } from '@/lib/filters'
-import { Filters } from '@/components/Filters'
+import { ListToolbar } from '@/components/ListToolbar'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
 import { shareMetadata } from '@/lib/site'
@@ -26,10 +26,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <p className="kk-lede">A community-owned database of events. Open data, open API, no algorithm.</p>
       </section>
 
-      <Filters filters={filters} allTags={tags} />
-
       <section aria-label="Event list">
         <hr className="kk-rule" />
+        <ListToolbar filters={filters} allTags={tags} />
         <EventList
           key={apiQuery.toString()}
           initialEvents={events.data}

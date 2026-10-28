@@ -44,6 +44,24 @@ export function TickIcon({ size = 14 }: { size?: number }) {
   )
 }
 
+export function PlusIcon() {
+  return (
+    <svg className="kk-icon kk-icon--btn" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+export function FilterIcon() {
+  return (
+    <svg className="kk-icon kk-icon--btn" viewBox="0 0 24 24" aria-hidden>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </svg>
+  )
+}
+
 export function SearchIcon() {
   return (
     <svg className="kk-icon h-[18px] w-[18px] text-muted" style={{ strokeWidth: 2 }} viewBox="0 0 24 24" aria-hidden>

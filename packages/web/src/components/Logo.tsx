@@ -17,9 +17,10 @@ export function LogoMark({ dark = false, label }: { dark?: boolean; label?: stri
 
 export function Logo() {
   return (
-    <Link className="kk-logo" href="/">
+    <Link className="kk-logo" href="/" aria-label="Kellerkompass">
       <LogoMark />
-      Kellerkompass
+      {/* Hidden on phones, where the mark stands alone */}
+      <span className="kk-logo__word">Kellerkompass</span>
     </Link>
   )
 }

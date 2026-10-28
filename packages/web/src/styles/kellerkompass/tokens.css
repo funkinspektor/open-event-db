@@ -30,6 +30,8 @@
   --focus-ring: 0 0 0 3px #a58bff33;
   --mark-edge: inset 0 0 0 1px #ffffff1a;
   --mark-edge-light: inset 0 0 0 1px #0000001f;
+  --glass: #0c0c0dd9; /* app: sticky bars over scrolling content */
+  --scrim: #000000a6; /* app: behind the filter sheet */
 }
 :root {
   --space-1: 4px;
@@ -49,7 +51,8 @@
   --chrome-dark: linear-gradient(100deg, #0E0E10 0%, #26262E 24%, #4A4262 40%, #3A5864 53%, #1C1C22 66%, #33333B 100%);
   --content-max: 1200px;
   --form-max: 760px;
-  --header-h: 108px;
+  --header-h: 64px; /* app: sticky header bar (design system: 108px) */
+  --header-h-mobile: 56px; /* app: sticky phone header */
   --font-display: var(--font-germania-one), "Germania One", "UnifrakturMaguntia", Georgia, serif;
   --font-sans: var(--font-schibsted-grotesk), "Schibsted Grotesk", system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;

@@ -47,6 +47,18 @@ export function parseFilters(sp: SP): Filters {
   return { range, tags, city }
 }
 
+// Same DD.MM style as the day headings in the listing.
+const fmtDay = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
+
+/** Filter button label: "Upcoming", "This weekend", "16.10 – 19.10", "From 16.10", "Until 19.10". */
+export function rangeLabel(f: Pick<Filters, 'range' | 'from' | 'to'>): string {
+  if (f.range !== 'custom') return RANGES.find((r) => r.key === f.range)?.label ?? 'Upcoming'
+  if (f.from && f.to) return f.from === f.to ? fmtDay(f.from) : `${fmtDay(f.from)} – ${fmtDay(f.to)}`
+  if (f.from) return `From ${fmtDay(f.from)}`
+  if (f.to) return `Until ${fmtDay(f.to)}`
+  return 'Dates'
+}
+
 export function filtersToHref(f: Filters): string {
   const qs = new URLSearchParams()
   if (f.range === 'custom') {
