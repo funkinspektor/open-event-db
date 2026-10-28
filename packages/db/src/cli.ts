@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises'
-import { and, eq, or, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { createDb } from './index.js'
-import { editHistory, eventOwners, events, invites, magicLinkTokens, publishers, sessions } from './schema.js'
+import { editHistory, eventOwners, events, ingestItems, invites, magicLinkTokens, publishers, sessions } from './schema.js'
 import { generateApiKey } from './tokens.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
@@ -138,6 +138,11 @@ switch (cmd) {
         action: 'ownership_changed',
         diff: { owners: { before: [], after: [p.id] }, via: 'cli' },
       })
+      // A claimed event is no longer synced from a feed
+      await tx
+        .update(ingestItems)
+        .set({ detachedAt: new Date() })
+        .where(and(eq(ingestItems.eventId, id), isNull(ingestItems.detachedAt)))
     })
     console.log(`"${event.title}" is now claimed by ${p.name}`)
     break

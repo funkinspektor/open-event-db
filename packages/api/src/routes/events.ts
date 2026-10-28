@@ -30,6 +30,7 @@ import { encodeCursor, decodeCursor } from '../cursor.js'
 import { badRequest, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
+import { detachIngest } from '../ingest/detach.js'
 import {
   eventSnapshot,
   getEventDetail,
@@ -227,6 +228,7 @@ export async function eventRoutes(app: FastifyInstance) {
         action: cancelledNow ? 'cancelled' : 'updated',
         diff: diff(eventSnapshot(current), eventSnapshot(updated)),
       })
+      await detachIngest(tx, current.id)
     })
 
     return { data: await getEventDetail(current.id) }
@@ -259,6 +261,7 @@ export async function eventRoutes(app: FastifyInstance) {
           action: 'cancelled',
           diff: diff(eventSnapshot(current), eventSnapshot(updated)),
         })
+        await detachIngest(tx, current.id)
       })
     }
 
@@ -295,6 +298,7 @@ export async function eventRoutes(app: FastifyInstance) {
         action: 'ownership_changed',
         diff: { owners: { before, after: [...before, publisher_id] } },
       })
+      await detachIngest(tx, current.id)
     })
 
     reply.status(201)
