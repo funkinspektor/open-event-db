@@ -155,6 +155,32 @@ describe('normalizeFeedEvent', () => {
     expect(draft.location_text).toBe('constructor, Somewhere')
   })
 
+  it('cuts title, description and location text to the event limits', () => {
+    const long = {
+      ...feed('Psychopomp'),
+      summary: `  ${'T'.repeat(250)}  `,
+      description: 'D'.repeat(12_000),
+      locationRoom: 'Elsewhere',
+      locationText: 'L'.repeat(400),
+    }
+    const draft = normalize(long, unmapped, null)
+    expect(draft.title).toHaveLength(200)
+    expect(draft.title.startsWith('T')).toBe(true)
+    expect(draft.title.endsWith('…')).toBe(true)
+    expect(draft.description).toHaveLength(10_000)
+    expect(draft.location_text).toHaveLength(300)
+
+    // Short values stay as they are (apart from the title's outer spaces)
+    const short = normalize({ ...feed('Psychopomp'), summary: ' Psychopomp ' }, unmapped, null)
+    expect(short.title).toBe('Psychopomp')
+    expect(short.location_text).toBe('Club, 21 Veteranenstrasse, Berlin')
+  })
+
+  it('does not split a surrogate pair when cutting', () => {
+    const draft = normalize({ ...feed('Psychopomp'), summary: `${'T'.repeat(198)}🎉🎉` }, unmapped, null)
+    expect(draft.title).toBe(`${'T'.repeat(198)}…`)
+  })
+
   it('uses the city from the source config', () => {
     const leipzig = ingestSourceConfigSchema.parse({ city: 'Leipzig' })
     expect(normalize(feed('Psychopomp'), leipzig, null).city).toBe('Leipzig')

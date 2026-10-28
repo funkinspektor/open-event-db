@@ -131,6 +131,8 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
     const uid = stringOf(vevent, 'uid')
     const dtstart = vevent.getFirstProperty('dtstart')
     if (!uid || !dtstart) return // cannot be tracked or placed in time
+    const summary = stringOf(vevent, 'summary')
+    if (!summary?.trim()) return // an event needs a title
 
     const dtend = vevent.getFirstProperty('dtend')
     const start = toMoment(dtstart)
@@ -149,7 +151,7 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
     events.set(externalId, {
       externalId,
       uid,
-      summary: stringOf(vevent, 'summary') ?? '',
+      summary,
       description: stringOf(vevent, 'description') ?? '',
       start,
       end,

@@ -29,6 +29,19 @@ function httpUrl(value: string | null): string | null {
   }
 }
 
+/** The limits POST /events enforces, so an accepted draft is a valid event. */
+const MAX_TITLE = 200
+const MAX_DESCRIPTION = 10_000
+const MAX_LOCATION_TEXT = 300
+
+/** At most `max` UTF-16 units, ending in "…" when cut, without leaving half a surrogate pair. */
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text
+  let cut = text.slice(0, max - 1)
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1)
+  return `${cut}…`
+}
+
 /** Single newlines become Markdown hard breaks; blank lines stay paragraph breaks. */
 const markdownBreaks = (text: string) => text.replace(/(?<!\n)\n(?!\n)/g, '  \n')
 
@@ -77,12 +90,12 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
   const venueId = room && Object.hasOwn(config.venues, room) ? (config.venues[room] ?? null) : null
 
   return {
-    title: ev.summary,
-    description: markdownBreaks(ev.description),
+    title: truncate(ev.summary.trim(), MAX_TITLE),
+    description: truncate(markdownBreaks(ev.description), MAX_DESCRIPTION),
     starts_at: berlinIso(startsAt),
     ends_at: endsAt ? berlinIso(endsAt) : null,
     venue_id: venueId,
-    location_text: venueId ? null : ev.locationText,
+    location_text: venueId || ev.locationText === null ? null : truncate(ev.locationText, MAX_LOCATION_TEXT),
     city: config.city,
     links: normalizeLinks(extraction?.links ?? [], website ? { website } : {}),
     image_url: httpUrl(ev.imageUrl),

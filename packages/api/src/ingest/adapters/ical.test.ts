@@ -134,6 +134,18 @@ describe('parseIcal (edge cases)', () => {
     expect(() => parseIcal(text, cfg)).toThrow(/2026/)
   })
 
+  it('skips a VEVENT without a title', () => {
+    const events = parseIcal(
+      calendar(
+        vevent('UID:a@x', 'SUMMARY:   ', 'DTSTART:20261101T190000Z'),
+        vevent('UID:b@x', 'DTSTART:20261101T190000Z'),
+        vevent('UID:c@x', 'SUMMARY:Named', 'DTSTART:20261101T190000Z'),
+      ),
+      cfg,
+    )
+    expect(events.map((e) => e.uid)).toEqual(['c@x'])
+  })
+
   it('returns a VEVENT that appears twice once, last wins', () => {
     const first = vevent('UID:1-100@x', 'SUMMARY:First', 'DTSTART:20261101T190000Z')
     const second = vevent('UID:1-100@x', 'SUMMARY:Second', 'DTSTART:20261101T190000Z')
