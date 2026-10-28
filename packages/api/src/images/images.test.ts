@@ -43,7 +43,7 @@ describe('s3ImageStore', () => {
 
   function recording(status = 200) {
     const calls: Request[] = []
-    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       calls.push(new Request(input, init))
       return new Response(null, { status })
     }) as typeof fetch
@@ -115,7 +115,7 @@ describe('localImageStore', () => {
 })
 
 describe('fetchRemoteImage', () => {
-  const answering = (body: BodyInit | null, status = 200) =>
+  const answering = (body: ConstructorParameters<typeof Response>[0], status = 200) =>
     (async () => new Response(body, { status })) as unknown as typeof fetch
 
   it('returns the image with its sniffed type', async () => {
