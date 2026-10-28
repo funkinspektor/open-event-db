@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { EventDetail, EventStatus } from '@open-event-db/shared'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import type { DuplicateDraft } from '@/lib/duplicates'
+import { imageSaveOutcome, savedParam, type ImageSaveOutcome } from '@/lib/image-save'
 import { EventImageInput, type ImageChange } from './EventImageInput'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
@@ -26,18 +27,19 @@ interface Props {
   onDraftChange?: (d: DuplicateDraft) => void
 }
 
-/** Sends the image change for a saved event; false when the image request failed. */
-async function saveImage(eventId: string, change: ImageChange): Promise<boolean> {
-  if (change.kind === 'keep') return true
+/** Sends the image change for a saved event. */
+async function saveImage(eventId: string, change: ImageChange): Promise<ImageSaveOutcome> {
+  if (change.kind === 'keep') return 'saved'
   try {
     const res = await fetch(`${API_URL}/api/v1/events/${eventId}/image`, {
       method: change.kind === 'replace' ? 'PUT' : 'DELETE',
       credentials: 'include',
       ...(change.kind === 'replace' ? { headers: { 'content-type': change.blob.type || 'image/jpeg' }, body: change.blob } : {}),
     })
-    return res.ok
+    const json = (await res.json().catch(() => ({}))) as { error?: { code?: string } }
+    return imageSaveOutcome(res.status, json.error?.code)
   } catch {
-    return false
+    return 'failed'
   }
 }
 
@@ -144,9 +146,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
         return
       }
       // The event is saved either way; a failed image only changes the message on the event page
-      const imageSaved = await saveImage(json.data.id, image)
-      const saved = mode === 'create' ? 'created' : 'updated'
-      router.push(`/events/${json.data.id}?saved=${imageSaved ? saved : `${saved}_image_failed`}`)
+      router.push(`/events/${json.data.id}?saved=${savedParam(mode, await saveImage(json.data.id, image))}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')

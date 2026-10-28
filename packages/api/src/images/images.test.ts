@@ -6,7 +6,7 @@ import { EVENT_IMAGE_MAX_BYTES } from '@open-event-db/shared'
 import { buildApp } from '../app.js'
 import { fetchRemoteImage } from './fetch.js'
 import { sniffImageType } from './sniff.js'
-import { imageKey, imageStore, localImageStore, s3ImageStore } from './store.js'
+import { imageKey, imageStore, isLocalStore, localImageStore, s3ImageStore, storeFromEnv } from './store.js'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10])
@@ -147,5 +147,41 @@ describe('fetchRemoteImage', () => {
     expect(await fetchRemoteImage('https://feed.test/a.png', answering(big))).toBeNull()
     const fits = big.subarray(0, EVENT_IMAGE_MAX_BYTES)
     expect((await fetchRemoteImage('https://feed.test/a.png', answering(fits)))?.data.length).toBe(EVENT_IMAGE_MAX_BYTES)
+  })
+})
+
+describe('storeFromEnv', () => {
+  const s3 = {
+    S3_BUCKET: 'kk-images',
+    S3_ENDPOINT: 'https://s3.fr-par.scw.cloud',
+    S3_REGION: 'fr-par',
+    S3_ACCESS_KEY_ID: 'id',
+    S3_SECRET_ACCESS_KEY: 'secret',
+    IMAGE_BASE_URL: 'https://kk-images.s3.fr-par.scw.cloud',
+  }
+
+  it('uses the bucket when one is configured', () => {
+    const store = storeFromEnv({ ...s3, DATABASE_URL: 'postgres://u:p@db.example.org:5432/rdb' })
+    expect(store?.url('events/a.jpg')).toBe('https://kk-images.s3.fr-par.scw.cloud/events/a.jpg')
+    expect(isLocalStore(store)).toBe(false)
+  })
+
+  it('uses a local folder for a local database', () => {
+    expect(isLocalStore(storeFromEnv({}))).toBe(true)
+    expect(isLocalStore(storeFromEnv({ DATABASE_URL: 'postgres://oedb:oedb@localhost:5432/oedb' }))).toBe(true)
+    expect(isLocalStore(storeFromEnv({ DATABASE_URL: 'postgres://oedb:oedb@127.0.0.1:5432/oedb' }))).toBe(true)
+  })
+
+  it('turns images off for a remote database without a bucket', () => {
+    // e.g. scripts/prod-db.sh running an ingest from a laptop: files on the laptop would be broken images in production
+    expect(storeFromEnv({ DATABASE_URL: 'postgres://u:p@db.example.org:5432/rdb?sslmode=require' })).toBeNull()
+  })
+
+  it('turns images off in production without a bucket', () => {
+    expect(storeFromEnv({ NODE_ENV: 'production' })).toBeNull()
+  })
+
+  it('turns images off when the bucket settings are incomplete', () => {
+    expect(storeFromEnv({ S3_BUCKET: 'kk-images' })).toBeNull()
   })
 })

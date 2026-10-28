@@ -20,6 +20,8 @@ const SAVED_MESSAGES: Record<string, string> = {
   updated: 'Changes saved.',
   created_image_failed: 'Event created, but the image couldn’t be saved. Edit the event to try again.',
   updated_image_failed: 'Changes saved, but the image couldn’t be saved. Try again.',
+  created_image_unavailable: 'Event created. Images can’t be stored on this server yet, so it has none.',
+  updated_image_unavailable: 'Changes saved. Images can’t be stored on this server yet, so the image is unchanged.',
   accepted: 'Accepted — it’s live now.',
 }
 

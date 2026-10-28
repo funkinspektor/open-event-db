@@ -15,6 +15,7 @@ import {
   sessions,
 } from './schema.js'
 import { generateApiKey } from './tokens.js'
+import { imageRemovalNotice } from './images.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
 const db = createDb(url)
@@ -175,7 +176,7 @@ switch (cmd) {
     const [id] = args
     if (!isUuid(id)) usage()
     const [event] = await db
-      .select({ title: events.title, createdBy: events.createdBy })
+      .select({ title: events.title, createdBy: events.createdBy, imageKey: events.imageKey })
       .from(events)
       .where(eq(events.id, id))
       .limit(1)
@@ -207,6 +208,8 @@ switch (cmd) {
       })
     })
     console.log(`Deleted event "${event.title}" (${id}); only a "deleted" history entry remains`)
+    const notice = imageRemovalNotice(event.imageKey)
+    if (notice) console.warn(`\n${notice}`)
     break
   }
   case 'delete-publisher': {

@@ -104,10 +104,19 @@ export function localImageStore(dir: string, baseUrl: string): LocalImageStore {
 
 export const isLocalStore = (store: ImageStore | null): store is LocalImageStore => !!store && 'read' in store
 
-function storeFromEnv(): ImageStore | null {
-  // Automated tests install their own store via imageStore.setStore().
-  if (isTestRun) return null
-  const env = process.env
+/** A database on this machine: development, where images may live in a local folder. */
+function isLocalDatabase(url: string | undefined): boolean {
+  if (!url) return true // the API and CLI default to the local docker database
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, '')
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
+
+/** The store the environment configures, or null when images are off. */
+export function storeFromEnv(env: Record<string, string | undefined>): ImageStore | null {
   if (env.S3_BUCKET) {
     const { S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, IMAGE_BASE_URL } = env
     if (!S3_ENDPOINT || !S3_REGION || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY || !IMAGE_BASE_URL) {
@@ -123,14 +132,17 @@ function storeFromEnv(): ImageStore | null {
       baseUrl: IMAGE_BASE_URL,
     })
   }
-  // Production without a bucket: no images rather than files on a container disk that a redeploy wipes.
-  if (env.NODE_ENV === 'production') return null
+  // Without a bucket, a local folder only serves a local database. In production, files on the container
+  // disk vanish with the next deploy; a laptop run against the production database (scripts/prod-db.sh)
+  // would store keys that production cannot serve. Images stay off there and the next server run adds them.
+  if (env.NODE_ENV === 'production' || !isLocalDatabase(env.DATABASE_URL)) return null
   const dir = env.IMAGE_DIR || fileURLToPath(new URL('../../../../.data/images', import.meta.url))
   const port = env.API_PORT ?? env.PORT ?? '3001'
   return localImageStore(dir, env.IMAGE_BASE_URL || `http://localhost:${port}/images`)
 }
 
-const defaultStore = storeFromEnv()
+// Automated tests install their own store via imageStore.setStore().
+const defaultStore = isTestRun ? null : storeFromEnv(process.env)
 let store: ImageStore | null = defaultStore
 
 /** The configured store, or null when images are off. Tests swap it with `setStore`. */

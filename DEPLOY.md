@@ -78,7 +78,11 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 **Event images bucket.** Create an Object Storage bucket in `fr-par` (Scaleway console → Object Storage →
 Create bucket, visibility private: the API writes every object with a `public-read` ACL, so only the images
 themselves are public, not the bucket listing). The API stores images under `events/<event id>/` with
-immutable cache headers and deletes replaced ones.
+immutable cache headers and deletes replaced ones. Commands run from a laptop against the production database
+(`scripts/prod-db.sh …`, e.g. an ingest run) have no bucket credentials, so they leave images out; the next
+run on the server adds them. `pnpm db:cli delete-event` cannot reach the bucket either: it prints the image's
+key when the event had one, and that folder has to be deleted in the Scaleway console, or the image stays
+public.
 
 **Web**
 
