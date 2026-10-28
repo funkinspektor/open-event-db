@@ -101,6 +101,6 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
     image_url: httpUrl(ev.imageUrl),
     source_url: website,
     // An unreadable start time counts as missing: the feed time was used.
-    times_unverified: extractedStart === null,
+    times_unverified: extractedStart === null && !ev.timesStated,
   }
 }

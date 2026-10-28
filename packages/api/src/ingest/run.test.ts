@@ -62,14 +62,18 @@ function stubExtractor() {
   return stub
 }
 
-async function newSource(config: Record<string, unknown> = ACUD, suffix = ''): Promise<IngestSource> {
+async function newSource(
+  config: Record<string, unknown> = ACUD,
+  suffix = '',
+  kind: IngestSource['kind'] = 'ical',
+): Promise<IngestSource> {
   const slug = `run-${stamp}${suffix}-${++seq}`
   const [s] = await db
     .insert(ingestSources)
     .values({
       slug,
       name: `Run source ${seq}`,
-      kind: 'ical',
+      kind,
       url: `https://${slug}.test/?scope={from}--{to}`,
       publisherId: scout.id,
       config,
@@ -584,5 +588,35 @@ describe('runIngest', () => {
     expect(results.map((r) => r.skipped).sort()).toEqual([false, true])
     expect(results.find((r) => r.skipped)!.sources).toEqual([])
     expect(await itemsOf(source.id)).toHaveLength(5)
+  })
+})
+
+describe('runIngest (Dunckerclub page)', () => {
+  const page = readFileSync(fileURLToPath(new URL('./fixtures/dunckerclub.html', import.meta.url)), 'utf8')
+
+  it('reads the programme table with the page adapter and trusts its times', async () => {
+    const stub = stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    const result = await run(source, page, NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 11, created: 11 })
+    expect(stub.calls).toBe(0)
+    const samhain = await itemOf(source.id, '2026-10-31')
+    expect(samhain.draft).toMatchObject({
+      title: 'Dark Mønday – SAMHAIN Celebration 2026',
+      starts_at: '2026-10-31T21:00:00+01:00',
+      ends_at: '2026-11-01T04:00:00+01:00',
+      source_url: `https://${source.slug}.test/?scope=2026-10-28--2027-04-26`,
+      times_unverified: false,
+    })
+  })
+
+  it('marks a night gone when it leaves the page', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    const withoutSamhain = page.replace(/<td class="tabledate">31\.10\.<\/td>/, '<td class="tabledate"></td>')
+    const result = await run(source, withoutSamhain, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 10, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, '2026-10-31')).goneAt?.getTime()).toBe(LATER.getTime())
   })
 })

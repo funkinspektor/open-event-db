@@ -31,7 +31,9 @@ export interface FeedEvent {
   imageUrl: string | null
   locationRoom: string | null
   locationText: string | null
-  /** The VEVENT text as served. */
+  /** The source states the start time itself, so the draft needs no "times unverified" mark. */
+  timesStated: boolean
+  /** The source text of the event (VEVENT, table row) as served. */
   raw: string
   /** sha256 of `raw` without DTSTAMP lines, so a re-export alone does not count as a change. */
   hash: string
@@ -159,6 +161,8 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
       imageUrl: imageOf(vevent),
       locationRoom: location ? (location.split(',')[0] ?? '').trim() || null : null,
       locationText: location,
+      // Feeds often carry placeholder times; only text extraction confirms them
+      timesStated: false,
       raw,
       hash: createHash('sha256').update(withoutDtstamp(raw)).digest('hex'),
     })

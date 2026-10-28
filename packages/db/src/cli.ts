@@ -7,6 +7,7 @@ import {
   eventOwners,
   events,
   ingestItems,
+  ingestSourceKind,
   ingestSources,
   invites,
   magicLinkTokens,
@@ -19,10 +20,13 @@ const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oed
 const db = createDb(url)
 
 const rawArgv = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
-// --config takes the next argument as its value (JSON), so it is pulled out before the bare flags are sorted
+// --config and --kind take the next argument as their value, so they are pulled out before the bare flags are sorted
 const configAt = rawArgv.indexOf('--config')
 const configArg = configAt === -1 ? undefined : rawArgv[configAt + 1]
-const argv = configAt === -1 ? rawArgv : rawArgv.filter((_, i) => i !== configAt && i !== configAt + 1)
+const kindAt = rawArgv.indexOf('--kind')
+const kindArg = kindAt === -1 ? undefined : rawArgv[kindAt + 1]
+const valueAt = new Set([configAt, kindAt].filter((i) => i !== -1).flatMap((i) => [i, i + 1]))
+const argv = rawArgv.filter((_, i) => !valueAt.has(i))
 const flags = new Set(argv.filter((a) => a.startsWith('--')))
 const [cmd, ...args] = argv.filter((a) => !a.startsWith('--'))
 
@@ -35,8 +39,8 @@ function usage(): never {
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
-  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--config '<json>']
-                                                        Add an iCal feed source whose events a scout reviews
+  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub] [--config '<json>']
+                                                        Add a feed source (default: iCal) whose events a scout reviews
   pnpm db:cli ingest-list                               List feed sources: last run, last error, items per status
   pnpm db:cli ingest-disable <slug>                     Stop the daily run from fetching a source
   pnpm db:cli ingest-enable <slug>                      Let the daily run fetch a source again`)
@@ -269,6 +273,9 @@ switch (cmd) {
     const [slug, name, feedUrl, scoutSlug] = args
     if (!slug || !name || !feedUrl || !scoutSlug) usage()
     if (configAt !== -1 && configArg === undefined) fail('--config needs a JSON value')
+    const kinds = ingestSourceKind.enumValues
+    const kind = kindArg ?? 'ical'
+    if (!(kinds as readonly string[]).includes(kind)) fail(`--kind must be one of: ${kinds.join(', ')}`)
     // Same rule as slugSchema in @open-event-db/shared
     if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug) || slug.length > 100) {
       fail(`Invalid slug "${slug}": use lowercase letters, digits and hyphens (no leading/trailing hyphen)`)
@@ -307,7 +314,7 @@ switch (cmd) {
     const [taken] = await db.select({ id: ingestSources.id }).from(ingestSources).where(eq(ingestSources.slug, slug)).limit(1)
     if (taken) fail(`Source "${slug}" already exists`)
 
-    await db.insert(ingestSources).values({ slug, name, kind: 'ical', url: feedUrl, publisherId: scout.id, config })
+    await db.insert(ingestSources).values({ slug, name, kind: kind as (typeof kinds)[number], url: feedUrl, publisherId: scout.id, config })
     console.log(`Added source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
     break
   }
@@ -324,7 +331,7 @@ switch (cmd) {
     for (const s of sources) {
       const byStatus = new Map(counts.filter((c) => c.sourceId === s.id).map((c) => [c.status, c.count]))
       const items = (['pending', 'accepted', 'rejected'] as const).map((st) => `${st} ${byStatus.get(st) ?? 0}`).join(', ')
-      console.log(`${s.slug}  ${s.enabled ? 'enabled' : 'disabled'}  "${s.name}"`)
+      console.log(`${s.slug}  ${s.kind}  ${s.enabled ? 'enabled' : 'disabled'}  "${s.name}"`)
       console.log(`  last run:   ${s.lastRunAt ? s.lastRunAt.toISOString() : 'never'}`)
       console.log(`  last error: ${s.lastError ?? '-'}`)
       console.log(`  items:      ${items}`)

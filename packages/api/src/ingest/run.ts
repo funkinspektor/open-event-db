@@ -21,6 +21,7 @@ import { ExtractionError } from '../extract/vision.js'
 import { berlinInstant, berlinToday, fmtDay, nextDay, type CalendarDay } from '../extract/normalize.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
+import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
 import { normalizeFeedEvent } from './normalize.js'
 
@@ -204,11 +205,22 @@ async function ingestEvent(
   result.updated++
 }
 
+/** The source's text -> feed events, by the adapter its kind names. */
+function parseFeed(source: IngestSource, config: IngestSourceConfig, text: string, url: string, now: Date): FeedEvent[] {
+  switch (source.kind) {
+    case 'ical':
+      return parseIcal(text, config)
+    case 'dunckerclub':
+      return parseDunckerclub(text, config, { pageUrl: url, now })
+  }
+}
+
 async function runSource(source: IngestSource, now: Date, fetchText: (url: string) => Promise<string>): Promise<SourceRunResult> {
   const result: SourceRunResult = { slug: source.slug, ok: false, seen: 0, created: 0, updated: 0, synced: 0, gone: 0 }
   try {
     const config = ingestSourceConfigSchema.parse(source.config)
-    const feed = parseIcal(await fetchText(feedUrl(source, now)), config)
+    const url = feedUrl(source, now)
+    const feed = parseFeed(source, config, await fetchText(url), url, now)
     result.seen = feed.length
     const existing = await db.select().from(ingestItems).where(eq(ingestItems.sourceId, source.id))
     // Stored items count too: a first run that crashed before recording its count left no lastItemCount

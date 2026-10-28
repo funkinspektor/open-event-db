@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ingestDraftSchema, ingestSourceConfigSchema, type Extraction } from '@open-event-db/shared'
+import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal } from './adapters/ical.js'
 import { normalizeFeedEvent } from './normalize.js'
 
@@ -206,6 +207,29 @@ describe('normalizeFeedEvent', () => {
       tickets: 'https://ra.co/events/2554847',
       instagram: 'https://www.instagram.com/gumpmother',
       'website-2': 'https://acudmachtneu.de/',
+    })
+  })
+})
+
+describe('normalizeFeedEvent (Dunckerclub)', () => {
+  const html = readFileSync(fileURLToPath(new URL('./fixtures/dunckerclub.html', import.meta.url)), 'utf8')
+  const DUNCKER = '0190a0b0-0000-7000-8000-000000000002'
+  const config = ingestSourceConfigSchema.parse({ venues: { Dunckerclub: DUNCKER } })
+  const pageUrl = 'https://www.dunckerclub.de/start.html'
+  const nights = parseDunckerclub(html, config, { pageUrl, now: new Date('2026-10-28T10:00:00Z') })
+
+  it('trusts the times the page states and maps the club', () => {
+    const samhain = nights.find((e) => e.externalId === '2026-10-31')!
+    expect(normalize(samhain, config, null)).toMatchObject({
+      title: 'Dark Mønday – SAMHAIN Celebration 2026',
+      starts_at: '2026-10-31T21:00:00+01:00',
+      ends_at: '2026-11-01T04:00:00+01:00',
+      venue_id: DUNCKER,
+      location_text: null,
+      links: { website: pageUrl },
+      image_url: 'https://www.dunckerclub.de/bilder/samhain_2026.jpg',
+      source_url: pageUrl,
+      times_unverified: false,
     })
   })
 })
