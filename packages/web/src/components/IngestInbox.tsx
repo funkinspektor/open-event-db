@@ -3,10 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { IngestItemView } from '@open-event-db/shared'
+import { ingestAction } from '@/lib/ingest-actions'
 import { IngestItemCard } from './IngestItemCard'
 import { Toast } from './Toast'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 interface Props {
   items: IngestItemView[]
@@ -35,22 +34,11 @@ export function IngestInbox({ items, view }: Props) {
     setError(null)
     setBusy((prev) => new Set([...prev, ...affected]))
     try {
-      const res = await fetch(`${API_URL}/api/v1/ingest/${path}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = (await res.json().catch(() => ({}))) as { data?: T; error?: { message: string } }
-      if (!res.ok || !json.data) {
-        setError(json.error?.message ?? `Request failed (${res.status})`)
-        // e.g. 409 because someone else decided it first — show the current state
-        if (res.status === 409) router.refresh()
-        return null
-      }
-      return json.data
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed')
+      const result = await ingestAction<T>(path, body)
+      if ('data' in result) return result.data
+      setError(result.error)
+      // e.g. 409 because someone else decided it first — show the current state
+      if (result.status === 409) router.refresh()
       return null
     } finally {
       setBusy((prev) => new Set([...prev].filter((id) => !affected.includes(id))))

@@ -1,6 +1,7 @@
 import type {
   EventDetail,
   EventSlim,
+  IngestItemDetail,
   IngestItemView,
   Meta,
   PublisherMe,
@@ -97,4 +98,15 @@ export async function getIngestItems(
 
 export async function getIngestCount(cookieHeader: string): Promise<IngestCounts> {
   return (await getScout<{ data: IngestCounts }>('/ingest/count', cookieHeader)).data
+}
+
+/** One inbox item with its state; null for an unknown item. */
+export async function getIngestItem(id: string, cookieHeader: string): Promise<IngestItemDetail | null> {
+  const res = await fetch(`${API_URL}/api/v1/ingest/items/${id}`, {
+    headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
+    cache: 'no-store',
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`API ${res.status} for /ingest/items/${id}`)
+  return ((await res.json()) as { data: IngestItemDetail }).data
 }

@@ -5,15 +5,10 @@ import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
-import { formatDate, formatDateTime, formatTimeRange } from '@/lib/format'
-import { describeRecurrence } from '@/lib/recurrence'
+import { formatDateTime } from '@/lib/format'
 import { markdownToPlainText } from '@/lib/plaintext'
-import { Markdown } from '@/components/Markdown'
-import { StatusBanner } from '@/components/StatusBadge'
-import { LinkButtons } from '@/components/LinkButtons'
-import { Map } from '@/components/Map'
+import { EventDetailBody } from '@/components/EventDetailBody'
 import { JsonLd } from '@/components/JsonLd'
-import { Headline } from '@/components/Headline'
 import { Toast } from '@/components/Toast'
 import { CONTACT_EMAIL } from '@/content/legal/operator'
 
@@ -25,6 +20,7 @@ const SAVED_MESSAGES: Record<string, string> = {
   updated: 'Changes saved.',
   created_image_failed: 'Event created, but the image couldn’t be saved. Edit the event to try again.',
   updated_image_failed: 'Changes saved, but the image couldn’t be saved. Try again.',
+  accepted: 'Accepted — it’s live now.',
 }
 
 async function load(params: Params) {
@@ -113,136 +109,68 @@ export default async function EventPage({ params, searchParams }: { params: Para
       : {}),
   }
 
-  const image = e.image_url && (
-    <a href={e.image_url} target="_blank" rel="noopener" className="kk-event-image">
-      <img src={e.image_url} alt={`Image for ${e.title}`} />
-    </a>
-  )
-
   return (
     <article className="kk-container" style={{ gap: 52 }}>
       <JsonLd data={jsonLd} />
       {savedMessage && canEdit && <Toast message={savedMessage} param="saved" />}
 
-      <StatusBanner status={e.status} />
-
-      <header className="kk-intro" style={{ gap: 16 }}>
-        <p className="kk-eyebrow kk-eyebrow--live">{formatDate(e.starts_at, true)}</p>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <Headline text={e.title} className="max-w-[900px]" style={{ fontSize: 'clamp(56px, 8vw, 104px)' }} />
-          {canEdit && (
+      <EventDetailBody
+        title={e.title}
+        startsAt={e.starts_at}
+        endsAt={e.ends_at}
+        status={e.status}
+        recurrence={e.recurrence}
+        tags={e.tags}
+        description={e.description}
+        links={e.links}
+        venue={e.venue}
+        locationText={e.location_text}
+        city={e.city}
+        imageUrl={e.image_url}
+        headerAction={
+          canEdit && (
             <Link href={`/events/${e.id}/edit`} className="kk-btn kk-btn--outline">
               Edit event
             </Link>
-          )}
-        </div>
-        <p className="m-0 text-[20px]">
-          <span className="font-bold tabular-nums">{formatTimeRange(e.starts_at, e.ends_at, ' – ')}</span>
-          {e.recurrence && (
-            <>
-              {' '}
-              <span className="text-border">·</span> <span className="text-muted">{describeRecurrence(e.recurrence)}</span>
-            </>
-          )}
-        </p>
-        {e.tags.length > 0 && (
-          <div className="kk-pills" style={{ gap: 6 }}>
-            {e.tags.map((t) => (
-              <Link key={t} href={`/?tags=${encodeURIComponent(t)}`} className="kk-tag kk-tag--filter">
-                {t}
-              </Link>
-            ))}
-          </div>
-        )}
-      </header>
-
-      <hr className="kk-rule" />
-
-      {/* Narrow layouts stack the aside below the text, so the image goes first there */}
-      {image && <div className="max-w-[380px] lg:hidden">{image}</div>}
-
-      <div className="flex flex-wrap items-start gap-12">
-        <div className="flex min-w-0 flex-col gap-10" style={{ flex: '999 1 520px' }}>
-          {e.description && (
-            <section>
-              <h2 className="sr-only">Description</h2>
-              <Markdown text={e.description} className="max-w-[680px] text-body-long text-ink-soft" />
-            </section>
-          )}
-
-          {Object.keys(e.links).length > 0 && (
-            <section className="flex flex-col gap-3.5">
-              <h2 className="kk-eyebrow">Links</h2>
-              <LinkButtons links={e.links} primary="tickets" />
-            </section>
-          )}
-
-          {e.claimed ? (
-            <section className="flex flex-col gap-3.5">
-              <h2 className="kk-eyebrow">Organised by</h2>
-              <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
-                {e.owners.map((o) => (
-                  <li key={o.publisher_id}>
-                    <Link href={`/publishers/${o.slug}`} className="font-bold">
-                      {o.name}
-                    </Link>
-                    {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
-                  </li>
-                ))}
-              </ul>
-              {addedByOther && (
-                <p className="m-0 text-[14px] text-muted">
-                  Added by {e.added_by.name}
-                  {e.added_by.is_scout && ' · Scout'}
-                </p>
-              )}
-            </section>
-          ) : (
-            <section className="flex flex-col gap-3.5">
-              <h2 className="kk-eyebrow">Added by</h2>
-              <p className="m-0 text-[17px]">
-                <span className="font-bold">{e.added_by.name}</span>
-                {e.added_by.is_scout && <span className="text-muted"> · Scout</span>}
+          )
+        }
+      >
+        {e.claimed ? (
+          <section className="flex flex-col gap-3.5">
+            <h2 className="kk-eyebrow">Organised by</h2>
+            <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
+              {e.owners.map((o) => (
+                <li key={o.publisher_id}>
+                  <Link href={`/publishers/${o.slug}`} className="font-bold">
+                    {o.name}
+                  </Link>
+                  {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
+                </li>
+              ))}
+            </ul>
+            {addedByOther && (
+              <p className="m-0 text-[14px] text-muted">
+                Added by {e.added_by.name}
+                {e.added_by.is_scout && ' · Scout'}
               </p>
-              <p className="m-0 text-[14px] text-muted">Not yet confirmed by the organizer</p>
-            </section>
-          )}
+            )}
+          </section>
+        ) : (
+          <section className="flex flex-col gap-3.5">
+            <h2 className="kk-eyebrow">Added by</h2>
+            <p className="m-0 text-[17px]">
+              <span className="font-bold">{e.added_by.name}</span>
+              {e.added_by.is_scout && <span className="text-muted"> · Scout</span>}
+            </p>
+            <p className="m-0 text-[14px] text-muted">Not yet confirmed by the organizer</p>
+          </section>
+        )}
 
-          {/* Notice mechanism (Art. 16 DSA): the prefilled body asks for what a valid notice needs */}
-          <a href={reportHref(e.title, absoluteUrl(`/events/${e.id}`))} className="self-start text-[14px] text-muted underline underline-offset-4">
-            Report event
-          </a>
-        </div>
-
-        <aside className="flex max-w-[380px] flex-col gap-3.5" style={{ flex: '1 1 300px' }}>
-          {image && <div className="mb-6 hidden lg:block">{image}</div>}
-          <h2 className="kk-eyebrow">Location</h2>
-          {e.venue ? (
-            <>
-              <div>
-                <Link href={`/venues/${e.venue.id}`} className="kk-listlink__name" style={{ fontSize: 30 }}>
-                  {e.venue.name}
-                </Link>
-                <div className="mt-2 leading-normal text-muted">
-                  {e.venue.address}
-                  <br />
-                  {e.venue.city}
-                </div>
-              </div>
-              {e.venue.coordinates && (
-                <Map lat={e.venue.coordinates.lat} lng={e.venue.coordinates.lng} title={e.venue.name} />
-              )}
-            </>
-          ) : (
-            <div>
-              <span className="kk-listlink__name" style={{ fontSize: 30 }}>
-                {e.location_text ?? 'Location TBA'}
-              </span>
-              <div className="mt-2 text-muted">{e.city}</div>
-            </div>
-          )}
-        </aside>
-      </div>
+        {/* Notice mechanism (Art. 16 DSA): the prefilled body asks for what a valid notice needs */}
+        <a href={reportHref(e.title, absoluteUrl(`/events/${e.id}`))} className="self-start text-[14px] text-muted underline underline-offset-4">
+          Report event
+        </a>
+      </EventDetailBody>
     </article>
   )
 }

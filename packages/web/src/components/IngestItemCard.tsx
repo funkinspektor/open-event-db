@@ -17,7 +17,8 @@ interface Props {
   onGone: (action: 'cancel' | 'keep') => void
 }
 
-function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: boolean; onLink: () => void }) {
+/** A possible duplicate with the button to link the item to it instead of accepting. */
+export function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: boolean; onLink: () => void }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <span className="min-w-0 text-[15px]">
@@ -66,7 +67,7 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
       <div className="kk-event__main flex flex-col gap-3">
         <div>
           <h3 className="kk-event__title" style={{ fontSize: 22 }}>
-            {draft.title}
+            <Link href={`/ingest/${item.id}`}>{draft.title}</Link>
           </h3>
           <p className="kk-event__meta">
             {where} · {draft.city}
