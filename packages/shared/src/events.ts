@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { cursorQuerySchema, metaSchema } from './pagination.js'
 import { linksSchema } from './links.js'
 
+/** Largest event image the API stores, uploaded or fetched from a feed. */
+export const EVENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
 export const eventStatusSchema = z.enum(['scheduled', 'cancelled', 'postponed'])
 export type EventStatus = z.infer<typeof eventStatusSchema>
 

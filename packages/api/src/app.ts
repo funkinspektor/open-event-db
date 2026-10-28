@@ -13,6 +13,7 @@ import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
 import { ingestRoutes } from './routes/ingest.js'
 import { hasIngestSecret, internalRoutes } from './routes/internal.js'
+import { IMAGE_CACHE_CONTROL, imageStore, isLocalStore } from './images/store.js'
 
 const UUID_PARAMS = ['id', 'publisher_id'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -63,6 +64,13 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
   })
 
   await app.register(healthRoutes)
+  // Development without a bucket: the local image store's files. In production the bucket serves them.
+  app.get<{ Params: { '*': string } }>('/images/*', async (req, reply) => {
+    const store = imageStore.store
+    const found = isLocalStore(store) ? await store.read(req.params['*']) : null
+    if (!found) throw notFound('Image not found')
+    return reply.type(found.type).header('cache-control', IMAGE_CACHE_CONTROL).send(found.data)
+  })
   await app.register(internalRoutes)
   await app.register(
     async (api) => {

@@ -4,11 +4,11 @@ import {
   EXTRACT_IMAGE_TYPES,
   EXTRACT_MAX_BYTES,
   EXTRACT_MAX_IMAGES,
-  type ExtractImageType,
 } from '@open-event-db/shared'
 import { ApiError } from '../errors.js'
 import { requireAuth } from '../auth.js'
 import { isEmptyDraft, normalizeExtraction } from '../extract/normalize.js'
+import { sniffImageType } from '../images/sniff.js'
 import { ExtractionError, vision, type ExtractImage, type ExtractionErrorKind } from '../extract/vision.js'
 
 // Per account, not per minute: this is a cost limit (PRD Event Capture, Decision 9)
@@ -16,18 +16,6 @@ const extractRateLimit = {
   max: EXTRACT_DAILY_LIMIT,
   timeWindow: '1 day',
   keyGenerator: (req: FastifyRequest) => `extract:${req.publisher?.id ?? req.ip}`,
-}
-
-/** The actual format, from the file signature — the Content-Type header is only a claim. */
-function sniffImageType(data: Buffer): ExtractImageType | null {
-  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return 'image/png'
-  }
-  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg'
-  if (data.length >= 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') {
-    return 'image/webp'
-  }
-  return null
 }
 
 const notAnImage = () =>

@@ -20,6 +20,7 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@open-event-db/db": "workspace:*",
     "@open-event-db/shared": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.36.4",
     "fastify": "^5.2.1",
     "ical.js": "^2.2.1",

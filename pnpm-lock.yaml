@@ -38,6 +38,9 @@ importers:
       '@open-event-db/shared':
         specifier: workspace:*
         version: link:../shared
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/react@19.2.14)(postgres@3.4.9)(react@19.2.5)
@@ -1262,6 +1265,9 @@ packages:
 
   avvio@9.2.0:
     resolution: {integrity: sha512-2t/sy01ArdHHE0vRH5Hsay+RtCZt3dLPji7W7/MMOCEgze5b7SNDC4j5H6FnVgPkI1MTNFGzHdHrVXDDl7QSSQ==}
+
+  aws4fetch@1.0.20:
+    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
@@ -3350,6 +3356,8 @@ snapshots:
     dependencies:
       '@fastify/error': 4.2.0
       fastq: 1.20.1
+
+  aws4fetch@1.0.20: {}
 
   bail@2.0.2: {}
 
