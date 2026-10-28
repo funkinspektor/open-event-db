@@ -307,6 +307,30 @@ describe('runIngest', () => {
     expect((item.draft as { starts_at: string }).starts_at).toBe('2026-11-06T22:00:00+01:00')
   })
 
+  it('does not overwrite an event edited by hand while the run was extracting', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    const item = await itemOf(source.id, PERSIAN)
+    const event = await accept(item)
+
+    // PUT /events/:id lands mid-run: it edits the event and detaches the item in one go
+    textExtraction.setExtractor({
+      async extract() {
+        await db.update(events).set({ title: 'Edited by hand' }).where(eq(events.id, event.id))
+        await db.update(ingestItems).set({ detachedAt: LATER }).where(eq(ingestItems.id, item.id))
+        return extraction({ start_time: '22:00', end_time: '04:00' })
+      },
+    })
+    const result = await run(source, movePersian(fixture), LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, updated: 1, synced: 0 })
+
+    const after = await eventRow(event.id)
+    expect(after.title).toBe('Edited by hand')
+    expect(after.startsAt.getTime()).toBe(event.startsAt.getTime())
+    expect(await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))).toHaveLength(0)
+  })
+
   it('marks an item gone when it leaves the feed and clears it when it comes back', async () => {
     stubExtractor()
     const source = await newSource()

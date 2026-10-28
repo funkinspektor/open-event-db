@@ -171,13 +171,22 @@ async function ingestEvent(
   }
 
   await db.transaction(async (tx) => {
-    await tx
+    // `item` was read before this run's extractions, so a human edit may have landed since. Lock the
+    // event first, then the item: the same order as PUT/DELETE /events/:id (event update, then
+    // detachIngest), so the two serialize instead of deadlocking, and the item row read below is current.
+    // (An item accepted or linked mid-run can still meet a concurrent edit of its new event in the reverse
+    // order; Postgres then aborts one side and this source records the error.)
+    if (item.eventId) {
+      await tx.select({ id: events.id }).from(events).where(eq(events.id, item.eventId)).for('update')
+    }
+    const [current] = await tx
       .update(ingestItems)
       .set({ draft, raw: ev.raw, contentHash, lastSeenAt: now, ...reappeared(item) })
       .where(eq(ingestItems.id, item.id))
+      .returning()
     // Pending items only get the new draft; rejected and detached ones stay as decided.
-    if (item.status === 'accepted' && item.eventId && !item.detachedAt) {
-      if (await syncEvent(tx, source, item.eventId, draft)) result.synced++
+    if (current?.status === 'accepted' && current.eventId && !current.detachedAt) {
+      if (await syncEvent(tx, source, current.eventId, draft)) result.synced++
     }
   })
   result.updated++
