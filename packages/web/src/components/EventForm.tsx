@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, EventStatus } from '@open-event-db/shared'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
+import type { DuplicateDraft } from '@/lib/duplicates'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
@@ -20,11 +21,18 @@ interface Props {
   knownTags: string[]
   /** Create mode after an image import: pre-fills the form and marks what couldn't be read. */
   imported?: ImportResult
+  /** Create mode: called with the fields the duplicate lookup needs, on mount and whenever one of them changes. Pass a stable callback. */
+  onDraftChange?: (d: DuplicateDraft) => void
 }
 
 const LINK_KEYS = ['website', 'tickets', 'ra', 'instagram', 'facebook', 'telegram', 'soundcloud']
 
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null)
+/** Like fromLocalInput, but tolerates a half-typed value while the user is still editing. */
+const isoOrNull = (v: string) => {
+  const d = v ? new Date(v) : null
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null
+}
 
 const formatDay = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', {
@@ -35,7 +43,7 @@ const formatDay = (day: string) =>
     timeZone: 'Europe/Berlin',
   })
 
-export function EventForm({ mode, event, canCancel = false, knownTags, imported }: Props) {
+export function EventForm({ mode, event, canCancel = false, knownTags, imported, onDraftChange }: Props) {
   const router = useRouter()
   const pre = imported?.prefill
   const [title, setTitle] = useState(event?.title ?? pre?.title ?? '')
@@ -53,6 +61,18 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported 
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const venueId = venue?.id ?? null
+  useEffect(() => {
+    if (mode !== 'create') return
+    onDraftChange?.({
+      venueId,
+      locationText: venueId ? null : locationText.trim() || null,
+      startsAt: isoOrNull(startsAt),
+      endsAt: isoOrNull(endsAt),
+      title,
+    })
+  }, [mode, onDraftChange, venueId, locationText, startsAt, endsAt, title])
 
   // After an import, empty fields stay marked until filled: they're the ones the image didn't have
   const missing = (empty: boolean) => (imported && empty ? ' kk-input--missing' : '')

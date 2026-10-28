@@ -35,6 +35,11 @@ export default async function EditEventPage({ params }: { params: Params }) {
           {!isClaimed(event) && ' The organizer hasn’t claimed this event yet, so any scout can edit it.'}
         </p>
       </section>
+      {event.synced_from && (
+        <div className="kk-notice mb-[18px]" role="status">
+          This event is synced from {event.synced_from.source_name}. Editing it stops the sync.
+        </div>
+      )}
       <EventForm mode="edit" event={event} canCancel={canCancel(event, me)} knownTags={tags} />
       {canManageOwners(event, me) && (
         <div className="mt-10">

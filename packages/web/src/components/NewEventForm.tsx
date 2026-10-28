@@ -1,15 +1,15 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { EventDraft, EventSlim, Venue } from '@open-event-db/shared'
+import type { DuplicateCandidate, EventDraft, Venue } from '@open-event-db/shared'
 import { draftToPrefill, pickVenue, venueQueries, type ImportResult, type VenueMatchable } from '@/lib/draft'
-import { berlinDayStart } from '@/lib/filters'
+import { duplicateQuery, type DuplicateDraft } from '@/lib/duplicates'
 import { EventForm } from './EventForm'
 import { EventImport } from './EventImport'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
-const DAY = 24 * 60 * 60 * 1000
+const DUPLICATE_DEBOUNCE_MS = 500
 
 async function searchVenues(name: string): Promise<VenueMatchable[]> {
   for (const q of venueQueries(name)) {
@@ -21,15 +21,20 @@ async function searchVenues(name: string): Promise<VenueMatchable[]> {
   return []
 }
 
-/** Events on the same Berlin day at the same venue — a hint, never a block (PRD Event Capture, Decision 11). */
-async function findPossibleDuplicates(venueId: string, day: string): Promise<EventSlim[]> {
-  const from = berlinDayStart(day)
-  const to = berlinDayStart(new Date(Date.parse(`${day}T12:00:00Z`) + DAY).toISOString().slice(0, 10))
-  const params = new URLSearchParams({ venue_id: venueId, from: from.toISOString(), to: to.toISOString(), limit: '5' })
-  const res = await fetch(`${API_URL}/api/v1/events?${params}`)
+/** Possible duplicates of what's been entered so far — a hint, never a block (PRD Event Capture, Decision 11). Likely ones first. */
+async function findPossibleDuplicates(params: URLSearchParams, signal: AbortSignal): Promise<DuplicateCandidate[]> {
+  const res = await fetch(`${API_URL}/api/v1/events/duplicates?${params}`, { signal })
   if (!res.ok) return []
-  return ((await res.json()) as { data: EventSlim[] }).data
+  const { data } = (await res.json()) as { data: DuplicateCandidate[] }
+  return [...data].sort((a, b) => Number(b.likely) - Number(a.likely))
 }
+
+const sameDraft = (a: DuplicateDraft, b: DuplicateDraft) =>
+  a.venueId === b.venueId &&
+  a.locationText === b.locationText &&
+  a.startsAt === b.startsAt &&
+  a.endsAt === b.endsAt &&
+  a.title === b.title
 
 /** The create page: optional image import on top, then the regular form — pre-filled after an import. */
 export function NewEventForm({ knownTags }: { knownTags: string[] }) {
@@ -37,7 +42,8 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [imports, setImports] = useState(0)
   const [imageCount, setImageCount] = useState(1)
-  const [duplicates, setDuplicates] = useState<EventSlim[]>([])
+  const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([])
+  const [draft, setDraft] = useState<DuplicateDraft | null>(null)
 
   const onImported = useCallback(
     async (draft: EventDraft, count: number) => {
@@ -59,13 +65,31 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
       })
       setImports((n) => n + 1)
       setImageCount(count)
-      setDuplicates([])
-      if (venue && draft.start_date) {
-        findPossibleDuplicates(venue.id, draft.start_date).then(setDuplicates, () => {})
-      }
     },
     [knownTags],
   )
+
+  // The form reports its fields on mount and on change — after an import it remounts pre-filled, which covers that path too.
+  const onDraftChange = useCallback(
+    (d: DuplicateDraft) => setDraft((prev) => (prev && sameDraft(prev, d) ? prev : d)),
+    [],
+  )
+
+  useEffect(() => {
+    const params = draft && duplicateQuery(draft)
+    if (!params) {
+      setDuplicates([])
+      return
+    }
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => {
+      findPossibleDuplicates(params, ctrl.signal).then(setDuplicates, () => {})
+    }, DUPLICATE_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timer)
+      ctrl.abort()
+    }
+  }, [draft])
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -92,7 +116,7 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
       {busy && <FormSkeleton />}
       {/* Kept mounted while an import runs, so a failed import doesn't lose what was typed */}
       <div hidden={busy}>
-        <EventForm key={imports} mode="create" knownTags={knownTags} imported={result ?? undefined} />
+        <EventForm key={imports} mode="create" knownTags={knownTags} imported={result ?? undefined} onDraftChange={onDraftChange} />
       </div>
     </div>
   )
