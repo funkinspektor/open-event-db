@@ -37,21 +37,28 @@ export function EventRow({
         {showDate && <span className="kk-event__date">{running ? 'Now' : formatRowDate(event.starts_at, now)}</span>}
         <span className="kk-event__time">{formatTimeRange(event.starts_at, event.ends_at)}</span>
       </div>
-      <div className="kk-event__main">
-        <h3 className="kk-event__title" style={titleSize ? { fontSize: titleSize } : undefined}>
-          <Link href={`/events/${event.id}`}>{event.title}</Link>
-        </h3>
-        {meta === 'venue' ? (
-          <p className="kk-event__meta">
-            {event.venue ? (
-              <Link href={`/venues/${event.venue.id}`}>{event.venue.name}</Link>
-            ) : (
-              (event.location_text ?? 'Location TBA')
-            )}{' '}
-            · {event.venue?.city ?? event.city}
-          </p>
-        ) : (
-          event.tags.length > 0 && <p className="kk-event__meta">{event.tags.join(' · ')}</p>
+      <div className={`kk-event__main${event.image_url ? ' kk-event__main--thumb' : ''}`}>
+        <div className="min-w-0">
+          <h3 className="kk-event__title" style={titleSize ? { fontSize: titleSize } : undefined}>
+            <Link href={`/events/${event.id}`}>{event.title}</Link>
+          </h3>
+          {meta === 'venue' ? (
+            <p className="kk-event__meta">
+              {event.venue ? (
+                <Link href={`/venues/${event.venue.id}`}>{event.venue.name}</Link>
+              ) : (
+                (event.location_text ?? 'Location TBA')
+              )}{' '}
+              · {event.venue?.city ?? event.city}
+            </p>
+          ) : (
+            event.tags.length > 0 && <p className="kk-event__meta">{event.tags.join(' · ')}</p>
+          )}
+        </div>
+        {event.image_url && (
+          <span className="kk-thumb kk-thumb--row" aria-hidden="true">
+            <img src={event.image_url} alt="" loading="lazy" />
+          </span>
         )}
       </div>
       <div className="kk-event__aside">

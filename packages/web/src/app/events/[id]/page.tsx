@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: e.title,
     description,
-    ...shareMetadata(`/events/${e.id}`, e.title, description),
+    ...shareMetadata(`/events/${e.id}`, e.title, description, e.image_url),
   }
 }
 
@@ -78,6 +78,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
     name: e.title,
     url: absoluteUrl(`/events/${e.id}`),
     description: e.description ? markdownToPlainText(e.description) : undefined,
+    ...(e.image_url ? { image: [e.image_url] } : {}),
     startDate: e.starts_at,
     ...(e.ends_at ? { endDate: e.ends_at } : {}),
     eventStatus: SCHEMA_STATUS[e.status],
@@ -109,6 +110,12 @@ export default async function EventPage({ params, searchParams }: { params: Para
         }
       : {}),
   }
+
+  const image = e.image_url && (
+    <a href={e.image_url} target="_blank" rel="noopener" className="kk-event-image">
+      <img src={e.image_url} alt={`Image for ${e.title}`} />
+    </a>
+  )
 
   return (
     <article className="kk-container" style={{ gap: 52 }}>
@@ -148,6 +155,9 @@ export default async function EventPage({ params, searchParams }: { params: Para
       </header>
 
       <hr className="kk-rule" />
+
+      {/* Narrow layouts stack the aside below the text, so the image goes first there */}
+      {image && <div className="max-w-[380px] lg:hidden">{image}</div>}
 
       <div className="flex flex-wrap items-start gap-12">
         <div className="flex min-w-0 flex-col gap-10" style={{ flex: '999 1 520px' }}>
@@ -203,6 +213,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
         </div>
 
         <aside className="flex max-w-[380px] flex-col gap-3.5" style={{ flex: '1 1 300px' }}>
+          {image && <div className="mb-6 hidden lg:block">{image}</div>}
           <h2 className="kk-eyebrow">Location</h2>
           {e.venue ? (
             <>
