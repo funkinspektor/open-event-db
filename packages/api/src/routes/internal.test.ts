@@ -30,8 +30,8 @@ const stubRunner = () =>
     return RESULT
   })
 
-const post = (headers: Record<string, string> = {}) =>
-  app.inject({ method: 'POST', url: '/internal/ingest/run', headers })
+const post = (headers: Record<string, string> = {}, payload?: string | object) =>
+  app.inject({ method: 'POST', url: '/internal/ingest/run', headers, payload })
 
 describe('POST /internal/ingest/run', () => {
   it('is 404 when INGEST_CRON_SECRET is not set, even with a header', async () => {
@@ -70,11 +70,50 @@ describe('POST /internal/ingest/run', () => {
     expect(runs).toBe(1)
   })
 
+  // Scaleway cron triggers cannot set headers; they POST their `args` as the JSON body
+  it('accepts the secret from the JSON body', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    const res = await post({}, { secret: 'right-secret' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: RESULT })
+    expect(runs).toBe(1)
+  })
+
+  it('is 403 for a wrong or malformed body secret', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    expect((await post({}, { secret: 'wrong-secret' })).statusCode).toBe(403)
+    expect((await post({}, { secret: ['right-secret'] })).statusCode).toBe(403)
+    expect((await post({}, { other: 'right-secret' })).statusCode).toBe(403)
+    expect(runs).toBe(0)
+  })
+
+  it('accepts the header with an empty JSON body', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    const json = await post({ 'x-ingest-secret': 'right-secret', 'content-type': 'application/json' }, '')
+    expect(json.statusCode).toBe(200)
+    const blank = await post({ 'x-ingest-secret': 'right-secret', 'content-type': 'application/json' }, '  ')
+    expect(blank.statusCode).toBe(200)
+    expect(runs).toBe(2)
+    // Without the secret an empty body is still a 403, not a parse error
+    expect((await post({ 'content-type': 'application/json' }, '')).statusCode).toBe(403)
+  })
+
   it('is not subject to the global rate limit', async () => {
     process.env.INGEST_CRON_SECRET = 'right-secret'
     stubRunner()
     for (let i = 0; i < 105; i++) {
       expect((await post({ 'x-ingest-secret': 'right-secret' })).statusCode).toBe(200)
+    }
+  })
+
+  it('is not subject to the global rate limit with the secret in the body', async () => {
+    process.env.INGEST_CRON_SECRET = 'right-secret'
+    stubRunner()
+    for (let i = 0; i < 105; i++) {
+      expect((await post({}, { secret: 'right-secret' })).statusCode).toBe(200)
     }
   })
 })

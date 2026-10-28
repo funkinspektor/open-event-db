@@ -59,7 +59,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     // The cron call is exempt too, but only with the right secret, so guessing it stays rate limited
     allowList: (req) =>
       (!!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN) ||
-      hasIngestSecret(req.headers['x-ingest-secret']),
+      hasIngestSecret(req),
   })
 
   await app.register(healthRoutes)

@@ -51,6 +51,8 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 | `SCALEWAY_REGION` | `fr-par` (region of the verified TEM domain) |
 | `EMAIL_FROM`, `EMAIL_FROM_NAME` | verified TEM sender |
 | `VISION_MODEL` | `mistral-medium-3.5-128b` |
+| `TEXT_MODEL` | optional; model for reading feed descriptions, defaults to `VISION_MODEL` |
+| `INGEST_CRON_SECRET` 🔒 | `openssl rand -hex 32` — without it `/internal/ingest/run` answers 404 |
 
 **Web**
 
@@ -77,7 +79,38 @@ scripts/prod-db.sh pnpm db:cli create-publisher "Letzte Welle" letzte-welle some
 scripts/prod-db.sh pnpm db:migrate
 ```
 
-## 4. Domains
+The feed-ingest migrations run `CREATE EXTENSION pg_trgm` (duplicate detection). On the managed database
+the migrating user needs `CREATE` on the database for that; otherwise create the extension once as the
+admin user before deploying.
+
+## 4. Feed ingest cron
+
+The API container gets a Scaleway cron trigger that runs every enabled ingest source once a day:
+
+| Setting | Value |
+|---|---|
+| Schedule | `0 4 * * *` — cron triggers run in UTC: 05:00 Berlin in winter, 06:00 in summer |
+| Args | `{"secret":"<INGEST_CRON_SECRET>"}` |
+
+Cron triggers can't set headers; Scaleway POSTs the args as the JSON body and the API reads the secret from
+there (`X-Ingest-Secret` works too, for a manual `curl`).
+
+> **Open:** Scaleway's docs say a container cron trigger POSTs to the root path `/`, while the API serves the
+> run at `/internal/ingest/run`. Check the request path the trigger actually uses before relying on it.
+
+The run is synchronous inside the request: fetching every feed and extracting the times of new events can
+take minutes, so it must finish within the container's request timeout. Do the first production run, which
+extracts every upcoming event at once, from a laptop with the CLI instead:
+
+```bash
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest acud
+```
+
+The CLI picks up `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID` and `TEXT_MODEL`/`VISION_MODEL` from the local
+`.env`; `DATABASE_URL` from `prod-db.sh` takes precedence over the one in `.env`. A source with
+`extract_from_text` fails with a clear `lastError` when text extraction isn't configured.
+
+## 5. Domains
 
 Add both custom domains to their containers in the Scaleway console (it issues the TLS certificates)
 and create the CNAME records it shows at the DNS provider.
