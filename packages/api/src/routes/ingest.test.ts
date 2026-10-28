@@ -237,6 +237,27 @@ describe('GET /ingest/items and /ingest/count', () => {
   })
 })
 
+describe('public visibility', () => {
+  it('never lists a pending inbox item on GET /api/v1/events, only an accepted one', async () => {
+    const startsAt = '2031-05-01T20:00:00.000Z'
+    const pending = await newItem({}, draftOf({ title: `Unaccepted ${stamp}`, starts_at: startsAt }))
+    const accepted = await newItem({}, draftOf({ title: `Accepted ${stamp}`, starts_at: startsAt }))
+    const ok = await post(`/items/${accepted.id}/accept`, keyScout)
+    expect(ok.statusCode).toBe(200)
+    eventIds.push(ok.json().data.event_id)
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/events?from=2031-05-01T19:00:00Z&to=2031-05-01T21:00:00Z&limit=100',
+    })
+    expect(res.statusCode).toBe(200)
+    const titles = res.json().data.map((e: { title: string }) => e.title)
+    expect(titles).toContain(`Accepted ${stamp}`)
+    expect(titles).not.toContain(`Unaccepted ${stamp}`)
+    expect((await itemRow(pending.id)).status).toBe('pending')
+  })
+})
+
 describe('POST /ingest/items/:id/accept', () => {
   it('publishes the draft as an unclaimed scout event', async () => {
     const item = await newItem({}, draftOf({ venue_id: venue.id, ends_at: '2031-03-01T23:00:00.000Z', location_text: 'Back room' }))

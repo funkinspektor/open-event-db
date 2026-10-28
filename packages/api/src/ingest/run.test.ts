@@ -429,6 +429,37 @@ describe('runIngest', () => {
     expect((await eventRow(event.id)).startsAt.getTime()).toBe(event.startsAt.getTime())
   })
 
+  it('treats an empty feed as an error when items are stored, even without a recorded last count', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    // A first run that crashed after writing items but before recording its count
+    await db.update(ingestSources).set({ lastItemCount: null }).where(eq(ingestSources.id, source.id))
+
+    const result = await run(source, EMPTY_FEED, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: false, seen: 0, gone: 0 })
+    expect((await sourceRow(source.id)).lastError).toMatch(/empty/i)
+    expect((await itemsOf(source.id)).every((i) => i.goneAt === null)).toBe(true)
+  })
+
+  it('does not extract for rejected or detached items whose content changed', async () => {
+    stubExtractor()
+    const source = await newSource()
+    await run(source, fixture, NOW)
+    await db.update(ingestItems).set({ status: 'rejected' }).where(eq(ingestItems.id, (await itemOf(source.id, PERSIAN)).id))
+    await accept(await itemOf(source.id, '2390'), { detachedAt: NOW })
+
+    const stub = stubExtractor()
+    const changed = fixture
+      .replace('SUMMARY:Persian Love: SHAB SHOD', 'SUMMARY:Persian Love: SHAB SHOD (changed)')
+      .replace('SUMMARY:Burre w/ Heavenphetamine', 'SUMMARY:Burre w/ Heavenphetamine (changed)')
+    const result = await run(source, changed, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, updated: 2, synced: 0 })
+    expect(stub.calls).toBe(0)
+    expect((await itemOf(source.id, PERSIAN)).draft).toMatchObject({ title: 'Persian Love: SHAB SHOD (changed)' })
+    expect((await itemOf(source.id, '2390')).draft).toMatchObject({ title: 'Burre w/ Heavenphetamine (changed)' })
+  })
+
   it('fails a source with an invalid config', async () => {
     const source = await newSource({ external_id_pattern: '(' })
     const result = await run(source, fixture, NOW)

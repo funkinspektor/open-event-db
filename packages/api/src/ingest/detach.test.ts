@@ -19,6 +19,8 @@ import { buildApp } from '../app.js'
 let app: FastifyInstance
 let scout: Publisher
 let owner: Publisher
+let creator: Publisher
+let keyC: string
 let keyS: string
 let sourceId: string
 const stamp = Date.now()
@@ -83,6 +85,19 @@ beforeAll(async () => {
     })
     .returning()
   owner = o!
+  const cr = generateApiKey()
+  keyC = cr.key
+  const [c] = await db
+    .insert(publishers)
+    .values({
+      name: 'Detach Creator',
+      slug: `detach-creator-${stamp}`,
+      email: `detach-creator-${stamp}@test.local`,
+      verified: true,
+      apiKeyHash: cr.hash,
+    })
+    .returning()
+  creator = c!
   const [s] = await db
     .insert(ingestSources)
     .values({
@@ -99,10 +114,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(ingestSources).where(eq(ingestSources.id, sourceId))
   await db.delete(editHistory).where(inArray(editHistory.publisherId, [scout.id]))
-  await db.delete(events).where(eq(events.createdBy, scout.id))
-  await db.delete(eventOwners).where(eq(eventOwners.publisherId, owner.id))
-  await db.delete(editHistory).where(eq(editHistory.publisherId, owner.id))
-  await db.delete(publishers).where(inArray(publishers.id, [scout.id, owner.id]))
+  await db.delete(events).where(inArray(events.createdBy, [scout.id, creator.id]))
+  await db.delete(eventOwners).where(inArray(eventOwners.publisherId, [owner.id, creator.id]))
+  await db.delete(editHistory).where(inArray(editHistory.publisherId, [owner.id, creator.id]))
+  await db.delete(publishers).where(inArray(publishers.id, [scout.id, owner.id, creator.id]))
   await app.close()
 })
 
@@ -139,6 +154,23 @@ describe('detach synced events', () => {
     })
     expect(res.statusCode).toBe(200)
     expect((await detachedAt(itemId))!.getTime()).toBe(original.getTime())
+  })
+
+  it('detaches on POST /events/:id/owners', async () => {
+    // A claimed event whose item is still synced (e.g. claimed before detach existed)
+    const { eventId, itemId } = await syncedEvent()
+    await db.update(events).set({ createdBy: creator.id }).where(eq(events.id, eventId))
+    await db.insert(eventOwners).values({ eventId, publisherId: creator.id, role: 'creator' })
+    expect(await detachedAt(itemId)).toBeNull()
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${eventId}/owners`,
+      headers: { authorization: `Bearer ${keyC}` },
+      payload: { publisher_id: owner.id },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(await detachedAt(itemId)).not.toBeNull()
   })
 
   it('detaches on CLI claim-event', async () => {

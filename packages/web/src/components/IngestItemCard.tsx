@@ -113,7 +113,7 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
       {draft.image_url && (
         <span className="kk-thumb flex-none">
           {/* Feed hosts are arbitrary, so no next/image optimisation. */}
-          <img src={draft.image_url} alt="" loading="lazy" />
+          <img src={draft.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
         </span>
       )}
 

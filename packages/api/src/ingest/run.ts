@@ -160,7 +160,9 @@ async function ingestEvent(
     return
   }
 
-  const { extraction, failed } = await extractTimes(ev, config)
+  // Rejected and detached items never feed an event, so reading their times would only cost LLM calls
+  const settled = item !== undefined && (item.status === 'rejected' || item.detachedAt !== null)
+  const { extraction, failed } = settled ? { extraction: null, failed: false } : await extractTimes(ev, config)
   // Checked before it is stored: an invalid draft fails the source instead of breaking the inbox later
   const draft = ingestDraftSchema.parse(normalizeFeedEvent(ev, config, extraction))
   const contentHash = failed ? null : ev.hash
@@ -208,11 +210,14 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
     const config = ingestSourceConfigSchema.parse(source.config)
     const feed = parseIcal(await fetchText(feedUrl(source, now)), config)
     result.seen = feed.length
-    if (feed.length === 0 && (source.lastItemCount ?? 0) > 0) {
-      throw new Error(`Feed is empty although the last run had ${source.lastItemCount} events; nothing marked gone`)
+    const existing = await db.select().from(ingestItems).where(eq(ingestItems.sourceId, source.id))
+    // Stored items count too: a first run that crashed before recording its count left no lastItemCount
+    if (feed.length === 0 && ((source.lastItemCount ?? 0) > 0 || existing.length > 0)) {
+      throw new Error(
+        `Feed is empty although the source had events before (last run: ${source.lastItemCount ?? 'none'}, stored items: ${existing.length}); nothing marked gone`,
+      )
     }
 
-    const existing = await db.select().from(ingestItems).where(eq(ingestItems.sourceId, source.id))
     const byExternalId = new Map(existing.map((item) => [item.externalId, item]))
     for (const ev of feed) {
       await ingestEvent(source, config, ev, byExternalId.get(ev.externalId), now, result)
