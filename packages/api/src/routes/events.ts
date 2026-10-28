@@ -34,6 +34,7 @@ import { diff, logEdit } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import {
+  cancelEvent,
   eventSnapshot,
   getEventDetail,
   getOwners,
@@ -262,24 +263,7 @@ export async function eventRoutes(app: FastifyInstance) {
       )
     }
 
-    if (current.status !== 'cancelled') {
-      await db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(events)
-          .set({ status: 'cancelled', updatedAt: new Date() })
-          .where(eq(events.id, current.id))
-          .returning()
-        if (!updated) throw new Error('update returned no row')
-        await logEdit(tx, {
-          entityType: 'event',
-          entityId: current.id,
-          publisherId: me.id,
-          action: 'cancelled',
-          diff: diff(eventSnapshot(current), eventSnapshot(updated)),
-        })
-        await detachIngest(tx, current.id)
-      })
-    }
+    await db.transaction((tx) => cancelEvent(tx, current, me.id))
 
     return { data: await getEventDetail(current.id) }
   })

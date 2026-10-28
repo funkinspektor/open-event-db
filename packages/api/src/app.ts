@@ -11,6 +11,7 @@ import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
 import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
+import { ingestRoutes } from './routes/ingest.js'
 import { hasIngestSecret, internalRoutes } from './routes/internal.js'
 
 const UUID_PARAMS = ['id', 'publisher_id'] as const
@@ -75,6 +76,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
       })
       await api.register(eventRoutes)
       await api.register(extractRoutes)
+      await api.register(ingestRoutes)
       await api.register(venueRoutes)
       await api.register(publisherRoutes)
       await api.register(tagsRoutes)

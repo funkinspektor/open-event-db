@@ -14,3 +14,4 @@ export const badRequest = (message: string, code = 'bad_request') => new ApiErro
 export const unauthorized = (message = 'Authentication required') =>
   new ApiError(401, 'unauthorized', message)
 export const forbidden = (message = 'Not allowed') => new ApiError(403, 'forbidden', message)
+export const conflict = (message = 'Conflict') => new ApiError(409, 'conflict', message)

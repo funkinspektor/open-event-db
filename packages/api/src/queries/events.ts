@@ -1,7 +1,18 @@
-import { eq, sql } from 'drizzle-orm'
-import { eventOwners, events, publishers, venues, type Event, type Venue } from '@open-event-db/db'
+import { and, eq, isNull, sql } from 'drizzle-orm'
+import {
+  eventOwners,
+  events,
+  ingestItems,
+  ingestSources,
+  publishers,
+  venues,
+  type Event,
+  type Venue,
+} from '@open-event-db/db'
 import type { EventAddedBy, EventDetail, EventOwnerRole, EventSlim } from '@open-event-db/shared'
 import { db } from '../db.js'
+import { diff, logEdit, type DbOrTx } from '../history.js'
+import { detachIngest } from '../ingest/detach.js'
 import { serializeCoordinates } from '../serializers.js'
 
 export function eventSnapshot(e: Event): Record<string, unknown> {
@@ -78,6 +89,7 @@ function serializeEventDetail(
   v: Venue | null,
   addedBy: EventAddedBy,
   owners: { publisherId: string; slug: string; name: string; role: EventOwnerRole }[],
+  syncedFrom: EventDetail['synced_from'],
 ): EventDetail {
   return {
     id: e.id,
@@ -110,7 +122,7 @@ function serializeEventDetail(
       name: o.name,
       role: o.role,
     })),
-    synced_from: null,
+    synced_from: syncedFrom,
   }
 }
 
@@ -125,10 +137,15 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
         name: publishers.name,
         is_scout: publishers.isScout,
       },
+      sourceName: ingestSources.name,
+      itemDraft: ingestItems.draft,
     })
     .from(events)
     .leftJoin(venues, eq(events.venueId, venues.id))
     .innerJoin(publishers, eq(publishers.id, events.createdBy))
+    // Still synced from a feed: an item points here and no human edit has detached it
+    .leftJoin(ingestItems, and(eq(ingestItems.eventId, events.id), isNull(ingestItems.detachedAt)))
+    .leftJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
     .where(eq(events.id, id))
     .limit(1)
   if (!row) return null
@@ -144,7 +161,30 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
     .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
     .where(eq(eventOwners.eventId, id))
 
-  return serializeEventDetail(row.event, row.venue, row.addedBy, owners)
+  const syncedFrom =
+    row.sourceName === null
+      ? null
+      : { source_name: row.sourceName, source_url: (row.itemDraft?.source_url as string | null | undefined) ?? null }
+  return serializeEventDetail(row.event, row.venue, row.addedBy, owners, syncedFrom)
+}
+
+/** Cancels an event, logs it and stops feed sync. No-op for an already cancelled event. */
+export async function cancelEvent(tx: DbOrTx, current: Event, publisherId: string): Promise<void> {
+  if (current.status === 'cancelled') return
+  const [updated] = await tx
+    .update(events)
+    .set({ status: 'cancelled', updatedAt: new Date() })
+    .where(eq(events.id, current.id))
+    .returning()
+  if (!updated) throw new Error('update returned no row')
+  await logEdit(tx, {
+    entityType: 'event',
+    entityId: current.id,
+    publisherId,
+    action: 'cancelled',
+    diff: diff(eventSnapshot(current), eventSnapshot(updated)),
+  })
+  await detachIngest(tx, current.id)
 }
 
 /** Owner rows in the shape the shared permission helpers expect. Empty = unclaimed. */
