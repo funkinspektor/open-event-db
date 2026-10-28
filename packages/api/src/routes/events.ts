@@ -18,6 +18,7 @@ import {
   canCancel,
   canEdit,
   canManageOwners,
+  duplicateQuerySchema,
   eventCreateSchema,
   eventListQuerySchema,
   eventUpdateSchema,
@@ -31,6 +32,7 @@ import { badRequest, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
+import { findDuplicateCandidates } from '../queries/duplicates.js'
 import {
   eventSnapshot,
   getEventDetail,
@@ -117,6 +119,20 @@ export async function eventRoutes(app: FastifyInstance) {
       data: page.map(serializeSlimEvent),
       meta: { cursor: nextCursor, has_more: hasMore },
     }
+  })
+
+  // Static path: must stay registered before '/events/:id'
+  app.get('/events/duplicates', async (req) => {
+    const q = duplicateQuerySchema.parse(req.query)
+    const data = await findDuplicateCandidates({
+      venueId: q.venue_id,
+      locationText: q.location_text,
+      startsAt: new Date(q.starts_at),
+      endsAt: q.ends_at ? new Date(q.ends_at) : null,
+      title: q.title,
+      excludeId: q.exclude_id,
+    })
+    return { data }
   })
 
   app.get<{ Params: { id: string } }>('/events/:id', async (req) => {
