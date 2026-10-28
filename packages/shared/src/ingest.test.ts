@@ -88,6 +88,7 @@ describe('ingestItemViewSchema', () => {
         source_url: 'https://example.org/e/1',
         times_unverified: true,
       },
+      venue_name: null,
       gone_at: null,
       event_id: null,
       duplicates: [

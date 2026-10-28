@@ -72,6 +72,8 @@ export const ingestItemViewSchema = z.object({
   status: ingestItemStatusSchema,
   source: z.object({ slug: z.string(), name: z.string() }),
   draft: ingestDraftSchema,
+  /** Name of the draft's mapped venue, null without one. */
+  venue_name: z.string().nullable(),
   gone_at: iso.nullable(),
   event_id: uuid.nullable(),
   duplicates: z.array(duplicateCandidateSchema),

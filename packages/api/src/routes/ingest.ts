@@ -61,9 +61,15 @@ async function counts(): Promise<{ new: number; gone: number }> {
 
 async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<IngestItemView[]> {
   const base = db
-    .select({ item: ingestItems, source: { slug: ingestSources.slug, name: ingestSources.name } })
+    .select({
+      item: ingestItems,
+      source: { slug: ingestSources.slug, name: ingestSources.name },
+      venueName: venues.name,
+    })
     .from(ingestItems)
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+    // Compared as text: a broken stored venue_id must not make the uuid cast fail the whole list
+    .leftJoin(venues, sql`${venues.id}::text = ${ingestItems.draft}->>'venue_id'`)
   const rows =
     view === 'new'
       ? await base.where(isNew()).orderBy(asc(draftStartsAt), asc(ingestItems.id))
@@ -73,15 +79,15 @@ async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<
           .orderBy(asc(draftStartsAt), asc(ingestItems.id))
 
   // A broken stored draft must not take the inbox down for every scout: skip it and log it
-  const valid = rows.flatMap(({ item, source }) => {
+  const valid = rows.flatMap(({ item, source, venueName }) => {
     const parsed = ingestDraftSchema.safeParse(item.draft)
-    if (parsed.success) return [{ item, source, draft: parsed.data }]
+    if (parsed.success) return [{ item, source, venueName, draft: parsed.data }]
     log.warn({ itemId: item.id, issues: parsed.error.issues }, 'skipping ingest item with an invalid draft')
     return []
   })
 
   return Promise.all(
-    valid.map(async ({ item, source, draft }) => {
+    valid.map(async ({ item, source, venueName, draft }) => {
       const duplicates =
         view === 'new'
           ? await findDuplicateCandidates({
@@ -97,6 +103,7 @@ async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<
         status: item.status,
         source,
         draft,
+        venue_name: venueName,
         gone_at: item.goneAt?.toISOString() ?? null,
         event_id: item.eventId,
         duplicates,

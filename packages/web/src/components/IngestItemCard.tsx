@@ -42,7 +42,7 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
   const { draft } = item
   const gone = view === 'gone'
   const where = draft.venue_id ? (
-    <Link href={`/venues/${draft.venue_id}`}>{draft.location_text ?? 'Venue'}</Link>
+    <Link href={`/venues/${draft.venue_id}`}>{item.venue_name ?? draft.location_text ?? 'Venue'}</Link>
   ) : (
     (draft.location_text ?? 'Location TBA')
   )

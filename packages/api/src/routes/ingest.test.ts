@@ -169,6 +169,8 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(first.status).toBe('pending')
     expect(first.event_id).toBeNull()
     expect(first.draft.title).toBe('Same Night Party')
+    expect(first.venue_name).toBe(venue.name)
+    expect(mine.find((i: { id: string }) => i.id === late.id).venue_name).toBeNull()
     expect(first.duplicates.map((d: { id: string }) => d.id)).toEqual([dup!.id])
     expect(first.duplicates[0].likely).toBe(true)
     expect(mine.find((i: { id: string }) => i.id === late.id).duplicates).toEqual([])
