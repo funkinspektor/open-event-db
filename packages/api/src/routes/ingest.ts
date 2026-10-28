@@ -29,9 +29,11 @@ function requireScout(req: FastifyRequest) {
 const draftStartsAt = sql`(${ingestItems.draft}->>'starts_at')::timestamptz`
 
 const isNew = and(eq(ingestItems.status, 'pending'), isNull(ingestItems.goneAt))
-// Accepted items that left their feed and still wait for a decision. An event cancelled elsewhere is settled.
+// Accepted items that left their feed and still wait for a decision. Detached items (claimed, edited by a
+// human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(
   eq(ingestItems.status, 'accepted'),
+  isNull(ingestItems.detachedAt),
   isNotNull(ingestItems.goneAt),
   isNull(ingestItems.goneResolvedAt),
   isNotNull(ingestItems.eventId),
@@ -214,7 +216,16 @@ export async function ingestRoutes(app: FastifyInstance) {
       // Event first, then item: the lock order of PUT/DELETE /events/:id and the sync run
       const [event] = await tx.select().from(events).where(eq(events.id, found.eventId)).for('update')
       const [item] = await tx.select().from(ingestItems).where(eq(ingestItems.id, req.params.id)).for('update')
-      if (!event || !item || item.status !== 'accepted' || !item.goneAt || item.goneResolvedAt) {
+      // The same conditions as the Gone view, checked under the locks so a detach committed meanwhile counts
+      if (
+        !event ||
+        !item ||
+        item.status !== 'accepted' ||
+        item.detachedAt ||
+        !item.goneAt ||
+        item.goneResolvedAt ||
+        event.status === 'cancelled'
+      ) {
         throw conflict('Item is not gone from its source')
       }
 

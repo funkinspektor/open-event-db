@@ -407,6 +407,33 @@ describe('gone items', () => {
     expect(await listIds('gone')).not.toContain(item.id)
   })
 
+  it('does not list or act on detached items, so scouts cannot cancel a human-owned event', async () => {
+    const [owned] = await db
+      .insert(events)
+      .values({ title: `Owned event ${++seq}`, startsAt: new Date('2034-02-01T20:00:00Z'), city: 'Gonetown', createdBy: alice.id })
+      .returning()
+    eventIds.push(owned!.id)
+    const edited = await newItem({ status: 'accepted', eventId: owned!.id, goneAt: new Date(), detachedAt: new Date() })
+    // A pending item linked to alice's event is detached at link time; the feed then drops it
+    const pending = await newItem()
+    expect((await post(`/items/${pending.id}/link`, keyScout, { event_id: owned!.id })).statusCode).toBe(200)
+    await db.update(ingestItems).set({ goneAt: new Date() }).where(eq(ingestItems.id, pending.id))
+
+    const ids = await listIds('gone')
+    expect(ids).not.toContain(edited.id)
+    expect(ids).not.toContain(pending.id)
+
+    for (const item of [edited, pending]) {
+      for (const action of ['cancel', 'keep']) {
+        const res = await post(`/items/${item.id}/gone`, keyScout, { action })
+        expect(res.statusCode, `${action} on ${item.id}`).toBe(409)
+        expect(res.json().error.code).toBe('conflict')
+      }
+      expect((await itemRow(item.id)).goneResolvedAt).toBeNull()
+    }
+    expect((await eventRow(owned!.id)).status).toBe('scheduled')
+  })
+
   it('409s for an item that is not gone and 400s for a bad action', async () => {
     const pending = await newItem()
     expect((await post(`/items/${pending.id}/gone`, keyScout, { action: 'keep' })).statusCode).toBe(409)
