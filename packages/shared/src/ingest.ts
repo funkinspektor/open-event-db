@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { linksSchema } from './links.js'
+import { venueDetailEmbedSchema } from './events.js'
 
 const iso = z.string().datetime({ offset: true })
 const uuid = z.string().uuid()
@@ -82,6 +83,21 @@ export const ingestItemViewSchema = z.object({
 })
 
 export type IngestItemView = z.infer<typeof ingestItemViewSchema>
+
+/**
+ * Where an item stands for a scout: `new` and `gone` are the inbox views (with their actions); `accepted`
+ * and `rejected` are decided; `over` ended before a decision; `removed` left its feed before a decision.
+ */
+export const ingestItemStateSchema = z.enum(['new', 'gone', 'accepted', 'rejected', 'over', 'removed'])
+export type IngestItemState = z.infer<typeof ingestItemStateSchema>
+
+export const ingestItemDetailSchema = ingestItemViewSchema.extend({
+  state: ingestItemStateSchema,
+  /** The draft's mapped venue with address and coordinates, as on an event page. */
+  venue: venueDetailEmbedSchema.nullable(),
+})
+
+export type IngestItemDetail = z.infer<typeof ingestItemDetailSchema>
 
 export const ingestListQuerySchema = z.object({
   view: z.enum(['new', 'gone']).default('new'),

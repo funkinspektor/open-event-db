@@ -120,6 +120,7 @@ describe('access control', () => {
     const calls: [string, string, unknown?][] = [
       ['GET', '/api/v1/ingest/items'],
       ['GET', '/api/v1/ingest/count'],
+      ['GET', `/api/v1/ingest/items/${item.id}`],
       ['POST', `/api/v1/ingest/items/${item.id}/accept`, {}],
       ['POST', '/api/v1/ingest/items/reject', { ids: [item.id] }],
       ['POST', `/api/v1/ingest/items/${item.id}/link`, { event_id: item.id }],
@@ -135,6 +136,62 @@ describe('access control', () => {
     expect((await itemRow(item.id)).status).toBe('pending')
   })
 })
+
+describe('GET /ingest/items/:id', () => {
+  const getItem = (id: string) => app.inject({ method: 'GET', url: `/api/v1/ingest/items/${id}`, headers: auth(keyScout) })
+
+  it('returns a new item with its venue and duplicates', async () => {
+    const draft = draftOf({ venue_id: venue.id, starts_at: '2031-05-01T20:00:00.000Z', title: `Detail dup ${stamp}` })
+    const [twin] = await db
+      .insert(events)
+      .values({ title: draft.title, startsAt: new Date(draft.starts_at), venueId: venue.id, city: venue.city, createdBy: alice.id })
+      .returning()
+    eventIds.push(twin!.id)
+    const item = await newItem({}, draft)
+    const res = await getItem(item.id)
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data).toMatchObject({ id: item.id, state: 'new', status: 'pending', source: { name: sourceName }, venue_name: venue.name })
+    expect(data.venue).toEqual({ id: venue.id, name: venue.name, address: venue.address, city: venue.city, coordinates: null })
+    expect(data.duplicates.map((d: { id: string }) => d.id)).toContain(twin!.id)
+  })
+
+  it('reports the state of decided and over items', async () => {
+    const rejected = await newItem({ status: 'rejected' })
+    expect((await getItem(rejected.id)).json().data).toMatchObject({ state: 'rejected', duplicates: [] })
+
+    const over = await newItem({}, draftOf({ starts_at: '2020-01-01T20:00:00.000Z' }))
+    expect((await getItem(over.id)).json().data.state).toBe('over')
+
+    const removed = await newItem({ goneAt: new Date() })
+    expect((await getItem(removed.id)).json().data.state).toBe('removed')
+
+    const { item: gone, event } = await acceptedGoneItem()
+    expect((await getItem(gone.id)).json().data).toMatchObject({ state: 'gone', event_id: event.id })
+
+    await db.update(ingestItems).set({ goneResolvedAt: new Date() }).where(eq(ingestItems.id, gone.id))
+    expect((await getItem(gone.id)).json().data).toMatchObject({ state: 'accepted', event_id: event.id })
+  })
+
+  it('answers 404 for an unknown item or id and for a broken draft', async () => {
+    expect((await getItem('00000000-0000-4000-8000-000000000000')).statusCode).toBe(404)
+    expect((await getItem('nope')).statusCode).toBe(404)
+    const broken = await newItem({}, { title: 'no dates' } as unknown as ReturnType<typeof draftOf>)
+    expect((await getItem(broken.id)).statusCode).toBe(404)
+  })
+})
+
+/** An accepted item whose event is live while the item left the feed: the Gone view's case. */
+async function acceptedGoneItem() {
+  const item = await newItem({ goneAt: new Date() })
+  const [event] = await db
+    .insert(events)
+    .values({ title: `Gone detail ${++seq}`, startsAt: new Date('2034-01-01T20:00:00Z'), city: 'Gonetown', createdBy: feedScout.id })
+    .returning()
+  eventIds.push(event!.id)
+  await db.update(ingestItems).set({ status: 'accepted', eventId: event!.id }).where(eq(ingestItems.id, item.id))
+  return { item, event: event! }
+}
 
 describe('GET /ingest/items and /ingest/count', () => {
   it('lists pending items by draft start with duplicates and counts', async () => {

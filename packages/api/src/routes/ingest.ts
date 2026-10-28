@@ -6,9 +6,12 @@ import {
   ingestLinkSchema,
   ingestListQuerySchema,
   ingestRejectSchema,
+  type IngestDraft,
+  type IngestItemDetail,
+  type IngestItemState,
   type IngestItemView,
 } from '@open-event-db/shared'
-import { events, ingestItems, ingestSources, venues } from '@open-event-db/db'
+import { events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
 import { conflict, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
@@ -18,6 +21,7 @@ import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
 import { syncItemImage } from '../ingest/image.js'
 import { berlinInstant, berlinToday } from '../extract/normalize.js'
+import { serializeCoordinates } from '../serializers.js'
 
 const read = { onRequest: requireAuth }
 const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
@@ -60,6 +64,74 @@ async function counts(): Promise<{ new: number; gone: number }> {
   return { new: n?.n ?? 0, gone: g?.n ?? 0 }
 }
 
+/** The API view of a stored item; duplicates are looked up for items that still wait for a decision. */
+async function toView(
+  item: IngestItem,
+  source: { slug: string; name: string },
+  venueName: string | null,
+  draft: IngestDraft,
+  withDuplicates: boolean,
+): Promise<IngestItemView> {
+  const duplicates = withDuplicates
+    ? await findDuplicateCandidates({
+        venueId: draft.venue_id,
+        locationText: draft.location_text,
+        startsAt: new Date(draft.starts_at),
+        endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
+        title: draft.title,
+      })
+    : []
+  return {
+    id: item.id,
+    status: item.status,
+    source,
+    draft,
+    venue_name: venueName,
+    gone_at: item.goneAt?.toISOString() ?? null,
+    event_id: item.eventId,
+    duplicates,
+  }
+}
+
+/** One item with its state, judged by the same conditions as the inbox views. Null if unknown or broken. */
+async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDetail | null> {
+  const [row] = await db
+    .select({
+      item: ingestItems,
+      source: { slug: ingestSources.slug, name: ingestSources.name },
+      venue: venues,
+      isNew: sql<boolean>`coalesce(${isNew()}, false)`,
+      isGone: sql<boolean>`coalesce(${isGone}, false)`,
+      isOver: sql<boolean>`not coalesce(${notOver()}, true)`,
+    })
+    .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+    .leftJoin(venues, sql`${venues.id}::text = ${ingestItems.draft}->>'venue_id'`)
+    .leftJoin(events, eq(events.id, ingestItems.eventId))
+    .where(eq(ingestItems.id, id))
+  if (!row) return null
+  const parsed = ingestDraftSchema.safeParse(row.item.draft)
+  if (!parsed.success) {
+    log.warn({ itemId: id, issues: parsed.error.issues }, 'ingest item with an invalid draft')
+    return null
+  }
+
+  let state: IngestItemState
+  if (row.isNew) state = 'new'
+  else if (row.isGone) state = 'gone'
+  else if (row.item.status !== 'pending') state = row.item.status
+  else state = row.isOver ? 'over' : 'removed'
+
+  const { venue } = row
+  return {
+    ...(await toView(row.item, row.source, venue?.name ?? null, parsed.data, state === 'new')),
+    state,
+    venue: venue
+      ? { id: venue.id, name: venue.name, address: venue.address, city: venue.city, coordinates: serializeCoordinates(venue.coordinates) }
+      : null,
+  }
+}
+
 async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<IngestItemView[]> {
   const base = db
     .select({
@@ -87,30 +159,7 @@ async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<
     return []
   })
 
-  return Promise.all(
-    valid.map(async ({ item, source, venueName, draft }) => {
-      const duplicates =
-        view === 'new'
-          ? await findDuplicateCandidates({
-              venueId: draft.venue_id,
-              locationText: draft.location_text,
-              startsAt: new Date(draft.starts_at),
-              endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
-              title: draft.title,
-            })
-          : []
-      return {
-        id: item.id,
-        status: item.status,
-        source,
-        draft,
-        venue_name: venueName,
-        gone_at: item.goneAt?.toISOString() ?? null,
-        event_id: item.eventId,
-        duplicates,
-      }
-    }),
-  )
+  return Promise.all(valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view === 'new')))
 }
 
 export async function ingestRoutes(app: FastifyInstance) {
@@ -119,6 +168,13 @@ export async function ingestRoutes(app: FastifyInstance) {
     const { view } = ingestListQuerySchema.parse(req.query)
     const [data, itemCounts] = await Promise.all([listItems(view, req.log), counts()])
     return { data, meta: { counts: itemCounts } }
+  })
+
+  app.get<{ Params: { id: string } }>('/ingest/items/:id', read, async (req) => {
+    requireScout(req)
+    const item = await getItem(req.params.id, req.log)
+    if (!item) throw notFound('Inbox item not found')
+    return { data: item }
   })
 
   app.get('/ingest/count', read, async (req) => {
