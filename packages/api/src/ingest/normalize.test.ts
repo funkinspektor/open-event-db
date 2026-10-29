@@ -29,6 +29,7 @@ const extraction = (fields: Partial<Extraction>): Extraction => ({
   city: null,
   description: null,
   lineup: [],
+  categories: [],
   tags: [],
   links: [],
   ...fields,

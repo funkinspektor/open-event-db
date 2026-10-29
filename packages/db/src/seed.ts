@@ -93,6 +93,7 @@ type Seed = {
   endsAt: Date | null
   venueId?: string
   locationText?: string
+  categories?: ('concert' | 'party')[]
   tags: string[]
   links?: Record<string, string>
   status?: 'scheduled' | 'postponed' | 'cancelled'
@@ -129,6 +130,7 @@ const seeds: Seed[] = [
     startsAt: at(toFriday, 21),
     endsAt: at(toFriday + 1, 6),
     venueId: rso.id,
+    categories: ['party'],
     tags: ['techno', 'residents'],
     recurrence: 'FREQ=WEEKLY;BYDAY=FR',
     creator: alice.id,
@@ -151,6 +153,7 @@ const seeds: Seed[] = [
     startsAt: at(5, 21),
     endsAt: at(6, 8),
     venueId: rso.id,
+    categories: ['party'],
     tags: ['queer', 'techno', 'awareness'],
     links: { instagram: 'https://instagram.com/softpower.berlin' },
     status: 'postponed',
@@ -163,6 +166,7 @@ const seeds: Seed[] = [
     startsAt: at(6, 20),
     endsAt: at(7, 2),
     venueId: blank.id,
+    categories: ['concert'],
     tags: ['live', 'electronic', 'modular'],
     status: 'cancelled',
     creator: bob.id,
@@ -171,10 +175,11 @@ const seeds: Seed[] = [
   {
     title: 'Letzte Welle x Nachtagentur',
     description:
-      'Two crews, one warehouse, twelve hours. Expect fast techno, a proper light show and a very late closing.',
+      'Two crews, one warehouse, twelve hours. Opens with two live sets on the main stage, then fast techno, a proper light show and a very late closing.',
     startsAt: at(9, 20),
     endsAt: at(10, 8),
     venueId: rso.id,
+    categories: ['concert', 'party'],
     tags: ['techno', 'warehouse'],
     links: { ra: 'https://ra.co/events/example' },
     creator: alice.id,
@@ -228,6 +233,7 @@ for (const s of seeds) {
       venueId: s.venueId ?? null,
       locationText: s.locationText ?? null,
       city: 'Berlin',
+      categories: s.categories ?? [],
       tags: s.tags,
       links: s.links ?? {},
       status: s.status ?? 'scheduled',

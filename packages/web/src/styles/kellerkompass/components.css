@@ -92,6 +92,7 @@ button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cu
 .kk-badge--postponed { border: 1px solid var(--warn); color: var(--warn); }
 .kk-badge--unconfirmed { border: 1px dashed var(--border); color: var(--muted); font-weight: 400; }
 .kk-badge--scout { border: 1px solid var(--border); color: var(--muted); }
+.kk-badge--category { border: 1px solid var(--ink); color: var(--ink); }
 
 /* Section title */
 .kk-section-title { margin: 0 0 24px; display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-weight: 400; font-size: 40px; line-height: 1; }
@@ -332,8 +333,8 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-sheet .kk-pills { gap: 6px; }
 .kk-sheet .kk-pill { padding: 9px 14px; font-size: 14px; }
 .kk-sheet__foot { position: sticky; bottom: 0; margin: 0 -16px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--surface-1); border-top: 1px solid var(--line); }
-.kk-sheet--dropdown { position: absolute; top: calc(100% + 8px); left: 0; right: auto; bottom: auto; width: 440px; max-width: calc(100vw - 48px); max-height: none; overflow: visible; padding: 20px 20px 0; border: 1px solid var(--border); border-radius: var(--radius-l); gap: 18px; animation: none; box-shadow: 0 16px 40px #00000099; }
-.kk-sheet--dropdown .kk-sheet__foot { position: static; margin: 0 -20px; padding: 14px 20px 20px; border-radius: 0 0 var(--radius-l) var(--radius-l); }
+.kk-sheet--dropdown { position: absolute; top: calc(100% + 8px); left: 0; right: auto; bottom: auto; width: 440px; max-width: calc(100vw - 48px); max-height: calc(100dvh - var(--header-h) - 84px); padding: 20px 20px 0; border: 1px solid var(--border); border-radius: var(--radius-l); gap: 18px; animation: none; box-shadow: 0 16px 40px #00000099; }
+.kk-sheet--dropdown .kk-sheet__foot { margin: 0 -20px; padding: 14px 20px 20px; border-radius: 0 0 var(--radius-l) var(--radius-l); }
 @keyframes kk-fade-in { from { opacity: 0; } }
 @keyframes kk-sheet-in { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { .kk-toolbar { transition: none; } .kk-scrim, .kk-sheet { animation: none; } }

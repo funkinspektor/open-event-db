@@ -4,13 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { EVENT_CATEGORIES, type EventCategory } from '@open-event-db/shared'
+import { CATEGORY_LABELS } from '@/lib/categories'
 import { RANGES, filtersToHref, rangeLabel, type Filters } from '@/lib/filters'
 import { FilterIcon, PlusIcon } from './Icons'
 
 const PHONE = '(max-width: 560px)'
 
 // The event list toolbar — one filter button and Create event — sticking under the header.
-// The filter button opens a panel with date range and tags: a dropdown on desktop, a bottom sheet on phones.
+// The filter button opens a panel with date range, categories and tags: a dropdown on desktop, a bottom sheet on phones.
 // Nothing changes until "Show events"; closing without applying drops the selection.
 export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: string[] }) {
   const router = useRouter()
@@ -22,9 +24,9 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
   const dropdownRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const active = filters.range !== 'upcoming' || filters.tags.length > 0
+  const active = filters.range !== 'upcoming' || filters.categories.length > 0 || filters.tags.length > 0
   const label = rangeLabel(filters)
-  const tagCount = filters.tags.length
+  const pickCount = filters.categories.length + filters.tags.length
 
   useEffect(() => {
     const mq = window.matchMedia(PHONE)
@@ -83,6 +85,11 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
   const tags = [...allTags, ...filters.tags.filter((t) => !allTags.includes(t))]
   const toggleTag = (t: string) =>
     setDraft({ ...draft, tags: draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t] })
+  const toggleCategory = (c: EventCategory) =>
+    setDraft({
+      ...draft,
+      categories: EVENT_CATEGORIES.filter((x) => (x === c) !== draft.categories.includes(x)),
+    })
 
   const panel = (
     <div
@@ -101,7 +108,9 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
         <button
           type="button"
           className="kk-btn kk-btn--text"
-          onClick={() => setDraft({ ...draft, range: 'upcoming', from: undefined, to: undefined, tags: [] })}
+          onClick={() =>
+            setDraft({ ...draft, range: 'upcoming', from: undefined, to: undefined, categories: [], tags: [] })
+          }
         >
           Reset
         </button>
@@ -158,6 +167,25 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
         )}
       </section>
 
+      <section className="kk-sheet__section" aria-labelledby="kk-sheet-category">
+        <span id="kk-sheet-category" className="kk-sheet__label">
+          Category
+        </span>
+        <div className="kk-pills">
+          {EVENT_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className="kk-pill"
+              aria-pressed={draft.categories.includes(c)}
+              onClick={() => toggleCategory(c)}
+            >
+              {CATEGORY_LABELS[c]}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {tags.length > 0 && (
         <section className="kk-sheet__section" aria-labelledby="kk-sheet-tags">
           <span id="kk-sheet-tags" className="kk-sheet__label">
@@ -197,7 +225,7 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-pressed={active || undefined}
-          aria-label={`Filters: ${label}${tagCount ? `, ${tagCount} tag${tagCount === 1 ? '' : 's'}` : ''}`}
+          aria-label={`Filters: ${label}${pickCount ? `, ${pickCount} more filter${pickCount === 1 ? '' : 's'}` : ''}`}
           onClick={() => {
             if (open) return close()
             setDraft(filters)
@@ -206,7 +234,7 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
         >
           <FilterIcon />
           <span className="kk-filterbtn__text">{label}</span>
-          {tagCount > 0 && <span className="kk-pill__count">{tagCount}</span>}
+          {pickCount > 0 && <span className="kk-pill__count">{pickCount}</span>}
         </button>
         {open && !phone && panel}
       </div>

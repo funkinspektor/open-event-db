@@ -1,4 +1,4 @@
-import { extractionSchema, type Extraction, type ExtractImageType } from '@open-event-db/shared'
+import { EVENT_CATEGORIES, extractionSchema, type Extraction, type ExtractImageType } from '@open-event-db/shared'
 
 export interface ExtractImage {
   data: Buffer
@@ -46,6 +46,7 @@ Fields:
 - city: only the city name if shown, e.g. "Berlin" — no postal code, no country.
 - description: one or two sentences, at most about 200 characters, saying what the event is, in your own words. Never copy sentences from the image. Write it in the language of the event's own text (the flyer, post or event description), not the language of the platform's buttons and menus: German event text → German, English event text → English. Leave out lineup, date and venue.
 - lineup: performer, artist and DJ names, one act per entry. Keep country codes written next to a name ("Lavion FR"), but leave out section labels such as "DJs:", "Live:" or "Line-up:".
+- categories: "concert" for a concert or live show with acts on stage, "party" for a club night, rave or party with DJs; both for a concert followed by a party. Only when the image makes it clear, otherwise an empty list.
 - tags: up to five lowercase genre or format keywords that are shown or clearly stated, e.g. "techno", "house", "queer", "open air", "concert", "workshop".
 - links: shop and ticket pages are kind "tickets". Only URLs and handles that are literally written in the image, each with a kind. Never build or guess a URL from the event, venue or platform name — if no URL is written, return an empty list. The page's own address counts only if a browser address bar is visible. Write full URLs. An Instagram handle "@name" becomes "https://www.instagram.com/name".`
 
@@ -92,6 +93,7 @@ export const EXTRACTION_JSON_SCHEMA = {
     city: nullableString,
     description: nullableString,
     lineup: { type: 'array', items: { type: 'string' } },
+    categories: { type: 'array', items: { type: 'string', enum: [...EVENT_CATEGORIES] } },
     tags: { type: 'array', items: { type: 'string' } },
     links: {
       type: 'array',

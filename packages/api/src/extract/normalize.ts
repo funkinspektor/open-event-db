@@ -1,4 +1,5 @@
 import {
+  normalizeCategories,
   normalizeTags,
   type EventDraft,
   type ExtractedLinkKind,
@@ -218,6 +219,7 @@ export function normalizeExtraction(x: Extraction, now: Date): EventDraft {
     city,
     description: text(x.description, 10_000),
     lineup,
+    categories: normalizeCategories(x.categories),
     tags,
     links: normalizeLinks(x.links),
   }

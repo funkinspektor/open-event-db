@@ -14,6 +14,7 @@ const result: Extraction = {
   city: null,
   description: null,
   lineup: [],
+  categories: [],
   tags: [],
   links: [],
 }

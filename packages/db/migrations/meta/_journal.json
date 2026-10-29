@@ -43,6 +43,13 @@
       "when": 1793221122474,
       "tag": "0005_fearless_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793275205564,
+      "tag": "0006_cheerful_jackal",
+      "breakpoints": true
     }
   ]
 }

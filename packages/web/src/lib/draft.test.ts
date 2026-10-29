@@ -12,6 +12,7 @@ const draft: EventDraft = {
   city: 'Berlin',
   description: 'A night with synth and wave.',
   lineup: ['Der Schrauber', 'Bloodygrave'],
+  categories: [],
   tags: ['goth', 'ebm', 'minimal wave'],
   links: { tickets: 'https://example.org/t' },
 }

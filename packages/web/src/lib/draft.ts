@@ -1,4 +1,4 @@
-import type { EventDraft } from '@open-event-db/shared'
+import type { EventCategory, EventDraft } from '@open-event-db/shared'
 
 /** What the create form starts with after an image import. Empty strings mean "not read from the image". */
 export interface EventPrefill {
@@ -11,6 +11,7 @@ export interface EventPrefill {
   city: string
   /** Address without a venue name: goes into the free-text location. */
   locationText: string
+  categories: EventCategory[]
   tags: string[]
   /** Tags from the image that don't exist yet: offered, not added. */
   suggestedTags: string[]
@@ -49,6 +50,7 @@ export function draftToPrefill(draft: EventDraft, knownTags: string[]): EventPre
     description: withLineup(draft.description, draft.lineup),
     city: draft.city,
     locationText: draft.venue_name ? '' : (draft.address ?? ''),
+    categories: draft.categories,
     tags: draft.tags.filter((t) => known.has(t)),
     suggestedTags: draft.tags.filter((t) => !known.has(t)),
     links: Object.entries(draft.links).map(([key, url]) => ({ key, url })),

@@ -24,6 +24,7 @@ import {
   eventCreateSchema,
   eventListQuerySchema,
   eventUpdateSchema,
+  normalizeCategories,
   normalizeTags,
   type EventStatus,
 } from '@open-event-db/shared'
@@ -89,7 +90,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.get('/events', async (req) => {
     const query = eventListQuerySchema.parse(req.query)
-    const { limit, cursor, city, from, to, tags, venue_id, publisher_id, added_by, q, order } = query
+    const { limit, cursor, city, from, to, tags, categories, venue_id, publisher_id, added_by, q, order } = query
     const status: EventStatus[] = query.status?.length
       ? query.status
       : ['scheduled', 'postponed']
@@ -104,6 +105,7 @@ export async function eventRoutes(app: FastifyInstance) {
     if (venue_id) conditions.push(eq(events.venueId, venue_id))
     if (q) conditions.push(ilike(events.title, `%${q}%`))
     if (tags?.length) conditions.push(arrayOverlaps(events.tags, tags))
+    if (categories?.length) conditions.push(arrayOverlaps(events.categories, categories))
     if (publisher_id) {
       const ownedIds = db
         .select({ id: eventOwners.eventId })
@@ -187,6 +189,7 @@ export async function eventRoutes(app: FastifyInstance) {
           venueId: body.venue_id ?? null,
           locationText: body.location_text ?? null,
           city,
+          categories: normalizeCategories(body.categories ?? []),
           tags: normalizeTags(body.tags ?? []),
           links: body.links ?? {},
           recurrence: body.recurrence ?? null,
@@ -226,6 +229,7 @@ export async function eventRoutes(app: FastifyInstance) {
     if (body.starts_at !== undefined) patch.startsAt = new Date(body.starts_at)
     if (body.ends_at !== undefined) patch.endsAt = body.ends_at ? new Date(body.ends_at) : null
     if (body.location_text !== undefined) patch.locationText = body.location_text
+    if (body.categories !== undefined) patch.categories = normalizeCategories(body.categories)
     if (body.tags !== undefined) patch.tags = normalizeTags(body.tags)
     if (body.links !== undefined) patch.links = body.links
     if (body.recurrence !== undefined) patch.recurrence = body.recurrence

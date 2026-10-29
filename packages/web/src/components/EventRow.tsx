@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { EventSlim } from '@open-event-db/shared'
+import { categoryLabel } from '@/lib/categories'
 import { formatRowDate, formatTimeRange, isHappeningNow } from '@/lib/format'
 import { StatusBadge } from './StatusBadge'
 
@@ -7,7 +8,7 @@ interface Props {
   event: EventSlim
   /** Put the date above the time — everywhere except the day-grouped home list. */
   showDate?: boolean
-  /** Second line: venue · city (default) or the tags (venue page). */
+  /** Second line after the category: venue · city (default) or the tags (venue page). */
   meta?: 'venue' | 'tags'
   /** Tags as chips in the aside. */
   showTags?: boolean
@@ -29,6 +30,7 @@ export function EventRow({
 }: Props) {
   const running = event.status !== 'cancelled' && isHappeningNow(event, now)
   const cancelled = event.status === 'cancelled'
+  const category = categoryLabel(event.categories)
   const cls = `kk-event${running ? ' kk-event--now' : ''}${cancelled ? ' kk-event--cancelled' : ''}`
 
   return (
@@ -44,6 +46,7 @@ export function EventRow({
           </h3>
           {meta === 'venue' ? (
             <p className="kk-event__meta">
+              {category && <>{category} · </>}
               {event.venue ? (
                 <Link href={`/venues/${event.venue.id}`}>{event.venue.name}</Link>
               ) : (
@@ -52,7 +55,9 @@ export function EventRow({
               · {event.venue?.city ?? event.city}
             </p>
           ) : (
-            event.tags.length > 0 && <p className="kk-event__meta">{event.tags.join(' · ')}</p>
+            (category || event.tags.length > 0) && (
+              <p className="kk-event__meta">{[category, ...event.tags].filter(Boolean).join(' · ')}</p>
+            )
           )}
         </div>
         {event.image_url && (

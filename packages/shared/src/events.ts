@@ -8,23 +8,32 @@ export const EVENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 export const eventStatusSchema = z.enum(['scheduled', 'cancelled', 'postponed'])
 export type EventStatus = z.infer<typeof eventStatusSchema>
 
+/** What kind of event it is. Several at once are allowed: a concert with a party afterwards has both. */
+export const EVENT_CATEGORIES = ['concert', 'party'] as const
+export const eventCategorySchema = z.enum(EVENT_CATEGORIES)
+export type EventCategory = z.infer<typeof eventCategorySchema>
+
+/** Without duplicates, in the order of EVENT_CATEGORIES, so equal sets compare equal. */
+export function normalizeCategories(categories: readonly EventCategory[]): EventCategory[] {
+  return EVENT_CATEGORIES.filter((c) => categories.includes(c))
+}
+
 const csv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean)
 
+// Comma-separated values are checked like array items, so an unknown value is a 400, not a database error.
 const csvOrArray = <T extends z.ZodTypeAny>(item: T) =>
   z
-    .union([z.string(), z.array(item)])
+    .union([z.string().transform(csv), z.array(z.unknown())])
+    .pipe(z.array(item))
     .optional()
-    .transform((v) => {
-      if (v === undefined) return undefined
-      if (Array.isArray(v)) return v
-      return csv(v) as z.infer<T>[]
-    })
 
 export const eventListQuerySchema = cursorQuerySchema.extend({
   city: z.string().min(1).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   tags: csvOrArray(z.string().min(1)),
+  /** Events with any of these categories; an event with both matches either. */
+  categories: csvOrArray(eventCategorySchema),
   venue_id: z.string().uuid().optional(),
   /** Events owned by this publisher (creator or co-owner). */
   publisher_id: z.string().uuid().optional(),
@@ -51,6 +60,7 @@ export const eventSlimSchema = z.object({
   starts_at: z.string().datetime({ offset: true }),
   ends_at: z.string().datetime({ offset: true }).nullable(),
   status: eventStatusSchema,
+  categories: z.array(eventCategorySchema),
   tags: z.array(z.string()),
   city: z.string(),
   location_text: z.string().nullable(),
@@ -130,6 +140,7 @@ export const eventCreateSchema = z.object({
   venue_id: z.string().uuid().nullable().optional(),
   location_text: z.string().trim().max(300).nullable().optional(),
   city: z.string().trim().min(1).max(100).optional(),
+  categories: z.array(eventCategorySchema).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
   links: linksSchema.optional(),
   recurrence: z.string().trim().max(200).nullable().optional(),

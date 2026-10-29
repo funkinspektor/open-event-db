@@ -74,7 +74,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
 
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Event',
+    '@type': e.categories.includes('concert') ? 'MusicEvent' : 'Event',
     name: e.title,
     url: absoluteUrl(`/events/${e.id}`),
     description: e.description ? markdownToPlainText(e.description) : undefined,
@@ -122,6 +122,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
         endsAt={e.ends_at}
         status={e.status}
         recurrence={e.recurrence}
+        categories={e.categories}
         tags={e.tags}
         description={e.description}
         links={e.links}

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { eventCategorySchema } from './events.js'
 import { linksSchema } from './links.js'
 
 /** Image types accepted by `POST /events/extract`. */
@@ -63,6 +64,7 @@ export const extractionSchema = z.object({
   city: z.string().nullable(),
   description: z.string().nullable(),
   lineup: z.array(z.string()),
+  categories: z.array(eventCategorySchema),
   tags: z.array(z.string()),
   links: z.array(z.object({ kind: extractedLinkKindSchema, url: z.string() })),
 })
@@ -83,6 +85,7 @@ export const eventDraftSchema = z.object({
   description: z.string().nullable(),
   /** Artist names; the web form appends them to the description. */
   lineup: z.array(z.string()),
+  categories: z.array(eventCategorySchema),
   tags: z.array(z.string()),
   links: linksSchema,
 })

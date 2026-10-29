@@ -28,6 +28,7 @@ const extraction: Extraction = {
   city: null,
   description: 'Eine lange Nacht.',
   lineup: ['DJ A'],
+  categories: ['party'],
   tags: ['Techno'],
   links: [{ kind: 'instagram', url: '@keller' }],
 }
@@ -114,6 +115,7 @@ describe('POST /events/extract', () => {
         city: 'Berlin',
         description: 'Eine lange Nacht.',
         lineup: ['DJ A'],
+        categories: ['party'],
         tags: ['techno'],
         links: { instagram: 'https://www.instagram.com/keller' },
       })

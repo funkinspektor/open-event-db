@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { EventDetail, EventStatus } from '@open-event-db/shared'
+import { EVENT_CATEGORIES, type EventCategory, type EventDetail, type EventStatus } from '@open-event-db/shared'
+import { CATEGORY_LABELS } from '@/lib/categories'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import type { DuplicateDraft } from '@/lib/duplicates'
 import { imageSaveOutcome, savedParam, type ImageSaveOutcome } from '@/lib/image-save'
@@ -73,6 +74,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
   const [city, setCity] = useState(event?.city ?? pre?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? pre?.description ?? '')
   const [previewing, setPreviewing] = useState(false)
+  const [categories, setCategories] = useState<EventCategory[]>(event?.categories ?? pre?.categories ?? [])
   const [tags, setTags] = useState<string[]>(event?.tags ?? pre?.tags ?? [])
   const [links, setLinks] = useState<LinkRow[]>(event ? toLinkRows(event.links) : (pre?.links ?? []))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
@@ -120,6 +122,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
       description,
       venue_id: venue?.id ?? null,
       location_text: venue ? null : locationText || null,
+      categories,
       tags,
       links: fromLinkRows(links),
       recurrence: recurrence || null,
@@ -260,6 +263,25 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
             />
           )}
           <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Pasted URLs become links, line breaks are kept.</span>
+        </div>
+
+        <div className="kk-field">
+          <span id="event-category">
+            Category <span className="kk-field__opt">(optional, both for a concert with a party)</span>
+          </span>
+          <div className="kk-pills" role="group" aria-labelledby="event-category">
+            {EVENT_CATEGORIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="kk-pill"
+                aria-pressed={categories.includes(c)}
+                onClick={() => setCategories(EVENT_CATEGORIES.filter((x) => (x === c) !== categories.includes(x)))}
+              >
+                {CATEGORY_LABELS[c]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <TagInput value={tags} onChange={setTags} knownTags={knownTags} />

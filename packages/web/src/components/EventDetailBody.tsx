@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { z } from 'zod'
-import type { EventStatus, venueDetailEmbedSchema } from '@open-event-db/shared'
+import type { EventCategory, EventStatus, venueDetailEmbedSchema } from '@open-event-db/shared'
+import { categoryLabel } from '@/lib/categories'
 import { formatDate, formatTimeRange } from '@/lib/format'
 import { describeRecurrence } from '@/lib/recurrence'
 import { Markdown } from './Markdown'
@@ -15,6 +16,7 @@ interface Props {
   endsAt: string | null
   status: EventStatus
   recurrence: string | null
+  categories: EventCategory[]
   tags: string[]
   description: string
   links: Record<string, string>
@@ -35,6 +37,7 @@ export function EventDetailBody({
   endsAt,
   status,
   recurrence,
+  categories,
   tags,
   description,
   links,
@@ -45,6 +48,7 @@ export function EventDetailBody({
   headerAction,
   children,
 }: Props) {
+  const category = categoryLabel(categories)
   const image = imageUrl && (
     <a href={imageUrl} target="_blank" rel="noopener noreferrer" className="kk-event-image">
       {/* No referrer: the inbox preview shows feed images straight from their host */}
@@ -71,8 +75,9 @@ export function EventDetailBody({
             </>
           )}
         </p>
-        {tags.length > 0 && (
+        {(category || tags.length > 0) && (
           <div className="kk-pills" style={{ gap: 6 }}>
+            {category && <span className="kk-badge kk-badge--category">{category}</span>}
             {tags.map((t) => (
               <Link key={t} href={`/?tags=${encodeURIComponent(t)}`} className="kk-tag kk-tag--filter">
                 {t}

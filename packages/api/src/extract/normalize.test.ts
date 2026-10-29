@@ -17,6 +17,7 @@ const empty: Extraction = {
   city: null,
   description: null,
   lineup: [],
+  categories: [],
   tags: [],
   links: [],
 }

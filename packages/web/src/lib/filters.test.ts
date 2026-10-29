@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { categoryLabel } from './categories'
 import { customRangeToDates, filtersToHref, parseFilters, rangeToDates } from './filters'
 
 // October 2026, Berlin is on CEST (UTC+2): Fri 16th 00:00 = 2026-10-15T22:00Z, Mon 19th 00:00 = 2026-10-18T22:00Z
@@ -42,7 +43,7 @@ describe('custom date range', () => {
   })
 
   it('keeps the custom range in the URL instead of a preset', () => {
-    expect(filtersToHref({ range: 'custom', from: '2026-10-16', to: '2026-10-19', tags: [], city: 'Berlin' })).toBe(
+    expect(filtersToHref({ range: 'custom', from: '2026-10-16', to: '2026-10-19', categories: [], tags: [], city: 'Berlin' })).toBe(
       '/?from=2026-10-16&to=2026-10-19',
     )
   })
@@ -63,5 +64,24 @@ describe('custom date range', () => {
   it('starts now when only an end day is given', () => {
     const now = new Date('2026-10-14T10:00:00Z')
     expect(customRangeToDates(undefined, '2026-10-19', now).from).toBe(now)
+  })
+})
+
+describe('categories', () => {
+  it('reads known categories from the URL in a fixed order and drops unknown ones', () => {
+    expect(parseFilters({ categories: 'party,techno,concert' }).categories).toEqual(['concert', 'party'])
+    expect(parseFilters({}).categories).toEqual([])
+  })
+
+  it('round-trips through the URL', () => {
+    expect(filtersToHref({ range: 'upcoming', categories: ['concert'], tags: [], city: 'Berlin' })).toBe(
+      '/?categories=concert',
+    )
+  })
+
+  it('labels the combination as both', () => {
+    expect(categoryLabel(['party', 'concert'])).toBe('Concert + Party')
+    expect(categoryLabel(['party'])).toBe('Party')
+    expect(categoryLabel([])).toBeNull()
   })
 })

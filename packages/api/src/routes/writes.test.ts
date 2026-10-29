@@ -351,6 +351,57 @@ describe('event list order', () => {
   })
 })
 
+describe('event categories', () => {
+  it('stores categories in a fixed order, filters by any of them and can clear them', async () => {
+    const create = async (title: string, categories: string[]) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/events',
+        headers: auth(keyA),
+        payload: { title, starts_at: '2031-05-01T20:00:00Z', venue_id: venue.id, categories },
+      })
+      expect(res.statusCode).toBe(201)
+      return res.json().data as { id: string; categories: string[] }
+    }
+    const party = await create('Category party', ['party'])
+    const concert = await create('Category concert', ['concert'])
+    const both = await create('Category both', ['party', 'concert', 'party'])
+    const none = await create('Category none', [])
+    expect(both.categories).toEqual(['concert', 'party'])
+    expect(none.categories).toEqual([])
+
+    const titles = async (categories: string) => {
+      const qs = new URLSearchParams({ venue_id: venue.id, from: '2031-05-01T00:00:00Z', to: '2031-05-02T00:00:00Z', categories })
+      const res = await app.inject({ method: 'GET', url: `/api/v1/events?${qs}` })
+      expect(res.statusCode).toBe(200)
+      return (res.json().data as { id: string }[]).map((e) => e.id).sort()
+    }
+    expect(await titles('concert')).toEqual([concert.id, both.id].sort())
+    expect(await titles('party,concert')).toEqual([party.id, concert.id, both.id].sort())
+
+    const cleared = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${both.id}`,
+      headers: auth(keyA),
+      payload: { categories: [] },
+    })
+    expect(cleared.json().data.categories).toEqual([])
+    expect(await titles('concert')).toEqual([concert.id])
+  })
+
+  it('rejects an unknown category in the body and in the list filter', async () => {
+    const body = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Bad category', starts_at: '2031-05-01T20:00:00Z', venue_id: venue.id, categories: ['opera'] },
+    })
+    expect(body.statusCode).toBe(400)
+    const list = await app.inject({ method: 'GET', url: '/api/v1/events?categories=opera' })
+    expect(list.statusCode).toBe(400)
+  })
+})
+
 const cliPath = fileURLToPath(new URL('../../../db/src/cli.ts', import.meta.url))
 const dbDir = fileURLToPath(new URL('../../../db', import.meta.url))
 const cli = (...args: string[]) =>

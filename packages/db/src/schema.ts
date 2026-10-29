@@ -15,6 +15,7 @@ import {
 } from 'drizzle-orm/pg-core'
 
 export const eventStatus = pgEnum('event_status', ['scheduled', 'cancelled', 'postponed'])
+export const eventCategory = pgEnum('event_category', ['concert', 'party'])
 export const eventOwnerRole = pgEnum('event_owner_role', ['creator', 'co_owner'])
 export const editHistoryEntityType = pgEnum('edit_history_entity_type', [
   'event',
@@ -74,6 +75,8 @@ export const events = pgTable(
     venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
     locationText: text('location_text'),
     city: text('city').notNull(),
+    /** Optional; a concert with a party afterwards has both. */
+    categories: eventCategory('categories').array().notNull().default(sql`ARRAY[]::event_category[]`),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     links: jsonb('links').$type<Links>().notNull().default({}),
     /** Immutable "Added by": survives claims, so provenance is kept. Ownership lives in event_owners. */
@@ -87,7 +90,10 @@ export const events = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('events_tags_gin_idx').using('gin', t.tags)],
+  (t) => [
+    index('events_tags_gin_idx').using('gin', t.tags),
+    index('events_categories_gin_idx').using('gin', t.categories),
+  ],
 )
 
 export const eventOwners = pgTable(

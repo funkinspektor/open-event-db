@@ -1,4 +1,6 @@
+import type { EventCategory } from '@open-event-db/shared'
 import { ALL_STATUSES } from './api'
+import { parseCategories } from './categories'
 import { TZ } from './format'
 
 export type Range = 'upcoming' | 'today' | 'weekend' | 'week' | 'custom'
@@ -11,6 +13,7 @@ export const RANGES: { key: Range; label: string }[] = [
 
 export interface Filters {
   range: Range
+  categories: EventCategory[]
   tags: string[]
   city: string
   /** Custom range as Berlin calendar days (YYYY-MM-DD), both inclusive; only used when range is 'custom'. */
@@ -31,6 +34,7 @@ export function parseFilters(sp: SP): Filters {
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean)
+  const categories = parseCategories(first(sp.categories))
   const city = first(sp.city) ?? 'Berlin'
 
   // A custom range (?from=…&to=…) wins over the preset ranges.
@@ -40,11 +44,11 @@ export function parseFilters(sp: SP): Filters {
     from = isDay(from) ? from : undefined
     to = isDay(to) ? to : undefined
     if (from && to && from > to) [from, to] = [to, from]
-    return { range: 'custom', tags, city, from, to }
+    return { range: 'custom', categories, tags, city, from, to }
   }
 
   const range = RANGES.some((r) => r.key === rangeRaw) ? (rangeRaw as Range) : 'upcoming'
-  return { range, tags, city }
+  return { range, categories, tags, city }
 }
 
 // Same DD.MM style as the day headings in the listing.
@@ -67,6 +71,7 @@ export function filtersToHref(f: Filters): string {
   } else if (f.range !== 'upcoming') {
     qs.set('range', f.range)
   }
+  if (f.categories.length) qs.set('categories', f.categories.join(','))
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   if (f.city !== 'Berlin') qs.set('city', f.city)
   const s = qs.toString()
@@ -151,6 +156,7 @@ export function buildApiQuery(f: Filters, limit = 20): URLSearchParams {
   qs.set('status', ALL_STATUSES)
   qs.set('limit', String(limit))
   if (f.city) qs.set('city', f.city)
+  if (f.categories.length) qs.set('categories', f.categories.join(','))
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   const { from, to } = f.range === 'custom' ? customRangeToDates(f.from, f.to) : rangeToDates(f.range)
   if (from) qs.set('from', from.toISOString())
