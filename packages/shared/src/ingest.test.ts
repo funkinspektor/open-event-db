@@ -21,6 +21,8 @@ describe('ingestSourceConfigSchema', () => {
       extract_from_text: false,
       city: 'Berlin',
       rooms: null,
+      default_location: null,
+      capped: false,
     })
   })
 
