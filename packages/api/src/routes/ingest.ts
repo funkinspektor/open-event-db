@@ -229,6 +229,7 @@ export async function ingestRoutes(app: FastifyInstance) {
           venueId,
           locationText,
           city,
+          categories: draft.categories,
           tags: [],
           links: draft.links,
           createdBy: source.publisherId,

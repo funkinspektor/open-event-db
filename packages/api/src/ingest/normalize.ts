@@ -1,4 +1,4 @@
-import type { Extraction, IngestDraft, IngestSourceConfig } from '@open-event-db/shared'
+import { normalizeCategories, type Extraction, type IngestDraft, type IngestSourceConfig } from '@open-event-db/shared'
 import {
   berlinInstant,
   berlinIso,
@@ -97,6 +97,8 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
     venue_id: venueId,
     location_text: venueId || ev.locationText === null ? null : truncate(ev.locationText, MAX_LOCATION_TEXT),
     city: config.city,
+    // What the text says wins; the source's default only fills in when it says nothing.
+    categories: normalizeCategories(extraction?.categories.length ? extraction.categories : config.default_categories),
     links: normalizeLinks(extraction?.links ?? [], { ...(website ? { website } : {}), ...ev.links }),
     image_url: httpUrl(ev.imageUrl),
     source_url: website,

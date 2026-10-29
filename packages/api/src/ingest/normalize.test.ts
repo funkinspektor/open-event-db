@@ -188,6 +188,19 @@ describe('normalizeFeedEvent', () => {
     expect(normalize(feed('Psychopomp'), leipzig, null).city).toBe('Leipzig')
   })
 
+  it('takes the categories from the text over the source default', () => {
+    const club = ingestSourceConfigSchema.parse({ default_categories: ['party'] })
+    const read = extraction({ start_time: '20:00', categories: ['party', 'concert', 'party'] })
+    expect(normalize(feed('Psychopomp'), club, read).categories).toEqual(['concert', 'party'])
+  })
+
+  it('falls back to the source default when the text names no category or is not read', () => {
+    const club = ingestSourceConfigSchema.parse({ default_categories: ['party'] })
+    expect(normalize(feed('Psychopomp'), club, extraction({ start_time: '20:00' })).categories).toEqual(['party'])
+    expect(normalize(feed('Psychopomp'), club, null).categories).toEqual(['party'])
+    expect(normalize(feed('Psychopomp'), acud, null).categories).toEqual([])
+  })
+
   it('adds extracted links next to the feed URL, without duplicates', () => {
     const burre = feed('Burre w/ Heavenphetamine')
     const draft = normalize(

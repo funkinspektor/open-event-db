@@ -42,6 +42,8 @@ function usage(): never {
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
   pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain] [--config '<json>']
                                                         Add a feed source (default: iCal) whose events a scout reviews
+  pnpm db:cli ingest-set-config <slug> --config '<json>'
+                                                        Change a feed source's config: the given keys replace the stored ones
   pnpm db:cli ingest-list                               List feed sources: last run, last error, items per status
   pnpm db:cli ingest-disable <slug>                     Stop the daily run from fetching a source
   pnpm db:cli ingest-enable <slug>                      Let the daily run fetch a source again`)
@@ -60,6 +62,24 @@ async function confirm(question: string): Promise<boolean> {
 function fail(message: string): never {
   console.error(message)
   process.exit(1)
+}
+
+/** --config as JSON, checked against the source config schema (defaults filled) but returned as given. */
+function parseConfig(raw: string, base: Record<string, unknown> = {}): Record<string, unknown> {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    fail(`--config is not valid JSON: ${raw}`)
+  }
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) fail('--config must be a JSON object')
+  const merged = { ...base, ...(json as Record<string, unknown>) }
+  const parsed = ingestSourceConfigSchema.safeParse(merged)
+  if (!parsed.success) {
+    fail(`Invalid --config:\n${parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n')}`)
+  }
+  // Stored as given: the pipeline fills in the defaults when it reads the config
+  return merged
 }
 
 // Stored lowercased: magic-link login matches emails case-insensitively
@@ -290,21 +310,7 @@ switch (cmd) {
       fail(`Invalid feed URL "${feedUrl}": it must be an http(s) URL ({from} and {to} are replaced by dates)`)
     }
 
-    let config: Record<string, unknown> = {}
-    if (configArg !== undefined) {
-      let json: unknown
-      try {
-        json = JSON.parse(configArg)
-      } catch {
-        fail(`--config is not valid JSON: ${configArg}`)
-      }
-      const parsed = ingestSourceConfigSchema.safeParse(json)
-      if (!parsed.success) {
-        fail(`Invalid --config:\n${parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n')}`)
-      }
-      // Stored as given: the pipeline fills in the defaults when it reads the config
-      config = json as Record<string, unknown>
-    }
+    const config = configArg === undefined ? {} : parseConfig(configArg)
 
     const [scout] = await db
       .select({ id: publishers.id, isScout: publishers.isScout })
@@ -319,6 +325,16 @@ switch (cmd) {
 
     await db.insert(ingestSources).values({ slug, name, kind: kind as (typeof kinds)[number], url: feedUrl, publisherId: scout.id, config })
     console.log(`Added source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
+    break
+  }
+  case 'ingest-set-config': {
+    const [slug] = args
+    if (!slug || configArg === undefined) usage()
+    const [source] = await db.select().from(ingestSources).where(eq(ingestSources.slug, slug)).limit(1)
+    if (!source) fail(`No source with slug "${slug}"`)
+    const config = parseConfig(configArg, source.config)
+    await db.update(ingestSources).set({ config, updatedAt: new Date() }).where(eq(ingestSources.id, source.id))
+    console.log(`Source ${slug} config: ${JSON.stringify(config)}`)
     break
   }
   case 'ingest-list': {

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import type { DuplicateCandidate, IngestItemView } from '@open-event-db/shared'
+import { categoryLabel } from '@/lib/categories'
 import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
 import { Markdown } from './Markdown'
 
@@ -42,6 +43,7 @@ export function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: bo
 export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept, onReject, onLink, onGone }: Props) {
   const { draft } = item
   const gone = view === 'gone'
+  const category = categoryLabel(draft.categories)
   const where = draft.venue_id ? (
     <Link href={`/venues/${draft.venue_id}`}>{item.venue_name ?? draft.location_text ?? 'Venue'}</Link>
   ) : (
@@ -70,6 +72,7 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
             <Link href={`/ingest/${item.id}`}>{draft.title}</Link>
           </h3>
           <p className="kk-event__meta">
+            {category && <>{category} · </>}
             {where} · {draft.city}
           </p>
         </div>

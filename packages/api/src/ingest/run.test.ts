@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   editHistory,
   events,
@@ -271,6 +271,44 @@ describe('runIngest', () => {
     const again = await run(source, movePersian(fixture), LATEST)
     expect(again.sources[0]).toMatchObject({ updated: 0, synced: 0 })
     expect(await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))).toHaveLength(1)
+  })
+
+  it('syncs the categories the text names into the accepted event', async () => {
+    const source = await newSource({ ...ACUD, default_categories: ['party'] })
+    stubExtractor()
+    await run(source, fixture, NOW)
+    const item = await itemOf(source.id, PERSIAN)
+    expect((item.draft as { categories: string[] }).categories).toEqual(['party'])
+    const event = await accept(item)
+
+    textExtraction.setExtractor({
+      async extract() {
+        return extraction({ start_time: '22:00', end_time: '04:00', categories: ['concert', 'party'] })
+      },
+    })
+    const result = await run(source, movePersian(fixture), LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, synced: 1 })
+    expect((await eventRow(event.id)).categories).toEqual(['concert', 'party'])
+  })
+
+  it('reads a draft stored before categories once more, even when the feed is unchanged', async () => {
+    const source = await newSource({ ...ACUD, default_categories: ['party'] })
+    stubExtractor()
+    await run(source, fixture, NOW)
+    const event = await accept(await itemOf(source.id, PERSIAN))
+    await db
+      .update(ingestItems)
+      .set({ draft: sql`${ingestItems.draft} - 'categories'` })
+      .where(eq(ingestItems.sourceId, source.id))
+
+    const stub = stubExtractor()
+    const result = await run(source, fixture, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, created: 0, updated: 5, synced: 1 })
+    expect(stub.calls).toBe(5)
+    expect((await eventRow(event.id)).categories).toEqual(['party'])
+
+    const again = await run(source, fixture, LATEST)
+    expect(again.sources[0]).toMatchObject({ ok: true, updated: 0, synced: 0 })
   })
 
   it('syncs a mapped venue with its city, and falls back to the source name for a deleted venue', async () => {

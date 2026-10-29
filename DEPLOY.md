@@ -175,6 +175,17 @@ The Badehaus feed (WordPress Events Manager) has no LOCATION, hence `default_loc
 next 50 events, hence `capped`: without it, an event pushed past the 50th by a newly added one would be
 marked gone.
 
+Categories come from the text extraction where a source has `extract_from_text`; `default_categories`
+fills in when the text names none or isn't read (e.g. `["party"]` for a club). Change an existing source's
+config with `ingest-set-config`: the given keys replace the stored ones, the rest stays.
+
+```bash
+scripts/prod-db.sh pnpm db:cli ingest-set-config duncker --config '{"default_categories":["party"]}'
+```
+
+The next run reads every item stored before categories existed once more (one text extraction each where
+`extract_from_text` is set) and syncs the categories into accepted events.
+
 Write patterns without backslashes (`[0-9]`, not `\d`): `pnpm` passes the arguments through a shell and
 doubles every backslash, so `\d` arrives as `\\d` and the source fails with "external_id_pattern … yields no id".
 

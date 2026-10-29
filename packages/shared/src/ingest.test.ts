@@ -23,6 +23,7 @@ describe('ingestSourceConfigSchema', () => {
       rooms: null,
       default_location: null,
       capped: false,
+      default_categories: [],
     })
   })
 
@@ -91,6 +92,7 @@ describe('ingestItemViewSchema', () => {
         venue_id: null,
         location_text: 'Somewhere 1',
         city: 'Berlin',
+        categories: ['concert'],
         links: {},
         image_url: null,
         source_url: 'https://example.org/e/1',

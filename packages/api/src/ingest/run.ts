@@ -126,6 +126,7 @@ async function syncEvent(tx: DbOrTx, source: IngestSource, eventId: string, draf
     venueId,
     locationText,
     city,
+    categories: draft.categories,
     links,
   } satisfies Partial<Event>
   const changes = diff(eventSnapshot(current), eventSnapshot({ ...current, ...patch }))
@@ -156,7 +157,8 @@ async function ingestEvent(
   now: Date,
   result: SourceRunResult,
 ): Promise<void> {
-  if (item && item.contentHash === ev.hash) {
+  // A draft stored before categories existed is read once more, so feed events get theirs
+  if (item && item.contentHash === ev.hash && 'categories' in item.draft) {
     await db
       .update(ingestItems)
       .set({ lastSeenAt: now, ...reappeared(item) })

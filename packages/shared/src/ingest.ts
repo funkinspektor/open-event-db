@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { linksSchema } from './links.js'
-import { venueDetailEmbedSchema } from './events.js'
+import { eventCategorySchema, venueDetailEmbedSchema } from './events.js'
 
 const iso = z.string().datetime({ offset: true })
 const uuid = z.string().uuid()
@@ -38,6 +38,8 @@ export const ingestSourceConfigSchema = z.object({
   default_location: z.string().min(1).nullable().default(null),
   /** The feed lists only its next N events, not a date range: items after its last event are not marked gone. */
   capped: z.boolean().default(false),
+  /** Categories for feed events whose text names none (or that are not read at all), e.g. `party` for a club. */
+  default_categories: z.array(eventCategorySchema).default([]),
 })
 
 export type IngestSourceConfig = z.infer<typeof ingestSourceConfigSchema>
@@ -51,6 +53,8 @@ export const ingestDraftSchema = z.object({
   venue_id: uuid.nullable(),
   location_text: z.string().nullable(),
   city: z.string(),
+  /** Drafts stored before categories existed have none. */
+  categories: z.array(eventCategorySchema).default([]),
   links: linksSchema,
   image_url: z.string().url().nullable(),
   source_url: z.string().url().nullable(),

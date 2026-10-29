@@ -345,6 +345,24 @@ describe('POST /ingest/items/:id/accept', () => {
     expect((await itemRow(item.id)).imageSourceUrl).toBe('https://feed.test/flyer.png')
   })
 
+  it('gives the event the categories of the draft, none for a draft stored before categories', async () => {
+    const item = await newItem({}, draftOf({ categories: ['concert', 'party'] }))
+    const res = await post(`/items/${item.id}/accept`, keyScout)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+    const event = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
+    expect(event.categories).toEqual(['concert', 'party'])
+
+    const old = await newItem()
+    const view = await app.inject({ method: 'GET', url: `/api/v1/ingest/items/${old.id}`, headers: auth(keyScout) })
+    expect(view.json().data.draft.categories).toEqual([])
+    const oldRes = await post(`/items/${old.id}/accept`, keyScout)
+    eventIds.push(oldRes.json().data.event_id as string)
+    const oldEvent = (await app.inject({ method: 'GET', url: `/api/v1/events/${oldRes.json().data.event_id}` })).json().data
+    expect(oldEvent.categories).toEqual([])
+  })
+
   it('accepts without an image when the feed image cannot be fetched', async () => {
     imageStore.setStore(memoryImageStore())
     ingestImages.setFetch((async () => new Response('gone', { status: 404 })) as unknown as typeof fetch)

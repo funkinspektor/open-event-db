@@ -35,7 +35,7 @@ export default async function IngestItemPage({ params }: { params: Params }) {
         endsAt={draft.ends_at}
         status="scheduled"
         recurrence={null}
-        categories={[]}
+        categories={draft.categories}
         tags={[]}
         description={draft.description}
         links={draft.links}
