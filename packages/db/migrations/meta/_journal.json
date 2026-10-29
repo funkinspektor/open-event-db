@@ -71,6 +71,13 @@
       "when": 1793305592656,
       "tag": "0009_robust_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793310647797,
+      "tag": "0010_yellow_gravity",
+      "breakpoints": true
     }
   ]
 }

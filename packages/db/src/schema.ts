@@ -31,7 +31,7 @@ export const editHistoryAction = pgEnum('edit_history_action', [
   'deleted',
 ])
 
-export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical', 'dunckerclub', 'urbanspree', 'berghain'])
+export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical', 'dunckerclub', 'urbanspree', 'berghain', 'slaughterhouse'])
 export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accepted', 'rejected'])
 
 type Links = Record<string, string>

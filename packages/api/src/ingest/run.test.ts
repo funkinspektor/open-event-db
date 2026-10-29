@@ -821,6 +821,48 @@ describe('runIngest (Berghain programme)', () => {
   })
 })
 
+describe('runIngest (Slaughterhouse page)', () => {
+  const page = readFileSync(fileURLToPath(new URL('./fixtures/slaughterhouse/konzerte.html', import.meta.url)), 'utf8')
+  // Thursday 2026-10-29, the day the fixture was saved
+  const SH_NOW = new Date('2026-10-29T10:00:00Z')
+  const SH_LATER = new Date('2026-10-29T16:00:00Z')
+
+  it('reads the programme page, maps the club to its venue and trusts its times', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Slaughterhouse ${stamp}`, address: 'Lehrter Str. 35', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Slaughterhouse: venue!.id } }, '', 'slaughterhouse')
+    const result = await run(source, page, SH_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 12, created: 12 })
+    expect(stub.calls).toBe(0)
+    const url = `https://${source.slug}.test/?scope=2026-10-29--2027-04-27`
+    expect((await itemOf(source.id, '2026-11-13')).draft).toMatchObject({
+      title: 'Stoner’s Fall – Sheev + Ghostones + Caosonora',
+      starts_at: '2026-11-13T21:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: { website: url, tickets: 'https://www.tixforgigs.com/Event/77283' },
+      source_url: url,
+      times_unverified: false,
+    })
+  })
+
+  it('marks a night gone when it leaves the page', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'slaughterhouse')
+    await run(source, page, SH_NOW)
+    const without = page.replace('07.11.2026<br><strong>', '<strong>')
+    expect(without).not.toBe(page)
+    const result = await run(source, without, SH_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 11, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, '2026-11-07')).goneAt?.getTime()).toBe(SH_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

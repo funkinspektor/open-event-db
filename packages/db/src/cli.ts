@@ -40,7 +40,7 @@ function usage(): never {
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
-  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain] [--config '<json>']
+  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse] [--config '<json>']
                                                         Add a feed source (default: iCal) whose events a scout reviews
   pnpm db:cli ingest-set-config <slug> --config '<json>'
                                                         Change a feed source's config: the given keys replace the stored ones

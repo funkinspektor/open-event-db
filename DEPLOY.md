@@ -159,6 +159,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source badehaus "Badehaus Berlin" 'htt
 scripts/prod-db.sh pnpm db:cli ingest-add-source urbanspree "Urban Spree" 'https://www.urbanspree.com/program/?limit=100' kellerkompass-import --kind urbanspree --config '{"venues":{"Urban Spree":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source berghain "Berghain" 'https://www.berghain.berlin/de/program/' kellerkompass-import --kind berghain --config '{"venues":{"Berghain":"<venue id>","Panorama Bar":"<venue id>","Säule":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" 'https://www.berghain.berlin/de/program/kantine-am-berghain/' kellerkompass-import --kind berghain --config '{"venues":{"Kantine am Berghain":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source slaughterhouse "Slaughterhouse" 'https://slaughterhouse-berlin.de/konzerte/' kellerkompass-import --kind slaughterhouse --config '{"venues":{"Slaughterhouse":"<venue id>"}}'
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -166,6 +167,11 @@ and the "Abgesagt"/"Verschoben"/"Verlegt" title suffixes. An event's room is its
 every floor to the Berghain venue; a night on another floor (Lab.oratory, Garten) without a mapping keeps
 the floors as its location text. The same kind reads the Halle listing (`/de/program/halle/`), which is
 empty most of the time. Running order, tickets and text are on the event pages, fetched one by one.
+
+The Slaughterhouse page (WordPress) writes its programme as plain paragraphs: a date, the title in bold
+("Party: Factory", the kind goes to the description), the text, a rule. There are no event pages or ids, so
+the date is the id, as with the Dunckerclub; a second event on one day gets "-2". The start is "Beginn",
+else the doors.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one
