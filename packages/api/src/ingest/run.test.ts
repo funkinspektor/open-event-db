@@ -728,6 +728,61 @@ describe('runIngest (Urban Spree programme)', () => {
   })
 })
 
+describe('runIngest (Berghain programme)', () => {
+  const fixture = (name: string) =>
+    readFileSync(fileURLToPath(new URL(`./fixtures/berghain/${name}.html`, import.meta.url)), 'utf8')
+  // Thursday 2026-10-29, the day the fixtures were saved
+  const BH_NOW = new Date('2026-10-29T10:00:00Z')
+  const BH_LATER = new Date('2026-10-29T16:00:00Z')
+
+  /** The listing at the source URL, the event fixtures at the URLs its cards link to (on the same host). */
+  const site = (source: IngestSource, listing: string) => async (url: string) => {
+    const id = url.match(/\/de\/event\/(\d+)\/$/)?.[1]
+    if (id) return fixture(`event-${id}`)
+    if (url.startsWith(`https://${source.slug}.test/`)) return listing
+    throw new Error(`unexpected fetch ${url}`)
+  }
+
+  it('reads the listing and the event pages, mapping every floor to the venue', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Berghain ${stamp}`, address: 'Am Wriezener Bahnhof', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Berghain: venue!.id, 'Panorama Bar': venue!.id, Säule: venue!.id } }, '', 'berghain')
+    const result = await runIngest({ only: source.slug, now: BH_NOW, fetchText: site(source, fixture('program')) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 6, created: 6 })
+    expect(stub.calls).toBe(0)
+    const url = `https://${source.slug}.test/de/event/80850/`
+    expect((await itemOf(source.id, '80850')).draft).toMatchObject({
+      title: 'Sound Metaphors Festival Part 1',
+      starts_at: '2026-10-29T19:00:00+01:00',
+      ends_at: '2026-10-29T23:30:00+01:00',
+      venue_id: venue!.id,
+      location_text: null,
+      links: { website: url, tickets: 'https://ticketingv2.berghain.de/event/event-24418-2026' },
+      source_url: url,
+      times_unverified: false,
+    })
+    // The Klubnacht runs into Monday: too long for an end
+    expect((await itemOf(source.id, '80749')).draft).toMatchObject({ ends_at: null, venue_id: venue!.id })
+    expect((await itemOf(source.id, '80851')).draft).toMatchObject({ venue_id: venue!.id })
+  })
+
+  it('marks a show gone when the site cancels it', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'berghain')
+    const listing = fixture('kantine')
+    await runIngest({ only: source.slug, now: BH_NOW, fetchText: site(source, listing) })
+    const cancelled = listing.replace(/(\n\s*)zeug(\n\s*<\/h2>)/, '$1zeug - Abgesagt!$2')
+    expect(cancelled).not.toBe(listing)
+    const result = await runIngest({ only: source.slug, now: BH_LATER, fetchText: site(source, cancelled) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 2, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, '81644')).goneAt?.getTime()).toBe(BH_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

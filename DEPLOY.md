@@ -157,7 +157,15 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source acud "ACUD macht neu" 'https://
 scripts/prod-db.sh pnpm db:cli ingest-add-source duncker "Dunckerclub" 'https://www.dunckerclub.de/start.html' kellerkompass-import --kind dunckerclub --config '{"venues":{"Dunckerclub":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source badehaus "Badehaus Berlin" 'https://badehaus-berlin.com/events.ics' kellerkompass-import --config '{"default_location":"Badehaus","capped":true,"venues":{"Badehaus":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source urbanspree "Urban Spree" 'https://www.urbanspree.com/program/?limit=100' kellerkompass-import --kind urbanspree --config '{"venues":{"Urban Spree":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source berghain "Berghain" 'https://www.berghain.berlin/de/program/' kellerkompass-import --kind berghain --config '{"venues":{"Berghain":"<venue id>","Panorama Bar":"<venue id>","Säule":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" 'https://www.berghain.berlin/de/program/kantine-am-berghain/' kellerkompass-import --kind berghain --config '{"venues":{"Kantine am Berghain":"<venue id>"}}'
 ```
+
+The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
+and the "Abgesagt"/"Verschoben"/"Verlegt" title suffixes. An event's room is its first listed floor, so map
+every floor to the Berghain venue; a night on another floor (Lab.oratory, Garten) without a mapping keeps
+the floors as its location text. The same kind reads the Halle listing (`/de/program/halle/`), which is
+empty most of the time. Running order, tickets and text are on the event pages, fetched one by one.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one

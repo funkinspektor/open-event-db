@@ -21,6 +21,7 @@ import { ExtractionError } from '../extract/vision.js'
 import { berlinInstant, berlinToday, fmtDay, nextDay, type CalendarDay } from '../extract/normalize.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
+import { readBerghain } from './adapters/berghain.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
 import { readUrbanSpree } from './adapters/urbanspree.js'
@@ -229,6 +230,8 @@ async function readFeed(
       return parseDunckerclub(text, config, { pageUrl: url, now })
     case 'urbanspree':
       return readUrbanSpree(text, config, { pageUrl: url, now, fetchText })
+    case 'berghain':
+      return readBerghain(text, config, { pageUrl: url, now, fetchText })
   }
 }
 

@@ -3,7 +3,7 @@ import { parse, serializeOuter } from 'parse5'
 import type { IngestSourceConfig } from '@open-event-db/shared'
 import { berlinToday, fmtDay, parseTime, type CalendarDay } from '../../extract/normalize.js'
 import { FeedParseError, type FeedEvent } from './ical.js'
-import { attr, berlinMoment, elements, hasClass, isElement, squash, textOf, type Element, type Node } from './page.js'
+import { attr, berlinMoment, elements, hasClass, richText, squash, textOf, webUrl, type Element } from './page.js'
 
 const SUPPORTED_TIMEZONE = 'Europe/Berlin'
 /** Concert room, Biergarten and Galerie share one address; map it with `venues: { 'Urban Spree': … }`. */
@@ -42,7 +42,6 @@ const SEPARATOR = /\s+[-–—]\s+|\s*[|•@,]\s*/g
 const VENUE_WORDS = new Set(['urban', 'spree', 'berlin', 'live', 'in', 'at', 'show', 'germany'])
 const SHORT_DATE = /^\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4})?$/
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-const BLOCKS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'table', 'tr'])
 
 /** "Urban Spree, Berlin", "Berlin Show", "29.10.2026": the place and day, which the event's own fields hold. */
 function isVenueSegment(segment: string): boolean {
@@ -85,66 +84,10 @@ function siteDate(text: string): { day: CalendarDay; minutes: number | null } | 
 const fmtDe = ({ year, month, day }: CalendarDay) =>
   `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
 
-/**
- * An absolute http(s) link without click tracking; null for placeholders such as "https://". Text copied
- * from Facebook wraps links in its l.facebook.com redirect, which is unwrapped to the target.
- */
-function webUrl(href: string | null): string | null {
-  if (!href) return null
-  try {
-    let url = new URL(href)
-    const target = url.hostname === 'l.facebook.com' ? url.searchParams.get('u') : null
-    if (target) url = new URL(target)
-    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname.includes('.')) return null
-    for (const key of [...url.searchParams.keys()]) {
-      if (key === 'fbclid' || key.startsWith('utm_')) url.searchParams.delete(key)
-    }
-    return url.href
-  } catch {
-    return null
-  }
-}
-
 /** The bare event link, without the `acontext` blob the site copies along. */
 function facebookEvent(href: string | null): string | null {
   const m = href?.match(/^https?:\/\/(?:www\.|m\.|web\.)?facebook\.com\/events\/(\d+)/)
   return m ? `https://www.facebook.com/events/${m[1]}` : null
-}
-
-/** The editor's HTML as Markdown-ish text: blocks become paragraphs, <br> line breaks, links stay links. */
-function richText(root: Node): string {
-  const out: string[] = []
-  const walk = (node: Node) => {
-    if (node.nodeName === '#text') {
-      out.push(textOf(node).replace(/\s+/g, ' '))
-      return
-    }
-    if (!isElement(node)) return
-    if (node.tagName === 'br') {
-      out.push('\n')
-      return
-    }
-    if (node.tagName === 'a') {
-      const text = squash(textOf(node))
-      const href = webUrl(attr(node, 'href'))
-      if (href && text && text !== href) {
-        out.push(`[${text.replace(/[[\]]/g, '\\$&')}](${href.replaceAll('(', '%28').replaceAll(')', '%29')})`)
-      } else out.push(text || href || '')
-      return
-    }
-    const block = BLOCKS.has(node.tagName)
-    if (block) out.push('\n\n')
-    node.childNodes.forEach(walk)
-    if (block) out.push('\n\n')
-  }
-  walk(root)
-  return out
-    .join('')
-    .split('\n')
-    .map((line) => line.trim())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
 }
 
 /** The cards of the programme listing, as listed (newest first). Pure. */
