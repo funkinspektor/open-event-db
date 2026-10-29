@@ -141,7 +141,7 @@ export function parseIcal(text: string, config: IngestSourceConfig): FeedEvent[]
     let end = dtend ? toMoment(dtend) : null
     if (end && end.iso <= start.iso) end = null // an end that is not after the start tells us nothing
 
-    const location = stringOf(vevent, 'location')
+    const location = stringOf(vevent, 'location')?.trim() || config.default_location
     const raw = raws[i] ?? ''
     const externalId = externalIdOf(uid, config.external_id_pattern)
     const earlier = events.get(externalId)

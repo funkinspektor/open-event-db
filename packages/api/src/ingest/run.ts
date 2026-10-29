@@ -23,7 +23,7 @@ import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
-import { normalizeFeedEvent } from './normalize.js'
+import { calendarDay, normalizeFeedEvent } from './normalize.js'
 import { syncItemImage } from './image.js'
 
 export interface SourceRunResult {
@@ -247,14 +247,21 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
     }
 
     // Items not in the feed (or no longer in a listed room) although they start inside the window it was
-    // asked for are gone.
+    // asked for are gone. A capped feed covers only the days before its last event: on that day and after it,
+    // a missing event may just have been pushed past the cap.
     const { from, to } = runWindow(config, now)
+    let until = berlinInstant(nextDay(to), 0)
+    if (config.capped && feed.length > 0) {
+      const lastDay = feed.map((ev) => ev.start.date).reduce((a, b) => (a > b ? a : b))
+      const lastStart = berlinInstant(calendarDay(lastDay), 0)
+      if (lastStart < until) until = lastStart
+    }
     const startsAt = sql`(${ingestItems.draft}->>'starts_at')::timestamptz`
     const conditions: SQL[] = [
       eq(ingestItems.sourceId, source.id),
       isNull(ingestItems.goneAt),
       sql`${startsAt} >= ${berlinInstant(from, 0).toISOString()}::timestamptz`,
-      sql`${startsAt} < ${berlinInstant(nextDay(to), 0).toISOString()}::timestamptz`,
+      sql`${startsAt} < ${until.toISOString()}::timestamptz`,
     ]
     if (listed.length > 0) conditions.push(notInArray(ingestItems.externalId, listed.map((ev) => ev.externalId)))
     const gone = await db

@@ -34,6 +34,10 @@ export const ingestSourceConfigSchema = z.object({
   city: z.string().min(1).default('Berlin'),
   /** Only feed events in these rooms (first part of LOCATION, case-insensitive) are imported; null = all. */
   rooms: z.array(z.string().min(1)).min(1).nullable().default(null),
+  /** LOCATION for feed events that have none (a venue's own feed); `venues` and `rooms` then apply to it. */
+  default_location: z.string().min(1).nullable().default(null),
+  /** The feed lists only its next N events, not a date range: items after its last event are not marked gone. */
+  capped: z.boolean().default(false),
 })
 
 export type IngestSourceConfig = z.infer<typeof ingestSourceConfigSchema>

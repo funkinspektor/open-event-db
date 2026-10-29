@@ -108,6 +108,19 @@ describe('parseIcal (edge cases)', () => {
     expect(e.description).toBe('')
   })
 
+  it('reads events without LOCATION at default_location, and keeps a stated one', () => {
+    const config = ingestSourceConfigSchema.parse({ default_location: 'Badehaus' })
+    const [bare, placed] = parseIcal(
+      calendar(
+        vevent('UID:a@x', 'SUMMARY:Bare', 'DTSTART:20261101T190000Z'),
+        vevent('UID:b@x', 'SUMMARY:Placed', 'DTSTART:20261101T190000Z', 'LOCATION:Hof\\, RAW'),
+      ),
+      config,
+    )
+    expect(bare).toMatchObject({ locationRoom: 'Badehaus', locationText: 'Badehaus' })
+    expect(placed).toMatchObject({ locationRoom: 'Hof', locationText: 'Hof, RAW' })
+  })
+
   it('throws when the pattern does not match a UID instead of falling back to it', () => {
     const text = calendar(
       vevent('UID:1-100@x', 'SUMMARY:A', 'DTSTART:20261101T190000Z'),

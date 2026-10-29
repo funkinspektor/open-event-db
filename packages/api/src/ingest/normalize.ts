@@ -13,7 +13,7 @@ import type { FeedEvent } from './adapters/ical.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function calendarDay(date: string): CalendarDay {
+export function calendarDay(date: string): CalendarDay {
   const [year, month, day] = date.split('-').map(Number)
   return { year: year!, month: month!, day: day! }
 }

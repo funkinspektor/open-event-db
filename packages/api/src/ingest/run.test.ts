@@ -371,6 +371,20 @@ describe('runIngest', () => {
     expect((await itemOf(source.id, '2390')).goneAt).toBeNull()
   })
 
+  it('marks nothing gone on or after the last day of a capped feed', async () => {
+    stubExtractor()
+    const source = await newSource({ ...ACUD, capped: true })
+    await run(source, fixture, NOW)
+    // 2386 (2026-10-31) is the last event: without it, the feed ends with Persian Love on 2026-10-30
+    const withoutLast = fixture.replace(/BEGIN:VEVENT\r\n(?:(?!BEGIN:VEVENT)[\s\S])*?-2386@[\s\S]*?END:VEVENT\r\n/, '')
+    expect((await run(source, withoutLast, LATER)).sources[0]).toMatchObject({ ok: true, gone: 0 })
+    expect((await itemOf(source.id, '2386')).goneAt).toBeNull()
+
+    // Before the last day the feed is complete, so a missing event is gone
+    expect((await run(source, withoutPersian(fixture), LATEST)).sources[0]).toMatchObject({ ok: true, gone: 1 })
+    expect((await itemOf(source.id, PERSIAN)).goneAt).not.toBeNull()
+  })
+
   it('records an HTML error page as the source error, marks nothing gone and runs the next source', async () => {
     stubExtractor()
     const broken = await newSource(ACUD, '-a')

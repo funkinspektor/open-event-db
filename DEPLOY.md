@@ -150,12 +150,17 @@ extracts every upcoming event at once, from a laptop with the CLI instead:
 scripts/prod-db.sh pnpm --filter @open-event-db/api ingest acud
 ```
 
-Sources are added with the admin CLI, for example the two in production:
+Sources are added with the admin CLI, for example the ones in production:
 
 ```bash
 scripts/prod-db.sh pnpm db:cli ingest-add-source acud "ACUD macht neu" 'https://acudmachtneu.de/?eme_ical=public&scope={from}--{to}' kellerkompass-import --config '{"external_id_pattern":"-([0-9]+)@","extract_from_text":true,"rooms":["Club"],"venues":{"Club":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source duncker "Dunckerclub" 'https://www.dunckerclub.de/start.html' kellerkompass-import --kind dunckerclub --config '{"venues":{"Dunckerclub":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source badehaus "Badehaus Berlin" 'https://badehaus-berlin.com/events.ics' kellerkompass-import --config '{"default_location":"Badehaus","capped":true,"venues":{"Badehaus":"<venue id>"}}'
 ```
+
+The Badehaus feed (WordPress Events Manager) has no LOCATION, hence `default_location`, and lists only the
+next 50 events, hence `capped`: without it, an event pushed past the 50th by a newly added one would be
+marked gone.
 
 Write patterns without backslashes (`[0-9]`, not `\d`): `pnpm` passes the arguments through a shell and
 doubles every backslash, so `\d` arrives as `\\d` and the source fails with "external_id_pattern … yields no id".
