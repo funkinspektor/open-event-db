@@ -37,7 +37,7 @@ export interface S3Config {
   bucket: string
   accessKeyId: string
   secretAccessKey: string
-  /** Public URL the bucket's objects are reachable at, e.g. `https://<bucket>.s3.fr-par.scw.cloud`. */
+  /** Public URL the bucket's objects are reachable at, e.g. `https://<bucket>.s3.nl-ams.scw.cloud`. */
   baseUrl: string
 }
 

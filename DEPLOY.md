@@ -1,8 +1,8 @@
 # Deploying to Scaleway
 
-Two containers plus a database, all in Amsterdam (`nl-ams`). Transactional Email and the Generative APIs
-stay in `fr-par` (`SCALEWAY_REGION=fr-par`) — the API reaches both over HTTPS, so the region split
-doesn't matter. (Managed PostgreSQL creation in `fr-par` was disabled on 2026-10-14.)
+Two containers, a database and the event images bucket, all in Amsterdam (`nl-ams`). Transactional
+Email and the Generative APIs stay in `fr-par` (`SCALEWAY_REGION=fr-par`) — the API reaches both over
+HTTPS, so the region split doesn't matter. (Managed PostgreSQL creation in `fr-par` was disabled on 2026-10-14.)
 
 | Piece | Scaleway product | Public URL |
 |---|---|---|
@@ -70,12 +70,12 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 | `VISION_MODEL` | `mistral-medium-3.5-128b` |
 | `TEXT_MODEL` | optional; model for reading feed descriptions, defaults to `VISION_MODEL` |
 | `INGEST_CRON_SECRET` 🔒 | `openssl rand -hex 32` — without it `/internal/ingest/run` answers 404 |
-| `S3_ENDPOINT`, `S3_REGION` | `https://s3.fr-par.scw.cloud`, `fr-par` |
+| `S3_ENDPOINT`, `S3_REGION` | `https://s3.nl-ams.scw.cloud`, `nl-ams` |
 | `S3_BUCKET` | the event images bucket (see below); without it events have no images |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` 🔒 | API key whose IAM policy has `ObjectStorageFullAccess` for the project |
-| `IMAGE_BASE_URL` | `https://<bucket>.s3.fr-par.scw.cloud` |
+| `IMAGE_BASE_URL` | `https://<bucket>.s3.nl-ams.scw.cloud` |
 
-**Event images bucket.** Create an Object Storage bucket in `fr-par` (Scaleway console → Object Storage →
+**Event images bucket.** Create an Object Storage bucket in `nl-ams` (Scaleway console → Object Storage →
 Create bucket, visibility private: the API writes every object with a `public-read` ACL, so only the images
 themselves are public, not the bucket listing). The API stores images under `events/<event id>/` with
 immutable cache headers and deletes replaced ones. Commands run from a laptop against the production database
