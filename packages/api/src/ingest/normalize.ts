@@ -97,7 +97,7 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
     venue_id: venueId,
     location_text: venueId || ev.locationText === null ? null : truncate(ev.locationText, MAX_LOCATION_TEXT),
     city: config.city,
-    links: normalizeLinks(extraction?.links ?? [], website ? { website } : {}),
+    links: normalizeLinks(extraction?.links ?? [], { ...(website ? { website } : {}), ...ev.links }),
     image_url: httpUrl(ev.imageUrl),
     source_url: website,
     // An unreadable start time counts as missing: the feed time was used.

@@ -23,6 +23,7 @@ import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
+import { readUrbanSpree } from './adapters/urbanspree.js'
 import { calendarDay, normalizeFeedEvent } from './normalize.js'
 import { syncItemImage } from './image.js'
 
@@ -212,13 +213,22 @@ async function ingestEvent(
   result.updated++
 }
 
-/** The source's text -> feed events, by the adapter its kind names. */
-function parseFeed(source: IngestSource, config: IngestSourceConfig, text: string, url: string, now: Date): FeedEvent[] {
+/** The source's feed events, by the adapter its kind names; a page adapter may fetch further pages. */
+async function readFeed(
+  source: IngestSource,
+  config: IngestSourceConfig,
+  url: string,
+  now: Date,
+  fetchText: (url: string) => Promise<string>,
+): Promise<FeedEvent[]> {
+  const text = await fetchText(url)
   switch (source.kind) {
     case 'ical':
       return parseIcal(text, config)
     case 'dunckerclub':
       return parseDunckerclub(text, config, { pageUrl: url, now })
+    case 'urbanspree':
+      return readUrbanSpree(text, config, { pageUrl: url, now, fetchText })
   }
 }
 
@@ -227,7 +237,7 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
   try {
     const config = ingestSourceConfigSchema.parse(source.config)
     const url = feedUrl(source, now)
-    const feed = parseFeed(source, config, await fetchText(url), url, now)
+    const feed = await readFeed(source, config, url, now, fetchText)
     result.seen = feed.length
     const existing = await db.select().from(ingestItems).where(eq(ingestItems.sourceId, source.id))
     // Stored items count too: a first run that crashed before recording its count left no lastItemCount

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ingest_source_kind" ADD VALUE 'urbanspree';

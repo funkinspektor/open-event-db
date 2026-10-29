@@ -33,6 +33,8 @@ export interface FeedEvent {
   locationText: string | null
   /** The source states the start time itself, so the draft needs no "times unverified" mark. */
   timesStated: boolean
+  /** Links the source gives as such (tickets, facebook), keyed like event links; the website is `url`. */
+  links?: Record<string, string>
   /** The source text of the event (VEVENT, table row) as served. */
   raw: string
   /** sha256 of `raw` without DTSTAMP lines, so a re-export alone does not count as a change. */

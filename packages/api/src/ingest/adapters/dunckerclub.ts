@@ -1,19 +1,9 @@
 import { createHash } from 'node:crypto'
-import { parse, serializeOuter, type DefaultTreeAdapterTypes } from 'parse5'
+import { parse, serializeOuter } from 'parse5'
 import type { IngestSourceConfig } from '@open-event-db/shared'
-import {
-  berlinInstant,
-  berlinIso,
-  berlinToday,
-  fmtDay,
-  nextDay,
-  parseTime,
-  type CalendarDay,
-} from '../../extract/normalize.js'
-import { FeedParseError, type FeedEvent, type FeedMoment } from './ical.js'
-
-type Node = DefaultTreeAdapterTypes.Node
-type Element = DefaultTreeAdapterTypes.Element
+import { berlinToday, fmtDay, nextDay, parseTime, type CalendarDay } from '../../extract/normalize.js'
+import { FeedParseError, type FeedEvent } from './ical.js'
+import { attr, berlinMoment, elements, hasClass, isElement, squash, textOf, type Element, type Node } from './page.js'
 
 const SUPPORTED_TIMEZONE = 'Europe/Berlin'
 /** The club has one floor, so every event is at the same place; map it with `venues: { Dunckerclub: … }`. */
@@ -27,26 +17,7 @@ export interface DunckerclubOptions {
   now: Date
 }
 
-const isElement = (node: Node): node is Element => 'tagName' in node
-const hasClass = (el: Element, name: string) =>
-  el.attrs.some((a) => a.name === 'class' && a.value.split(/\s+/).includes(name))
-const attr = (el: Element, name: string) => el.attrs.find((a) => a.name === name)?.value ?? null
-const squash = (text: string) => text.replace(/\s+/g, ' ').trim()
-
-function* elements(node: Node): Generator<Element> {
-  if (isElement(node)) yield node
-  if ('childNodes' in node) for (const child of node.childNodes) yield* elements(child)
-}
-
 const cell = (row: Element, name: string) => [...elements(row)].find((el) => el.tagName === 'td' && hasClass(el, name)) ?? null
-
-/** Text with <br> as "\n". Comments are separate nodes, so commented-out markup never shows up here. */
-function textOf(node: Node): string {
-  if (node.nodeName === '#text') return (node as DefaultTreeAdapterTypes.TextNode).value
-  if (isElement(node) && node.tagName === 'br') return '\n'
-  if ('childNodes' in node) return node.childNodes.map(textOf).join('')
-  return ''
-}
 
 /** "Dark Mønday<br>SAMHAIN Celebration 2026 (*)" → "Dark Mønday – SAMHAIN Celebration 2026". */
 function titleOf(name: Element): string {
@@ -125,16 +96,6 @@ function dayOf(text: string, today: CalendarDay): CalendarDay | null {
   return candidates[0] ?? null
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-
-function moment(day: CalendarDay, minutes: number | null): FeedMoment {
-  return {
-    date: fmtDay(day),
-    time: minutes === null ? null : `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
-    iso: berlinIso(berlinInstant(day, minutes ?? 0)),
-  }
-}
-
 /** "21h-05h" → start and end minutes; an end not after the start is on the next day. */
 function timesOf(text: string): { start: number | null; end: number | null } {
   const [from, to] = squash(text).split(/\s*[-–]\s*/)
@@ -186,8 +147,8 @@ export function parseDunckerclub(html: string, config: IngestSourceConfig, opts:
       uid: externalId,
       summary,
       description,
-      start: moment(day, times.start),
-      end: times.end === null ? null : moment(endDay, times.end),
+      start: berlinMoment(day, times.start),
+      end: times.end === null ? null : berlinMoment(endDay, times.end),
       url: opts.pageUrl,
       imageUrl,
       locationRoom: LOCATION,

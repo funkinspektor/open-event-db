@@ -638,6 +638,96 @@ describe('runIngest (Dunckerclub page)', () => {
   })
 })
 
+describe('runIngest (Urban Spree programme)', () => {
+  const fixture = (name: string) =>
+    readFileSync(fileURLToPath(new URL(`./fixtures/urbanspree/${name}.html`, import.meta.url)), 'utf8')
+  // Thursday 2026-10-29, the day the fixtures were saved
+  const US_NOW = new Date('2026-10-29T10:00:00Z')
+  const US_LATER = new Date('2026-10-29T16:00:00Z')
+  const details: Record<string, string> = {
+    'flame-parade': 'flame-parade',
+    'escape-with-romeo': 'escape-with-romeo',
+    tigercub: 'tigercub',
+    'wholetrain-20': 'wholetrain-20',
+    'mayflower-madame': 'mayflower-madame',
+    thaylo: 'thaylo',
+    'pure-obsessions': 'pure-obsessions',
+    'exhibitions/reconnections': 'reconnection',
+  }
+  const FLAME = 'concerts/flame-parade,-alice-gift-anna-grob-29.10.2026-urban-spree-berlin'
+
+  /** The listing at the source URL, the detail fixtures at the URLs its cards link to. */
+  const site = (source: IngestSource, listing: string, edit: (name: string, html: string) => string = (_, html) => html) =>
+    async (url: string) => {
+      if (url.startsWith(`https://${source.slug}.test/`)) return listing
+      const key = Object.keys(details).find((k) => url.includes(k))
+      if (!key) throw new Error(`unexpected fetch ${url}`)
+      return edit(details[key]!, fixture(details[key]!))
+    }
+
+  it('reads the listing and the detail pages and keeps their links', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Urban Spree ${stamp}`, address: 'Revaler Straße 99', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { 'Urban Spree': venue!.id } }, '', 'urbanspree')
+    const listing = fixture('program')
+    const result = await runIngest({ only: source.slug, now: US_NOW, fetchText: site(source, listing) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 7, created: 7 })
+    expect(stub.calls).toBe(0)
+    const flame = await itemOf(source.id, FLAME)
+    const url = `https://www.urbanspree.com/program/${FLAME}.html`
+    expect(flame.draft).toMatchObject({
+      title: 'FLAME PARADE, ALICE GIFT + ANNA GROB',
+      starts_at: '2026-10-29T20:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: {
+        website: url,
+        tickets: 'https://rausgegangen.de/events/flame-parade-alice-gift-29102026-urban-spree-berlin-0/',
+        facebook: 'https://www.facebook.com/events/1382782440102291',
+      },
+      source_url: url,
+      times_unverified: false,
+    })
+    expect((await itemOf(source.id, 'concerts/thaylo-darin-epsilon-gareden')).draft).toMatchObject({ times_unverified: true })
+  })
+
+  it('marks a concert gone when the site cancels it', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'urbanspree')
+    const listing = fixture('program')
+    await runIngest({ only: source.slug, now: US_NOW, fetchText: site(source, listing) })
+    const cancelled = listing.replace('SOLD OUT - Tigercub', 'CANCELLED - Tigercub')
+    const result = await runIngest({ only: source.slug, now: US_LATER, fetchText: site(source, cancelled) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 6, created: 0, updated: 0, gone: 1 })
+    const tigercub = await itemOf(source.id, 'concerts/tigercub-nets-to-catch-the-wind-berlin')
+    expect(tigercub.goneAt?.getTime()).toBe(US_LATER.getTime())
+  })
+
+  it('fails the source, marking nothing gone, when a detail page is down', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'urbanspree')
+    const listing = fixture('program')
+    await runIngest({ only: source.slug, now: US_NOW, fetchText: site(source, listing) })
+    const down = site(source, listing)
+    const result = await runIngest({
+      only: source.slug,
+      now: US_LATER,
+      fetchText: async (url) => {
+        if (url.includes('tigercub')) throw new Error('Feed answered HTTP 503')
+        return down(url)
+      },
+    })
+    expect(result.sources[0]).toMatchObject({ ok: false, gone: 0 })
+    expect(result.sources[0]!.error).toMatch(/^Detail page https:\/\/www\.urbanspree\.com\/program\/concerts\/tigercub.*HTTP 503$/)
+    expect((await itemsOf(source.id)).filter((item) => item.goneAt)).toEqual([])
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

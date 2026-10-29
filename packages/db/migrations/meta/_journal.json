@@ -57,6 +57,13 @@
       "when": 1793277653076,
       "tag": "0007_classy_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793304871438,
+      "tag": "0008_fast_darkstar",
+      "breakpoints": true
     }
   ]
 }
