@@ -71,6 +71,8 @@ export const events = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    /** False when only the day is known (flyers often have no time): starts_at is then 00:00 Berlin that day. */
+    startTimeKnown: boolean('start_time_known').notNull().default(true),
     endsAt: timestamp('ends_at', { withTimezone: true }),
     venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
     locationText: text('location_text'),

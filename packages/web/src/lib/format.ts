@@ -38,8 +38,18 @@ export function formatTime(iso: string): string {
   return timeFmt.format(new Date(iso))
 }
 
-/** "23:59–10:00" in lists; pass " – " for the spaced form on the event page. */
-export function formatTimeRange(startsAt: string, endsAt: string | null, sep = '–'): string {
+interface EventTimes {
+  starts_at: string
+  start_time_known: boolean
+  ends_at: string | null
+}
+
+/** The start for formatTimeRange: null when only the day is known. */
+export const knownStart = (e: EventTimes): string | null => (e.start_time_known ? e.starts_at : null)
+
+/** "23:59–10:00" in lists; pass " – " for the spaced form on the event page. A null start has no known time. */
+export function formatTimeRange(startsAt: string | null, endsAt: string | null, sep = '–'): string {
+  if (!startsAt) return endsAt ? `until ${formatTime(endsAt)}` : 'Time TBA'
   const start = formatTime(startsAt)
   return endsAt ? `${start}${sep}${formatTime(endsAt)}` : start
 }
@@ -85,14 +95,23 @@ export function formatRowDate(iso: string, now = new Date()): string {
   return berlinDay(new Date(iso)).n === berlinDay(now).n ? 'Today' : formatDay(iso)
 }
 
-/** Running right now; events without an end count as running for the rest of their day. */
-export function isHappeningNow(e: { starts_at: string; ends_at: string | null }, now = new Date()): boolean {
-  if (new Date(e.starts_at) > now) return false
+/** Not started yet; an event without a known time counts as upcoming for its whole day. */
+export function isUpcoming(e: EventTimes, now = new Date()): boolean {
+  if (!e.start_time_known) return dayKey(e.starts_at) >= berlinDay(now).key
+  return new Date(e.starts_at) > now
+}
+
+/**
+ * Running right now; events without an end count as running for the rest of their day. Without a known
+ * start time we can't tell, so it's never "now", only "today".
+ */
+export function isHappeningNow(e: EventTimes, now = new Date()): boolean {
+  if (!e.start_time_known || new Date(e.starts_at) > now) return false
   return e.ends_at ? new Date(e.ends_at) > now : dayKey(e.starts_at) === berlinDay(now).key
 }
 
-export function formatDateTime(startsAt: string, endsAt: string | null, long = false): string {
-  return `${formatDate(startsAt, long)} · ${formatTimeRange(startsAt, endsAt)}`
+export function formatDateTime(e: EventTimes, long = false): string {
+  return `${formatDate(e.starts_at, long)} · ${formatTimeRange(knownStart(e), e.ends_at)}`
 }
 
 const LINK_LABELS: Record<string, string> = {

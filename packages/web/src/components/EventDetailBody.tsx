@@ -13,6 +13,8 @@ import { Headline } from './Headline'
 interface Props {
   title: string
   startsAt: string
+  /** False when only the day is known; feed items in the inbox always have a time. */
+  startTimeKnown?: boolean
   endsAt: string | null
   status: EventStatus
   recurrence: string | null
@@ -34,6 +36,7 @@ interface Props {
 export function EventDetailBody({
   title,
   startsAt,
+  startTimeKnown = true,
   endsAt,
   status,
   recurrence,
@@ -67,7 +70,7 @@ export function EventDetailBody({
           {headerAction}
         </div>
         <p className="m-0 text-[20px]">
-          <span className="font-bold tabular-nums">{formatTimeRange(startsAt, endsAt, ' – ')}</span>
+          <span className="font-bold tabular-nums">{formatTimeRange(startTimeKnown ? startsAt : null, endsAt, ' – ')}</span>
           {recurrence && (
             <>
               {' '}

@@ -5,7 +5,7 @@ import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
-import { formatDateTime } from '@/lib/format'
+import { dayKey, formatDateTime } from '@/lib/format'
 import { markdownToPlainText } from '@/lib/plaintext'
 import { EventDetailBody } from '@/components/EventDetailBody'
 import { JsonLd } from '@/components/JsonLd'
@@ -36,7 +36,7 @@ async function load(params: Params) {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const e = await load(params)
   const where = e.venue?.name ?? e.location_text ?? e.city
-  const description = `${formatDateTime(e.starts_at, e.ends_at)} · ${where} · ${e.city}`
+  const description = `${formatDateTime(e)} · ${where} · ${e.city}`
   return {
     title: e.title,
     description,
@@ -79,7 +79,8 @@ export default async function EventPage({ params, searchParams }: { params: Para
     url: absoluteUrl(`/events/${e.id}`),
     description: e.description ? markdownToPlainText(e.description) : undefined,
     ...(e.image_url ? { image: [e.image_url] } : {}),
-    startDate: e.starts_at,
+    // schema.org takes a bare date when the time isn't known
+    startDate: e.start_time_known ? e.starts_at : dayKey(e.starts_at),
     ...(e.ends_at ? { endDate: e.ends_at } : {}),
     eventStatus: SCHEMA_STATUS[e.status],
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -119,6 +120,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
       <EventDetailBody
         title={e.title}
         startsAt={e.starts_at}
+        startTimeKnown={e.start_time_known}
         endsAt={e.ends_at}
         status={e.status}
         recurrence={e.recurrence}

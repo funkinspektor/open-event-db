@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { DuplicateCandidate, IngestItemView } from '@open-event-db/shared'
-import { formatDate, formatTimeRange } from '@/lib/format'
+import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
 import { Markdown } from './Markdown'
 
 interface Props {
@@ -27,7 +27,7 @@ export function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: bo
         </Link>
         <span className="text-muted">
           {' '}
-          · {formatDate(d.starts_at)} {formatTimeRange(d.starts_at, d.ends_at)}
+          · {formatDate(d.starts_at)} {formatTimeRange(knownStart(d), d.ends_at)}
           {d.venue_name && ` · ${d.venue_name}`} · added by {d.added_by_name}
         </span>
       </span>

@@ -102,6 +102,7 @@ describe('ingestItemViewSchema', () => {
           id: uuid,
           title: 'Concert',
           starts_at: '2026-11-01T20:00:00+01:00',
+          start_time_known: true,
           ends_at: null,
           venue_name: null,
           added_by_name: 'Scout',

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import {
   editHistory,
   eventOwners,
@@ -399,6 +399,59 @@ describe('event categories', () => {
     expect(body.statusCode).toBe(400)
     const list = await app.inject({ method: 'GET', url: '/api/v1/events?categories=opera' })
     expect(list.statusCode).toBe(400)
+  })
+})
+
+describe('events without a start time', () => {
+  it('stores a bare day as 00:00 Berlin with start_time_known false, and a timestamp turns it back on', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Day only', starts_at: '2031-07-04', venue_id: venue.id },
+    })
+    expect(created.statusCode).toBe(201)
+    const event = created.json().data as { id: string; starts_at: string; start_time_known: boolean }
+    expect(event).toMatchObject({ starts_at: '2031-07-03T22:00:00.000Z', start_time_known: false })
+
+    const qs = new URLSearchParams({ venue_id: venue.id, from: '2031-07-03T00:00:00Z', to: '2031-07-05T00:00:00Z' })
+    const list = await app.inject({ method: 'GET', url: `/api/v1/events?${qs}` })
+    expect(list.json().data).toEqual([expect.objectContaining({ id: event.id, start_time_known: false })])
+
+    const timed = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${event.id}`,
+      headers: auth(keyA),
+      payload: { starts_at: '2031-07-04T21:00:00+02:00' },
+    })
+    expect(timed.json().data).toMatchObject({ starts_at: '2031-07-04T19:00:00.000Z', start_time_known: true })
+
+    // Winter time: the day starts at 23:00 UTC the evening before
+    const untimed = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/events/${event.id}`,
+      headers: auth(keyA),
+      payload: { starts_at: '2031-12-24' },
+    })
+    expect(untimed.json().data).toMatchObject({ starts_at: '2031-12-23T23:00:00.000Z', start_time_known: false })
+
+    const [history] = await db
+      .select({ diff: editHistory.diff })
+      .from(editHistory)
+      .where(eq(editHistory.entityId, event.id))
+      .orderBy(desc(editHistory.createdAt))
+      .limit(1)
+    expect(history?.diff).toMatchObject({ start_time_known: { before: true, after: false } })
+  })
+
+  it('rejects anything that is neither a timestamp nor a day', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Bad start', starts_at: '4.7.2031', venue_id: venue.id },
+    })
+    expect(res.statusCode).toBe(400)
   })
 })
 

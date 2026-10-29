@@ -63,6 +63,7 @@ export const duplicateCandidateSchema = z.object({
   id: uuid,
   title: z.string(),
   starts_at: iso,
+  start_time_known: z.boolean(),
   ends_at: iso.nullable(),
   venue_name: z.string().nullable(),
   added_by_name: z.string(),

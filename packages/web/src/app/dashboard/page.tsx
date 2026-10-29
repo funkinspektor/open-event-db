@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import type { EventSlim } from '@open-event-db/shared'
 import { ALL_STATUSES, getEvent, getEvents } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
-import { isHappeningNow } from '@/lib/format'
+import { isHappeningNow, isUpcoming } from '@/lib/format'
 import { EventRow } from '@/components/EventRow'
 import { Headline } from '@/components/Headline'
 import { NextIcon } from '@/components/Icons'
@@ -16,7 +16,7 @@ function partition(events: EventSlim[], now = new Date()) {
   const upcoming: EventSlim[] = []
   const past: EventSlim[] = []
   for (const e of events) {
-    if (new Date(e.starts_at) > now) upcoming.push(e)
+    if (isUpcoming(e, now)) upcoming.push(e)
     else (isHappeningNow(e, now) ? happening : past).push(e)
   }
   past.reverse()

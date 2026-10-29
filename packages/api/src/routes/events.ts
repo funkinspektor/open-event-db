@@ -22,6 +22,7 @@ import {
   EVENT_IMAGE_MAX_BYTES,
   EXTRACT_IMAGE_TYPES,
   eventCreateSchema,
+  eventDaySchema,
   eventListQuerySchema,
   eventUpdateSchema,
   normalizeCategories,
@@ -35,6 +36,8 @@ import { ApiError, badRequest, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
+import { calendarDay } from '../ingest/normalize.js'
+import { berlinInstant } from '../extract/normalize.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { replaceEventImage } from '../images/events.js'
 import { sniffImageType } from '../images/sniff.js'
@@ -65,6 +68,12 @@ async function loadEvent(id: string) {
   const [e] = await db.select().from(events).where(eq(events.id, id)).limit(1)
   if (!e) throw notFound('Event not found')
   return { ...e, owners: await getOwners(e.id) }
+}
+
+/** `starts_at` from a write: a timestamp, or a bare day (stored as 00:00 Berlin) when the start time isn't known. */
+function startOf(value: string): { startsAt: Date; startTimeKnown: boolean } {
+  if (!eventDaySchema.safeParse(value).success) return { startsAt: new Date(value), startTimeKnown: true }
+  return { startsAt: berlinInstant(calendarDay(value), 0), startTimeKnown: false }
 }
 
 const actor = (p: Publisher) => ({ id: p.id, is_scout: p.isScout })
@@ -174,7 +183,7 @@ export async function eventRoutes(app: FastifyInstance) {
     const city = body.venue_id ? await venueCity(body.venue_id) : body.city
     if (!city) throw badRequest('city is required when no venue_id is provided')
 
-    const startsAt = new Date(body.starts_at)
+    const { startsAt, startTimeKnown } = startOf(body.starts_at)
     const endsAt = body.ends_at ? new Date(body.ends_at) : null
     if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
 
@@ -185,6 +194,7 @@ export async function eventRoutes(app: FastifyInstance) {
           title: body.title,
           description: body.description ?? '',
           startsAt,
+          startTimeKnown,
           endsAt,
           venueId: body.venue_id ?? null,
           locationText: body.location_text ?? null,
@@ -226,7 +236,7 @@ export async function eventRoutes(app: FastifyInstance) {
     const patch: Partial<typeof events.$inferInsert> = {}
     if (body.title !== undefined) patch.title = body.title
     if (body.description !== undefined) patch.description = body.description
-    if (body.starts_at !== undefined) patch.startsAt = new Date(body.starts_at)
+    if (body.starts_at !== undefined) Object.assign(patch, startOf(body.starts_at))
     if (body.ends_at !== undefined) patch.endsAt = body.ends_at ? new Date(body.ends_at) : null
     if (body.location_text !== undefined) patch.locationText = body.location_text
     if (body.categories !== undefined) patch.categories = normalizeCategories(body.categories)

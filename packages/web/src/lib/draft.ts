@@ -3,10 +3,11 @@ import type { EventCategory, EventDraft } from '@open-event-db/shared'
 /** What the create form starts with after an image import. Empty strings mean "not read from the image". */
 export interface EventPrefill {
   title: string
-  startsAt: string
+  /** YYYY-MM-DD, for <input type="date">. */
+  startDate: string
+  /** HH:MM, for <input type="time">; empty when the image had a date but no time — never pre-filled as 00:00. */
+  startTime: string
   endsAt: string
-  /** Berlin day (YYYY-MM-DD) when the image had a date but no time — shown as a hint, never pre-filled as 00:00. */
-  startDateOnly: string | null
   description: string
   city: string
   /** Address without a venue name: goes into the free-text location. */
@@ -42,11 +43,12 @@ export function withLineup(description: string | null, lineup: string[]): string
 
 export function draftToPrefill(draft: EventDraft, knownTags: string[]): EventPrefill {
   const known = new Set(knownTags)
+  const [startDate, startTime] = toLocalInput(draft.starts_at).split('T')
   return {
     title: draft.title ?? '',
-    startsAt: toLocalInput(draft.starts_at),
+    startDate: startDate || (draft.start_date ?? ''),
+    startTime: startTime ?? '',
     endsAt: toLocalInput(draft.ends_at),
-    startDateOnly: draft.starts_at ? null : draft.start_date,
     description: withLineup(draft.description, draft.lineup),
     city: draft.city,
     locationText: draft.venue_name ? '' : (draft.address ?? ''),

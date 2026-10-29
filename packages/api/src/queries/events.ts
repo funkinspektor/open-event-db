@@ -27,6 +27,7 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
     title: e.title,
     description: e.description,
     starts_at: e.startsAt.toISOString(),
+    start_time_known: e.startTimeKnown,
     ends_at: e.endsAt?.toISOString() ?? null,
     venue_id: e.venueId,
     location_text: e.locationText,
@@ -46,6 +47,7 @@ export const slimEventColumns = {
   title: events.title,
   description: events.description,
   startsAt: events.startsAt,
+  startTimeKnown: events.startTimeKnown,
   endsAt: events.endsAt,
   status: events.status,
   categories: events.categories,
@@ -66,6 +68,7 @@ interface SlimEventRow {
   title: string
   description: string
   startsAt: Date
+  startTimeKnown: boolean
   endsAt: Date | null
   status: Event['status']
   categories: Event['categories']
@@ -86,6 +89,7 @@ export function serializeSlimEvent(r: SlimEventRow): EventSlim {
     title: r.title,
     description: r.description,
     starts_at: r.startsAt.toISOString(),
+    start_time_known: r.startTimeKnown,
     ends_at: r.endsAt?.toISOString() ?? null,
     status: r.status,
     categories: r.categories,
@@ -111,6 +115,7 @@ function serializeEventDetail(
     title: e.title,
     description: e.description,
     starts_at: e.startsAt.toISOString(),
+    start_time_known: e.startTimeKnown,
     ends_at: e.endsAt?.toISOString() ?? null,
     status: e.status,
     categories: e.categories,

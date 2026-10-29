@@ -58,6 +58,8 @@ export const eventSlimSchema = z.object({
   title: z.string(),
   description: z.string(),
   starts_at: z.string().datetime({ offset: true }),
+  /** False when only the day is known: starts_at is then 00:00 Berlin that day and shouldn't be shown as a time. */
+  start_time_known: z.boolean(),
   ends_at: z.string().datetime({ offset: true }).nullable(),
   status: eventStatusSchema,
   categories: z.array(eventCategorySchema),
@@ -132,9 +134,13 @@ export const eventDetailResponseSchema = z.object({
   data: eventDetailSchema,
 })
 
+/** A day without a time (YYYY-MM-DD), for `starts_at` when the start time isn't known. */
+export const eventDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
 export const eventCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  starts_at: z.string().datetime({ offset: true }),
+  /** A timestamp, or just the day when the start time isn't known (stored with `start_time_known: false`). */
+  starts_at: z.union([z.string().datetime({ offset: true }), eventDaySchema]),
   ends_at: z.string().datetime({ offset: true }).nullable().optional(),
   description: z.string().max(10_000).optional(),
   venue_id: z.string().uuid().nullable().optional(),

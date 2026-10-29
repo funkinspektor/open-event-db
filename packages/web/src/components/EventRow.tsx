@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { EventSlim } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
-import { formatRowDate, formatTimeRange, isHappeningNow } from '@/lib/format'
+import { formatRowDate, formatTimeRange, isHappeningNow, knownStart } from '@/lib/format'
 import { StatusBadge } from './StatusBadge'
 
 interface Props {
@@ -37,7 +37,7 @@ export function EventRow({
     <article className={cls}>
       <div className="kk-event__when">
         {showDate && <span className="kk-event__date">{running ? 'Now' : formatRowDate(event.starts_at, now)}</span>}
-        <span className="kk-event__time">{formatTimeRange(event.starts_at, event.ends_at)}</span>
+        <span className="kk-event__time">{formatTimeRange(knownStart(event), event.ends_at)}</span>
       </div>
       <div className={`kk-event__main${event.image_url ? ' kk-event__main--thumb' : ''}`}>
         <div className="min-w-0">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EventDraft } from '@open-event-db/shared'
-import { draftToPrefill, pickVenue, venueQueries, withLineup } from './draft'
+import { draftToPrefill, pickVenue, toLocalInput, venueQueries, withLineup } from './draft'
 
 const draft: EventDraft = {
   title: 'Metro Alien',
@@ -34,11 +34,11 @@ describe('draftToPrefill', () => {
     expect(withLineup(null, ['A'])).toBe('**Lineup**\n- A')
   })
 
-  it('keeps a date without time as a hint only', () => {
-    const p = draftToPrefill({ ...draft, starts_at: null }, [])
-    expect(p.startsAt).toBe('')
-    expect(p.startDateOnly).toBe('2026-10-23')
-    expect(draftToPrefill(draft, []).startDateOnly).toBeNull()
+  it('fills the date without a time when the image has none', () => {
+    expect(draftToPrefill({ ...draft, starts_at: null }, [])).toMatchObject({ startDate: '2026-10-23', startTime: '' })
+    expect(draftToPrefill({ ...draft, starts_at: null, start_date: null }, [])).toMatchObject({ startDate: '', startTime: '' })
+    const [date, time] = toLocalInput(draft.starts_at).split('T')
+    expect(draftToPrefill(draft, [])).toMatchObject({ startDate: date, startTime: time })
   })
 
   it('uses the address as location text only when there is no venue name', () => {

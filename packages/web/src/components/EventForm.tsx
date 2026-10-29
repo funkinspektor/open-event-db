@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { EVENT_CATEGORIES, type EventCategory, type EventDetail, type EventStatus } from '@open-event-db/shared'
 import { CATEGORY_LABELS } from '@/lib/categories'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
+import { dayKey } from '@/lib/format'
 import type { DuplicateDraft } from '@/lib/duplicates'
 import { imageSaveOutcome, savedParam, type ImageSaveOutcome } from '@/lib/image-save'
 import { EventImageInput, type ImageChange } from './EventImageInput'
@@ -53,20 +54,21 @@ const isoOrNull = (v: string) => {
   return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null
 }
 
-const formatDay = (day: string) =>
-  new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Europe/Berlin',
-  })
+/** A saved event's start as form values; one without a known time keeps its Berlin day. */
+function startFields(e: EventDetail): { date: string; time: string } {
+  if (!e.start_time_known) return { date: dayKey(e.starts_at), time: '' }
+  const [date = '', time = ''] = toLocalInput(e.starts_at).split('T')
+  return { date, time }
+}
 
 export function EventForm({ mode, event, canCancel = false, knownTags, imported, onDraftChange }: Props) {
   const router = useRouter()
   const pre = imported?.prefill
   const [title, setTitle] = useState(event?.title ?? pre?.title ?? '')
-  const [startsAt, setStartsAt] = useState(event ? toLocalInput(event.starts_at) : (pre?.startsAt ?? ''))
+  // Date and time are separate fields: flyers nearly always have the date, often not the time
+  const start = event ? startFields(event) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
+  const [startDate, setStartDate] = useState(start.date)
+  const [startTime, setStartTime] = useState(start.time)
   const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : (pre?.endsAt ?? ''))
   const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? imported?.venue ?? null)
   const [creatingVenue, setCreatingVenue] = useState(!!imported?.newVenue)
@@ -83,6 +85,8 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // As a datetime-local value; without a time the event starts with its day
+  const startsAt = startDate ? `${startDate}T${startTime || '00:00'}` : ''
   const venueId = venue?.id ?? null
   useEffect(() => {
     if (mode !== 'create') return
@@ -117,7 +121,8 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
 
     const payload: Record<string, unknown> = {
       title,
-      starts_at: fromLocalInput(startsAt),
+      // A bare day tells the API the start time isn't known
+      starts_at: startTime ? fromLocalInput(startsAt) : startDate,
       ends_at: fromLocalInput(endsAt),
       description,
       venue_id: venue?.id ?? null,
@@ -172,21 +177,32 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
         </label>
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
-          <label className="kk-field">
-            Starts
-            <input
-              type="datetime-local"
-              required
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-              className={'kk-input' + missing(!startsAt)}
-            />
-            {pre?.startDateOnly && !startsAt && (
-              <span className="kk-hint kk-hint--warn">
-                The image says {formatDay(pre.startDateOnly)} but no start time — please add it.
+          <div className="grid grid-cols-[1fr_8rem] gap-3">
+            <label className="kk-field">
+              Date
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={'kk-input' + missing(!startDate)}
+              />
+            </label>
+            <label className="kk-field">
+              <span>
+                Start <span className="kk-field__opt">(optional)</span>
               </span>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className={'kk-input' + missing(!startTime)}
+              />
+            </label>
+            {imported && startDate && !startTime && (
+              <span className="kk-hint col-span-2">No start time on the image. Leave it empty if it isn’t known.</span>
             )}
-          </label>
+          </div>
           <label className="kk-field">
             <span>
               Ends <span className="kk-field__opt">(optional)</span>
