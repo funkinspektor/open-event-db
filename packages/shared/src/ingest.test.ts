@@ -64,8 +64,10 @@ describe('ingest request schemas', () => {
   })
 
   it('validates link and gone bodies', () => {
-    expect(ingestLinkSchema.parse({ event_id: uuid })).toEqual({ event_id: uuid })
+    // A plain link takes nothing from the feed
+    expect(ingestLinkSchema.parse({ event_id: uuid })).toEqual({ event_id: uuid, fields: [], links: [], sync: false })
     expect(() => ingestLinkSchema.parse({ event_id: 'x' })).toThrow()
+    expect(() => ingestLinkSchema.parse({ event_id: uuid, fields: ['tags'] })).toThrow()
     expect(ingestGoneSchema.parse({ action: 'cancel' })).toEqual({ action: 'cancel' })
     expect(() => ingestGoneSchema.parse({ action: 'delete' })).toThrow()
   })

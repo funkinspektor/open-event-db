@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
@@ -14,10 +16,13 @@ import {
   type Publisher,
   type Venue,
 } from '@open-event-db/db'
+import { ingestSourceConfigSchema } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
 import { ingestImages } from '../ingest/image.js'
+import { parseUrbanSpreeDetail, type UrbanSpreeCard } from '../ingest/adapters/urbanspree.js'
+import { normalizeFeedEvent } from '../ingest/normalize.js'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9])
 
@@ -51,7 +56,7 @@ const draftOf = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-async function newItem(over: Partial<typeof ingestItems.$inferInsert> = {}, draft = draftOf()): Promise<IngestItem> {
+async function newItem(over: Partial<typeof ingestItems.$inferInsert> = {}, draft: Record<string, unknown> = draftOf()): Promise<IngestItem> {
   const [item] = await db
     .insert(ingestItems)
     .values({ sourceId, externalId: `ext-${stamp}-${++seq}`, draft, raw: 'raw', ...over })
@@ -537,6 +542,144 @@ describe('POST /ingest/items/:id/link', () => {
     expect(await listIds('gone')).not.toContain(a.id)
     expect((await post(`/items/${a.id}/gone`, keyScout, { action: 'cancel' })).statusCode).toBe(409)
     expect((await eventRow(eventId)).status).toBe('scheduled')
+  })
+
+  describe('taking fields from the feed (VEITSTANZ, Urban Spree, 2027-01-09)', () => {
+    const SPREE = 'https://www.urbanspree.com/program/concerts/linear-movement-der-k%C3%BCnftige-musikant-twilight-ritual.html'
+    const OWN_TICKETS = 'https://aufnahmeundwiedergabe.de/tickets'
+
+    afterEach(() => {
+      imageStore.reset()
+      ingestImages.reset()
+    })
+
+    /** The draft the Urban Spree run stored for the event, read from the saved detail page. */
+    function spreeDraft() {
+      const card: UrbanSpreeCard = {
+        kind: 'concert',
+        externalId: 'concerts/linear-movement-der-künftige-musikant-twilight-ritual',
+        url: SPREE,
+        title: 'LINEAR MOVEMENT + DER KÜNFTIGE MUSIKANT +…',
+        day: { year: 2027, month: 1, day: 9 },
+        time: '20:00',
+        endDay: null,
+        imageUrl: 'https://www.urbanspree.com/assets/project/urbanspree/mediasource/IMG_3093.JPG',
+        raw: '',
+      }
+      const html = readFileSync(fileURLToPath(new URL('../ingest/fixtures/urbanspree/veitstanz.html', import.meta.url)), 'utf8')
+      const ev = parseUrbanSpreeDetail(html, card, { today: { year: 2026, month: 10, day: 29 }, cards: [card] })
+      const config = ingestSourceConfigSchema.parse({ venues: { 'Urban Spree': venue.id }, default_categories: ['concert'] })
+      return normalizeFeedEvent(ev!, config, null)
+    }
+
+    /** The event as a scout entered it by hand the day before the feed listed it. */
+    async function ownEvent(over: Partial<typeof events.$inferInsert> = {}) {
+      const [event] = await db
+        .insert(events)
+        .values({
+          title: 'VEITSTANZ',
+          description: 'A minimal electronic music event featuring live acts and DJs.',
+          startsAt: new Date('2027-01-09T19:00:00Z'),
+          venueId: venue.id,
+          city: 'Berlin',
+          tags: ['minimal', 'synth'],
+          links: { tickets: OWN_TICKETS },
+          createdBy: scout.id,
+          ...over,
+        })
+        .returning()
+      eventIds.push(event!.id)
+      return event!
+    }
+
+    function stubImages() {
+      const store = memoryImageStore()
+      imageStore.setStore(store)
+      ingestImages.setFetch((async () => new Response(PNG)) as unknown as typeof fetch)
+      return store
+    }
+
+    it('takes the chosen fields and links, keeps the rest, and stays detached', async () => {
+      const store = stubImages()
+      const draft = spreeDraft()
+      expect(draft.title).toBe('LINEAR MOVEMENT + DER KÜNFTIGE MUSIKANT + TWILIGHT RITUAL')
+      expect(draft.description).toMatch(/^Wehe! Musik & aufnahme \+ wiedergabe present\n\nVEITSTANZ w\/\n\nLinear Movement \(live\)/)
+      const event = await ownEvent()
+      const item = await newItem({}, draft)
+
+      const res = await post(`/items/${item.id}/link`, keyScout, {
+        event_id: event.id,
+        fields: ['description', 'categories', 'image'],
+        links: ['facebook', 'gone-key'],
+      })
+      expect(res.statusCode).toBe(200)
+
+      const after = await eventRow(event.id)
+      expect(after.title).toBe('VEITSTANZ')
+      expect(after.description).toBe(draft.description)
+      expect(after.categories).toEqual(draft.categories)
+      expect(after.tags).toEqual(['minimal', 'synth'])
+      expect(after.startsAt).toEqual(event.startsAt)
+      expect(after.links).toEqual({ tickets: OWN_TICKETS, facebook: 'https://www.facebook.com/events/2698407777240408' })
+      expect(after.imageKey).toMatch(new RegExp(`^events/${event.id}/`))
+      expect([...store.objects.values()].map((o) => o.data)).toEqual([PNG])
+
+      const stored = await itemRow(item.id)
+      expect(stored.status).toBe('accepted')
+      expect(stored.detachedAt).not.toBeNull()
+
+      const history = await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))
+      const merge = history.find((h) => (h.diff as { via?: string }).via === 'ingest-link')
+      expect(merge?.publisherId).toBe(scout.id)
+      expect(Object.keys(merge!.diff as object).sort()).toEqual(['categories', 'description', 'links', 'via'])
+    })
+
+    it('replaces a link the event already has when its key is chosen', async () => {
+      const event = await ownEvent()
+      const item = await newItem({}, spreeDraft())
+      expect((await post(`/items/${item.id}/link`, keyScout, { event_id: event.id, links: ['tickets'] })).statusCode).toBe(200)
+      expect((await eventRow(event.id)).links).toEqual({
+        tickets: 'https://shotgun.live/en/events/linear-movement-der-kunftige-musikant-twilight-ritual',
+      })
+    })
+
+    it('hands the event to the feed when synced: every synced field, the image, and the item stays attached', async () => {
+      stubImages()
+      const draft = spreeDraft()
+      const event = await ownEvent({ startsAt: new Date('2027-01-09T18:00:00Z') })
+      const item = await newItem({}, draft)
+
+      const res = await post(`/items/${item.id}/link`, keyScout, { event_id: event.id, fields: ['title'], sync: true })
+      expect(res.statusCode).toBe(200)
+
+      const after = await eventRow(event.id)
+      expect(after.title).toBe(draft.title)
+      expect(after.description).toBe(draft.description)
+      expect(after.startsAt).toEqual(new Date(draft.starts_at))
+      expect(after.tags).toEqual(['minimal', 'synth'])
+      expect(after.links).toEqual({ tickets: OWN_TICKETS, website: SPREE })
+      expect(after.imageKey).not.toBeNull()
+
+      const stored = await itemRow(item.id)
+      expect(stored.detachedAt).toBeNull()
+      expect(stored.imageSourceUrl).toBe(draft.image_url)
+      const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${event.id}` })
+      expect(detail.json().data.synced_from).not.toBeNull()
+    })
+
+    it('leaves a claimed event to its owners: no fields, but a plain link still works', async () => {
+      const event = await ownEvent({ createdBy: alice.id })
+      await db.insert(eventOwners).values({ eventId: event.id, publisherId: alice.id, role: 'creator' })
+      const item = await newItem({}, spreeDraft())
+
+      const merge = await post(`/items/${item.id}/link`, keyScout, { event_id: event.id, fields: ['description'] })
+      expect(merge.statusCode).toBe(403)
+      expect((await itemRow(item.id)).status).toBe('pending')
+      expect((await eventRow(event.id)).description).toBe(event.description)
+
+      expect((await post(`/items/${item.id}/link`, keyScout, { event_id: event.id })).statusCode).toBe(200)
+      await db.delete(eventOwners).where(eq(eventOwners.eventId, event.id))
+    })
   })
 
   it('404s for an unknown event and 409s for a decided item', async () => {

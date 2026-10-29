@@ -1,6 +1,9 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import {
+  canEdit,
+  INGEST_SYNCED_FIELDS,
+  SYNCED_LINK,
   ingestDraftSchema,
   ingestGoneSchema,
   ingestLinkSchema,
@@ -13,13 +16,14 @@ import {
 } from '@open-event-db/shared'
 import { events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
-import { conflict, forbidden, notFound } from '../errors.js'
+import { badRequest, conflict, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
-import { cancelEvent, eventSnapshot } from '../queries/events.js'
+import { cancelEvent, eventSnapshot, getOwners } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
-import { syncItemImage } from '../ingest/image.js'
+import { copyItemImage, syncItemImage } from '../ingest/image.js'
+import { mergePatch } from '../ingest/merge.js'
 import { berlinInstant, berlinToday } from '../extract/normalize.js'
 import { serializeCoordinates } from '../serializers.js'
 
@@ -266,26 +270,60 @@ export async function ingestRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>('/ingest/items/:id/link', write, async (req) => {
     const me = requireScout(req)
-    const { event_id } = ingestLinkSchema.parse(req.body)
+    const { event_id, links, sync, ...take } = ingestLinkSchema.parse(req.body)
+    const fields = sync ? INGEST_SYNCED_FIELDS : take.fields
+    const linkKeys = sync ? [...new Set([...links, SYNCED_LINK])] : links
+    const merging = sync || fields.length > 0 || linkKeys.length > 0
 
-    await db.transaction(async (tx) => {
+    const linked = await db.transaction(async (tx) => {
       // Event first, then items: the lock order of PUT/DELETE /events/:id and the sync run
-      const [target] = await tx.select({ id: events.id }).from(events).where(eq(events.id, event_id)).for('update')
+      const [target] = await tx.select().from(events).where(eq(events.id, event_id)).for('update')
       if (!target) throw notFound('Event not found')
+      // Taking the feed's fields is an edit: a claimed event is its owners' (a plain link changes nothing)
+      if (merging && !canEdit({ owners: await getOwners(event_id) }, { id: me.id, is_scout: me.isScout })) {
+        throw forbidden('Only event owners can edit this event')
+      }
       // An item the event was synced from (re-posted under a new id) must not later offer it as gone
       await detachIngest(tx, event_id)
-      // Detached from the start: the linked event is a human's, the feed must not overwrite it
+      // Detached unless the scout hands the event to the feed: otherwise it stays a human's, never overwritten
       const [item] = await tx
         .update(ingestItems)
-        .set({ status: 'accepted', eventId: event_id, detachedAt: new Date(), decidedBy: me.id, decidedAt: new Date() })
+        .set({ status: 'accepted', eventId: event_id, detachedAt: sync ? null : new Date(), decidedBy: me.id, decidedAt: new Date() })
         .where(and(eq(ingestItems.id, req.params.id), eq(ingestItems.status, 'pending')))
-        .returning({ id: ingestItems.id })
-      if (item) return
-      const [exists] = await tx.select({ id: ingestItems.id }).from(ingestItems).where(eq(ingestItems.id, req.params.id))
-      if (!exists) throw notFound('Inbox item not found')
-      throw conflict('Item has already been decided')
+        .returning()
+      if (!item) {
+        const [exists] = await tx.select({ id: ingestItems.id }).from(ingestItems).where(eq(ingestItems.id, req.params.id))
+        if (!exists) throw notFound('Inbox item not found')
+        throw conflict('Item has already been decided')
+      }
+      const draft = ingestDraftSchema.parse(item.draft)
+      if (!merging) return { item, draft }
+
+      const [source] = await tx.select({ name: ingestSources.name }).from(ingestSources).where(eq(ingestSources.id, item.sourceId))
+      const patch = await mergePatch(tx, target, draft, source?.name ?? draft.city, { fields, links: linkKeys })
+      const endsAt = patch.endsAt === undefined ? target.endsAt : patch.endsAt
+      if (endsAt && endsAt <= (patch.startsAt ?? target.startsAt)) throw badRequest('ends_at must be after starts_at')
+      if (Object.keys(patch).length) {
+        const [updated] = await tx
+          .update(events)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(eq(events.id, event_id))
+          .returning()
+        if (!updated) throw new Error('update returned no row')
+        await logEdit(tx, {
+          entityType: 'event',
+          entityId: event_id,
+          publisherId: me.id,
+          action: 'updated',
+          diff: { ...diff(eventSnapshot(target), eventSnapshot(updated)), via: 'ingest-link' },
+        })
+      }
+      return { item, draft }
     })
 
+    // After the commit, as on accept: the merge stands even if the feed image cannot be fetched
+    if (sync) await syncItemImage(linked.item, linked.draft, me.id)
+    else if (fields.includes('image')) await copyItemImage(event_id, linked.draft, me.id)
     return { data: { event_id } }
   })
 

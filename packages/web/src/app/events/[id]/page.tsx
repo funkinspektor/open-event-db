@@ -23,6 +23,8 @@ const SAVED_MESSAGES: Record<string, string> = {
   created_image_unavailable: 'Event created. Images can’t be stored on this server yet, so it has none.',
   updated_image_unavailable: 'Changes saved. Images can’t be stored on this server yet, so the image is unchanged.',
   accepted: 'Accepted — it’s live now.',
+  linked: 'Linked — the feed item is settled.',
+  merged: 'Linked — the feed’s fields are in.',
 }
 
 async function load(params: Params) {

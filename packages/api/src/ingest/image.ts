@@ -36,3 +36,19 @@ export async function syncItemImage(item: IngestItem, draft: IngestDraft, publis
     console.warn(`Could not sync the image of ingest item ${item.id}:`, err instanceof Error ? err.message : err)
   }
 }
+
+/**
+ * Copies the feed image onto an event once, as a person's edit: for a scout who links an item without
+ * keeping it synced. Never throws; returns whether the event now shows the feed image.
+ */
+export async function copyItemImage(eventId: string, draft: IngestDraft, publisherId: string): Promise<boolean> {
+  if (!draft.image_url || !imageStore.store) return false
+  try {
+    const image = await fetchRemoteImage(draft.image_url, fetchImpl)
+    if (!image) return false
+    return (await replaceEventImage(eventId, image, { publisherId })).applied
+  } catch (err) {
+    console.warn(`Could not copy the feed image onto event ${eventId}:`, err instanceof Error ? err.message : err)
+    return false
+  }
+}

@@ -116,9 +116,26 @@ export const ingestRejectSchema = z.object({
   ids: z.array(uuid).min(1).max(100),
 })
 
+/** Event fields a link can take over from the feed's version; `times` is start and end, `place` venue or location. */
+export const ingestMergeFieldSchema = z.enum(['title', 'description', 'times', 'place', 'categories', 'image'])
+export type IngestMergeField = z.infer<typeof ingestMergeFieldSchema>
+
+/** The fields the feed keeps current on an event it stays attached to: a synced link takes them all. */
+export const INGEST_SYNCED_FIELDS: readonly IngestMergeField[] = ingestMergeFieldSchema.options
+/** The one link the feed keeps current; the event's other links stay as they are. */
+export const SYNCED_LINK = 'website'
+
 export const ingestLinkSchema = z.object({
   event_id: uuid,
+  /** Fields the feed's version replaces on the event; the others stay as they are. */
+  fields: z.array(ingestMergeFieldSchema).default([]),
+  /** Link keys (`tickets`, `website`, …) whose feed URL replaces or joins the event's. */
+  links: z.array(z.string().min(1)).max(20).default([]),
+  /** Keep the item attached, so later feed changes reach the event; implies every synced field. */
+  sync: z.boolean().default(false),
 })
+
+export type IngestLinkInput = z.input<typeof ingestLinkSchema>
 
 export const ingestGoneSchema = z.object({
   action: z.enum(['cancel', 'keep']),

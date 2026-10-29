@@ -63,11 +63,9 @@ export function IngestInbox({ items, view }: Props) {
     router.refresh()
   }
 
-  async function link(item: IngestItemView, eventId: string) {
-    const data = await call<{ event_id: string }>(`items/${item.id}/link`, { event_id: eventId }, [item.id])
-    if (!data) return
-    showEvent('Linked —', data.event_id)
-    router.refresh()
+  // Linking first compares the two, on the item's own page
+  function link(item: IngestItemView, eventId: string) {
+    router.push(`/ingest/${item.id}?merge=${eventId}`)
   }
 
   async function gone(item: IngestItemView, action: 'cancel' | 'keep') {

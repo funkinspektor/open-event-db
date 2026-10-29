@@ -11,6 +11,7 @@ import {
 import {
   ingestDraftSchema,
   ingestSourceConfigSchema,
+  SYNCED_LINK,
   type Extraction,
   type IngestDraft,
   type IngestSourceConfig,
@@ -115,8 +116,8 @@ async function syncEvent(tx: DbOrTx, source: IngestSource, eventId: string, draf
 
   // Only the website comes from the feed; other links on the event stay.
   const links = { ...current.links }
-  if (draft.links.website) links.website = draft.links.website
-  else delete links.website
+  if (draft.links[SYNCED_LINK]) links[SYNCED_LINK] = draft.links[SYNCED_LINK]
+  else delete links[SYNCED_LINK]
 
   const patch = {
     title: draft.title,

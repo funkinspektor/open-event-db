@@ -38,7 +38,8 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
 
   const accept = () => act<{ event_id: string }>(`items/${item.id}/accept`, {}, (d) => `/events/${d.event_id}?saved=accepted`)
   const reject = () => act(`items/reject`, { ids: [item.id] }, () => '/ingest')
-  const link = (eventId: string) => act(`items/${item.id}/link`, { event_id: eventId }, () => '/ingest')
+  // Linking first compares the two: the page shows the merge panel for `?merge=`
+  const link = (eventId: string) => router.push(`/ingest/${item.id}?merge=${eventId}`)
   const gone = (action: 'keep' | 'cancel') => act(`items/${item.id}/gone`, { action }, () => '/ingest?view=gone')
 
   return (
