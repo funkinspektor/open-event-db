@@ -102,17 +102,32 @@ admin user before deploying.
 
 ## 4. Feed ingest cron
 
-The API container gets a Scaleway cron trigger that runs every enabled ingest source once a day:
+The API container gets a Scaleway cron trigger (container → Triggers → Create trigger, type CRON) that runs
+every enabled ingest source once a day:
 
 | Setting | Value |
 |---|---|
-| Schedule | `0 4 * * *` — cron triggers run in UTC: 05:00 Berlin in winter, 06:00 in summer |
-| Args | `{"secret":"<INGEST_CRON_SECRET>"}` |
+| Name | `ingest-daily` |
+| Schedule | `0 4 * * *` |
+| Timezone | `Europe/Berlin` — 04:00 local time all year |
+| Method, Path | `POST`, `/` |
+| JSON body | `{"secret":"<INGEST_CRON_SECRET>"}` — one line, no trailing comma, or the form rejects it |
+| HTTP headers | none |
 
-Cron triggers can't set headers or a path: Scaleway POSTs the args as the JSON body to `/`. The API serves
-the run at both `POST /` and `POST /internal/ingest/run` and reads the secret from the body
-(`X-Ingest-Secret` works too, for a manual `curl`). After the first scheduled run, `pnpm db:cli ingest-list`
-(via `prod-db.sh`) shows the new `last run` time; the API container log shows the request.
+The API serves the run at both `POST /` and `POST /internal/ingest/run` and reads the secret from the JSON
+body or the `X-Ingest-Secret` header, so a trigger with path `/internal/ingest/run` and the header works just
+as well. Check the wiring by sending the same request by hand (zsh); `read -s` keeps the secret out of the shell
+history:
+
+```bash
+read -s "S?Secret: "
+curl -X POST https://api.kellerkompass.de/ -H 'content-type: application/json' -d "{\"secret\":\"$S\"}"
+```
+
+It answers `{"data":{"skipped":false,"sources":[…]}}` with `"ok":true` per source; 404 means
+`INGEST_CRON_SECRET` isn't set on the container (or it hasn't restarted yet), 403 a wrong secret. After the
+first scheduled run, `pnpm db:cli ingest-list` (via `prod-db.sh`) shows the new `last run` time; the API
+container log shows the request.
 
 The run is synchronous inside the request: fetching every feed and extracting the times of new events can
 take minutes, so it must finish within the container's request timeout. Do the first production run, which
