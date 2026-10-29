@@ -246,4 +246,21 @@ describe('normalizeFeedEvent (Dunckerclub)', () => {
       times_unverified: false,
     })
   })
+
+  it('keeps the stated times when the text reads others, and takes categories and links from it', () => {
+    const samhain = nights.find((e) => e.externalId === '2026-10-31')!
+    const read = extraction({
+      start_time: '23:00',
+      end_time: '06:00',
+      categories: ['party'],
+      links: [{ kind: 'tickets', url: 'https://tickets.test/samhain' }],
+    })
+    expect(normalize(samhain, config, read)).toMatchObject({
+      starts_at: '2026-10-31T21:00:00+01:00',
+      ends_at: '2026-11-01T04:00:00+01:00',
+      categories: ['party'],
+      links: { website: pageUrl, tickets: 'https://tickets.test/samhain' },
+      times_unverified: false,
+    })
+  })
 })

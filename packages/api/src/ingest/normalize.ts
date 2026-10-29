@@ -76,14 +76,17 @@ function endOf(ev: FeedEvent, extraction: Extraction | null, startDay: CalendarD
 
 /**
  * Feed event (+ what the text extractor read from its description) → the draft a scout reviews.
- * The feed decides the day; the extraction only corrects the times, which feeds often get wrong.
+ * The feed decides the day. The extraction corrects the times of feeds that don't state them reliably
+ * (iCal times are often wrong); times a page states are kept, so there it only adds categories and links.
  */
 export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, extraction: Extraction | null): IngestDraft {
   const startDay = calendarDay(ev.start.date)
-  const extractedStart = parseTime(extraction?.start_time ?? null)
+  // A text time like "live from 22:00" must not replace the door time a page states
+  const timesFrom = ev.timesStated ? null : extraction
+  const extractedStart = parseTime(timesFrom?.start_time ?? null)
   const startMinutes = extractedStart ?? parseTime(ev.start.time) ?? 0
   const startsAt = berlinInstant(startDay, startMinutes)
-  const endsAt = endOf(ev, extraction, startDay, startsAt)
+  const endsAt = endOf(ev, timesFrom, startDay, startsAt)
 
   const website = httpUrl(ev.url)
   const room = ev.locationRoom

@@ -175,16 +175,19 @@ The Badehaus feed (WordPress Events Manager) has no LOCATION, hence `default_loc
 next 50 events, hence `capped`: without it, an event pushed past the 50th by a newly added one would be
 marked gone.
 
-Categories come from the text extraction where a source has `extract_from_text`; `default_categories`
-fills in when the text names none or isn't read (e.g. `["party"]` for a club). Change an existing source's
+`extract_from_text` reads each new or changed event's text once: categories and links always, the times
+only where the feed doesn't state them reliably (iCal; Urban Spree's placeholder times). Times the
+Dunckerclub, Berghain and Urban Spree pages state stay as read. `default_categories` fills in when the text
+names no category, e.g. `["party"]` for a club whose texts only list genres. Change an existing source's
 config with `ingest-set-config`: the given keys replace the stored ones, the rest stays.
 
 ```bash
-scripts/prod-db.sh pnpm db:cli ingest-set-config duncker --config '{"default_categories":["party"]}'
+scripts/prod-db.sh pnpm db:cli ingest-set-config duncker --config '{"extract_from_text":true,"default_categories":["party"]}'
 ```
 
-The next run reads every item stored before categories existed once more (one text extraction each where
-`extract_from_text` is set) and syncs the categories into accepted events.
+The next run reads every item stored before categories existed once more and syncs the categories into
+accepted events. With `extract_from_text` newly set that is one extraction per stored item, so run it from
+the laptop as above, not in the scheduled request.
 
 Write patterns without backslashes (`[0-9]`, not `\d`): `pnpm` passes the arguments through a shell and
 doubles every backslash, so `\d` arrives as `\\d` and the source fails with "external_id_pattern … yields no id".
