@@ -116,7 +116,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
   }
 
   return (
-    <article className="kk-container" style={{ gap: 52 }}>
+    <article className="kk-container">
       <JsonLd data={jsonLd} />
       {savedMessage && canEdit && <Toast message={savedMessage} param="saved" />}
 
@@ -130,15 +130,18 @@ export default async function EventPage({ params, searchParams }: { params: Para
         categories={e.categories}
         tags={e.tags}
         description={e.description}
+        lineup={e.lineup}
         links={e.links}
         venue={e.venue}
         locationText={e.location_text}
         city={e.city}
         imageUrl={e.image_url}
-        headerAction={
+        back={{ href: '/', label: 'Events' }}
+        topAction={
           canEdit && (
             <Link href={`/events/${e.id}/edit`} className="kk-btn kk-btn--outline">
-              Edit event
+              {/* The button's gap spaces the two words */}
+              Edit<span className="hidden sm:inline">event</span>
             </Link>
           )
         }

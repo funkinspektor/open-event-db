@@ -30,6 +30,14 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', {
   hour12: false,
 })
 
+const shortDateFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'long' })
+
+/** The event page's date line: "Fri, 30 October". */
+export function formatShortDate(iso: string): string {
+  const p = Object.fromEntries(shortDateFmt.formatToParts(new Date(iso)).map((x) => [x.type, x.value]))
+  return `${p.weekday}, ${p.day} ${p.month}`
+}
+
 export function formatDate(iso: string, long = false): string {
   return (long ? longDateFmt : dateFmt).format(new Date(iso))
 }
@@ -66,6 +74,13 @@ function berlinDay(date: Date) {
     n: Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)) / DAY_MS,
     wd: WEEKDAYS.indexOf(p.weekday ?? ''),
   }
+}
+
+/** "Sat" when the event ends on a later Berlin day than it starts, for "19:00 – 11:30 (Sat)". */
+export function formatEndDayMark(startsAt: string, endsAt: string | null): string | null {
+  if (!endsAt) return null
+  const end = berlinDay(new Date(endsAt))
+  return end.n > berlinDay(new Date(startsAt)).n ? WEEKDAYS[end.wd]! : null
 }
 
 /** Berlin calendar day, e.g. "2026-10-10" — used to group events by day. */

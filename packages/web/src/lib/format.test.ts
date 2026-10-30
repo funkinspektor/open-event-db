@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { formatTimeRange, isHappeningNow, isUpcoming, knownStart } from './format'
+import { formatEndDayMark, formatShortDate, formatTimeRange, isHappeningNow, isUpcoming, knownStart } from './format'
+
+describe('event page date and time', () => {
+  it('writes the day as "Fri, 30 October"', () => {
+    expect(formatShortDate('2026-10-30T18:00:00Z')).toBe('Fri, 30 October')
+  })
+
+  it('marks an end on a later Berlin day with its weekday', () => {
+    expect(formatEndDayMark('2026-10-30T18:00:00Z', '2026-10-31T10:30:00Z')).toBe('Sat')
+    // 00:10 to 02:00 Berlin is the same day, though the UTC dates differ
+    expect(formatEndDayMark('2026-10-30T23:10:00Z', '2026-10-31T01:00:00Z')).toBeNull()
+    expect(formatEndDayMark('2026-10-30T18:00:00Z', null)).toBeNull()
+  })
+})
 
 // 2031-07-04 20:00 Berlin; a day-only event on that day is stored as 00:00 Berlin
 const now = new Date('2031-07-04T18:00:00Z')

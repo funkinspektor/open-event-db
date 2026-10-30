@@ -51,6 +51,7 @@ export default async function IngestItemPage({ params, searchParams }: { params:
           categories={draft.categories}
           tags={[]}
           description={draft.description}
+          lineup={draft.lineup}
           links={draft.links}
           venue={item.venue}
           locationText={draft.location_text}
