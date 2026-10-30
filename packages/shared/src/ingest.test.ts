@@ -58,8 +58,12 @@ describe('ingest request schemas', () => {
   })
 
   it('defaults the list view to new and rejects unknown views', () => {
-    expect(ingestListQuerySchema.parse({})).toEqual({ view: 'new' })
-    expect(ingestListQuerySchema.parse({ view: 'gone' })).toEqual({ view: 'gone' })
+    expect(ingestListQuerySchema.parse({})).toEqual({ view: 'new', limit: 20 })
+    expect(ingestListQuerySchema.parse({ view: 'gone', source: 'berghain', limit: '50' })).toEqual({
+      view: 'gone',
+      source: 'berghain',
+      limit: 50,
+    })
     expect(() => ingestListQuerySchema.parse({ view: 'all' })).toThrow()
   })
 

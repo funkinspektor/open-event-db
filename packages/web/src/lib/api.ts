@@ -3,6 +3,7 @@ import type {
   EventSlim,
   IngestItemDetail,
   IngestItemView,
+  IngestSourceCount,
   Meta,
   PublisherMe,
   PublisherPublic,
@@ -89,11 +90,23 @@ export interface IngestCounts {
 
 export type IngestView = 'new' | 'gone'
 
+export interface IngestPageMeta {
+  cursor: string | null
+  has_more: boolean
+  /** Counts of the listed source when one is given, of all sources otherwise. */
+  counts: IngestCounts
+  /** Every source with items in the view, for the source filter. */
+  sources: IngestSourceCount[]
+}
+
 export async function getIngestItems(
-  view: IngestView,
+  query: { view: IngestView; source?: string; cursor?: string; limit: number },
   cookieHeader: string,
-): Promise<{ data: IngestItemView[]; meta: { counts: IngestCounts } }> {
-  return getScout(`/ingest/items?view=${view}`, cookieHeader)
+): Promise<{ data: IngestItemView[]; meta: IngestPageMeta }> {
+  const params = new URLSearchParams({ view: query.view, limit: String(query.limit) })
+  if (query.source) params.set('source', query.source)
+  if (query.cursor) params.set('cursor', query.cursor)
+  return getScout(`/ingest/items?${params}`, cookieHeader)
 }
 
 export async function getIngestCount(cookieHeader: string): Promise<IngestCounts> {

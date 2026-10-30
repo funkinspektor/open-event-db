@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
+import { z } from 'zod'
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql, type SQL } from 'drizzle-orm'
 import {
   canEdit,
   INGEST_SYNCED_FIELDS,
@@ -13,9 +14,11 @@ import {
   type IngestItemDetail,
   type IngestItemState,
   type IngestItemView,
+  type IngestSourceCount,
 } from '@open-event-db/shared'
 import { events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
+import { decodeCursor, encodeCursor } from '../cursor.js'
 import { badRequest, conflict, forbidden, notFound } from '../errors.js'
 import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
@@ -58,14 +61,36 @@ const isGone = and(
   ne(events.status, 'cancelled'),
 )
 
-async function counts(): Promise<{ new: number; gone: number }> {
-  const [n] = await db.select({ n: sql<number>`count(*)::int` }).from(ingestItems).where(isNew())
-  const [g] = await db
-    .select({ n: sql<number>`count(*)::int` })
+const itemCount = sql<number>`count(*)::int`
+
+/** Items in each view, of one source (by slug) if given. */
+async function counts(source?: string): Promise<{ new: number; gone: number }> {
+  const ofSource = source ? eq(ingestSources.slug, source) : undefined
+  const [n] = await db
+    .select({ n: itemCount })
     .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+    .where(and(isNew(), ofSource))
+  const [g] = await db
+    .select({ n: itemCount })
+    .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
     .innerJoin(events, eq(events.id, ingestItems.eventId))
-    .where(isGone)
+    .where(and(isGone, ofSource))
   return { new: n?.n ?? 0, gone: g?.n ?? 0 }
+}
+
+/** The sources with items in a view and how many, by name: the inbox's source filter. */
+async function sourceCounts(view: 'new' | 'gone'): Promise<IngestSourceCount[]> {
+  const base = db
+    .select({ slug: ingestSources.slug, name: ingestSources.name, count: itemCount })
+    .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+  const rows =
+    view === 'new'
+      ? await base.where(isNew()).groupBy(ingestSources.id)
+      : await base.innerJoin(events, eq(events.id, ingestItems.eventId)).where(isGone).groupBy(ingestSources.id)
+  return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 
 /** The API view of a stored item; duplicates are looked up for items that still wait for a decision. */
@@ -136,42 +161,75 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
   }
 }
 
-async function listItems(view: 'new' | 'gone', log: FastifyBaseLogger): Promise<IngestItemView[]> {
+/** Where a page of a view ends: the draft start as an ISO instant, then the id (the list order). */
+const itemCursorSchema = z.object({ starts_at: z.string().datetime({ offset: true }), id: z.string().uuid() })
+
+interface ListQuery {
+  view: 'new' | 'gone'
+  source?: string
+  limit: number
+  cursor?: string
+}
+
+async function listItems(
+  { view, source, limit, cursor }: ListQuery,
+  log: FastifyBaseLogger,
+): Promise<{ items: IngestItemView[]; cursor: string | null; hasMore: boolean }> {
+  const conditions: (SQL | undefined)[] = [view === 'new' ? isNew() : isGone]
+  if (source) conditions.push(eq(ingestSources.slug, source))
+  // An unreadable cursor starts from the top, as on GET /events
+  const after = itemCursorSchema.safeParse(cursor ? decodeCursor(cursor) : null)
+  if (after.success) {
+    conditions.push(sql`(${draftStartsAt}, ${ingestItems.id}) > (${after.data.starts_at}::timestamptz, ${after.data.id}::uuid)`)
+  }
+
   const base = db
     .select({
       item: ingestItems,
       source: { slug: ingestSources.slug, name: ingestSources.name },
       venueName: venues.name,
+      // Read from the row, not the parsed draft: a page may end on a broken one
+      startsAt: sql<string>`to_json(${draftStartsAt}) #>> '{}'`,
     })
     .from(ingestItems)
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
     // Compared as text: a broken stored venue_id must not make the uuid cast fail the whole list
     .leftJoin(venues, sql`${venues.id}::text = ${ingestItems.draft}->>'venue_id'`)
-  const rows =
-    view === 'new'
-      ? await base.where(isNew()).orderBy(asc(draftStartsAt), asc(ingestItems.id))
-      : await base
-          .innerJoin(events, eq(events.id, ingestItems.eventId))
-          .where(isGone)
-          .orderBy(asc(draftStartsAt), asc(ingestItems.id))
+  const query = view === 'new' ? base : base.innerJoin(events, eq(events.id, ingestItems.eventId))
+  const rows = await query
+    .where(and(...conditions))
+    .orderBy(asc(draftStartsAt), asc(ingestItems.id))
+    .limit(limit + 1)
+
+  const hasMore = rows.length > limit
+  const page = hasMore ? rows.slice(0, limit) : rows
+  const last = page[page.length - 1]
+  const nextCursor = hasMore && last ? encodeCursor({ starts_at: last.startsAt, id: last.item.id }) : null
 
   // A broken stored draft must not take the inbox down for every scout: skip it and log it
-  const valid = rows.flatMap(({ item, source, venueName }) => {
+  const valid = page.flatMap(({ item, source, venueName }) => {
     const parsed = ingestDraftSchema.safeParse(item.draft)
     if (parsed.success) return [{ item, source, venueName, draft: parsed.data }]
     log.warn({ itemId: item.id, issues: parsed.error.issues }, 'skipping ingest item with an invalid draft')
     return []
   })
 
-  return Promise.all(valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view === 'new')))
+  const items = await Promise.all(
+    valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view === 'new')),
+  )
+  return { items, cursor: nextCursor, hasMore }
 }
 
 export async function ingestRoutes(app: FastifyInstance) {
   app.get('/ingest/items', read, async (req) => {
     requireScout(req)
-    const { view } = ingestListQuerySchema.parse(req.query)
-    const [data, itemCounts] = await Promise.all([listItems(view, req.log), counts()])
-    return { data, meta: { counts: itemCounts } }
+    const query = ingestListQuerySchema.parse(req.query)
+    const [page, itemCounts, sources] = await Promise.all([
+      listItems(query, req.log),
+      counts(query.source),
+      sourceCounts(query.view),
+    ])
+    return { data: page.items, meta: { cursor: page.cursor, has_more: page.hasMore, counts: itemCounts, sources } }
   })
 
   app.get<{ Params: { id: string } }>('/ingest/items/:id', read, async (req) => {

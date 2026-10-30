@@ -67,11 +67,22 @@ async function newItem(over: Partial<typeof ingestItems.$inferInsert> = {}, draf
 const itemRow = async (id: string) => (await db.select().from(ingestItems).where(eq(ingestItems.id, id)))[0]!
 const eventRow = async (id: string) => (await db.select().from(events).where(eq(events.id, id)))[0]!
 
+/** The view's items of this file's source, every page of it. */
 async function listIds(view: 'new' | 'gone'): Promise<string[]> {
-  const res = await app.inject({ method: 'GET', url: `/api/v1/ingest/items?view=${view}`, headers: auth(keyScout) })
-  expect(res.statusCode).toBe(200)
-  return res.json().data.map((i: { id: string }) => i.id)
+  const ids: string[] = []
+  let cursor: string | null = null
+  do {
+    const url = `/api/v1/ingest/items?view=${view}&source=inbox-${stamp}&limit=100${cursor ? `&cursor=${cursor}` : ''}`
+    const res = await app.inject({ method: 'GET', url, headers: auth(keyScout) })
+    expect(res.statusCode).toBe(200)
+    const body: { data: { id: string }[]; meta: { cursor: string | null } } = res.json()
+    ids.push(...body.data.map((i) => i.id))
+    cursor = body.meta.cursor
+  } while (cursor)
+  return ids
 }
+
+const listUrl = (query: string) => `/api/v1/ingest/items?source=inbox-${stamp}&limit=100&${query}`
 
 const post = (url: string, key: string, payload: unknown = {}) =>
   app.inject({ method: 'POST', url: `/api/v1/ingest${url}`, headers: auth(key), payload: payload as object })
@@ -221,7 +232,7 @@ describe('GET /ingest/items and /ingest/count', () => {
     const hidden = await newItem({ goneAt: new Date() })
     const rejected = await newItem({ status: 'rejected' })
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/ingest/items?view=new', headers: auth(keyScout) })
+    const res = await app.inject({ method: 'GET', url: listUrl('view=new'), headers: auth(keyScout) })
     expect(res.statusCode).toBe(200)
     const body = res.json()
     const mine = body.data.filter((i: { source: { slug: string } }) => i.source.slug === `inbox-${stamp}`)
@@ -241,8 +252,8 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(first.duplicates[0].likely).toBe(true)
     expect(mine.find((i: { id: string }) => i.id === late.id).duplicates).toEqual([])
 
-    expect(body.meta.counts.new).toBeGreaterThanOrEqual(before.new + 3)
-    expect(body.meta.counts.gone).toBeGreaterThanOrEqual(before.gone)
+    // Filtered by source, the counts are that source's; GET /ingest/count counts them all
+    expect(body.meta.counts.new).toBe(mine.length)
 
     const count = await app.inject({ method: 'GET', url: '/api/v1/ingest/count', headers: auth(keyScout) })
     expect(count.json().data.new).toBeGreaterThanOrEqual(before.new + 3)
@@ -263,14 +274,9 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(ids).not.toContain(ended.id)
     expect(ids).not.toContain(startedYesterday.id)
 
-    // The count uses the same filter as the list (retried: other test files add items in parallel)
-    let consistent = false
-    for (let i = 0; i < 5 && !consistent; i++) {
-      const res = await app.inject({ method: 'GET', url: '/api/v1/ingest/items?view=new', headers: auth(keyScout) })
-      const body = res.json()
-      consistent = body.meta.counts.new === body.data.length
-    }
-    expect(consistent).toBe(true)
+    // The count uses the same filter as the list
+    const res = await app.inject({ method: 'GET', url: listUrl('view=new'), headers: auth(keyScout) })
+    expect(res.json().meta.counts.new).toBe(res.json().data.length)
 
     const accept = await post(`/items/${ended.id}/accept`, keyScout)
     expect(accept.statusCode).toBe(409)
@@ -292,6 +298,48 @@ describe('GET /ingest/items and /ingest/count', () => {
       expect(ids).not.toContain(broken.id)
     } finally {
       await db.delete(ingestItems).where(eq(ingestItems.id, broken.id))
+    }
+  })
+
+  it('pages through a view in start order and filters it by source', async () => {
+    const [other] = await db
+      .insert(ingestSources)
+      .values({ slug: `inbox-b-${stamp}`, name: `${sourceName} B`, kind: 'ical', url: 'https://inbox.test/b.ics', publisherId: feedScout.id })
+      .returning()
+    const page = (query: string) =>
+      app.inject({ method: 'GET', url: `/api/v1/ingest/items?source=inbox-b-${stamp}&${query}`, headers: auth(keyScout) })
+    try {
+      const at = (starts_at: string) => newItem({ sourceId: other!.id }, draftOf({ starts_at }))
+      const late = await at('2033-02-01T20:00:00.000Z')
+      // Same start: the id decides, so a page boundary between the two loses neither
+      const tied = [await at('2033-01-01T20:00:00.000Z'), await at('2033-01-01T20:00:00.000Z')].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      )
+      await newItem({}, draftOf({ starts_at: '2033-01-01T19:00:00.000Z' })) // another source
+
+      const first = await page('limit=2')
+      expect(first.statusCode).toBe(200)
+      expect(first.json().data.map((i: { id: string }) => i.id)).toEqual(tied.map((i) => i.id))
+      expect(first.json().meta).toMatchObject({ has_more: true, counts: { new: 3, gone: 0 } })
+
+      const second = await page(`limit=2&cursor=${first.json().meta.cursor}`)
+      expect(second.json().data.map((i: { id: string }) => i.id)).toEqual([late.id])
+      expect(second.json().meta).toMatchObject({ has_more: false, cursor: null })
+
+      // Every source with items in the view, whichever one is listed
+      const sources = first.json().meta.sources as { slug: string; name: string; count: number }[]
+      expect(sources).toContainEqual({ slug: `inbox-b-${stamp}`, name: `${sourceName} B`, count: 3 })
+      expect(sources.map((s) => s.slug)).toContain(`inbox-${stamp}`)
+
+      // An unreadable cursor starts from the top; an unknown source lists nothing
+      const garbled = await page('limit=2&cursor=nonsense')
+      expect(garbled.json().data.map((i: { id: string }) => i.id)).toEqual(tied.map((i) => i.id))
+      const unknown = await app.inject({ method: 'GET', url: `/api/v1/ingest/items?source=nope-${stamp}`, headers: auth(keyScout) })
+      expect(unknown.statusCode).toBe(200)
+      expect(unknown.json().data).toEqual([])
+      expect(unknown.json().meta.counts).toEqual({ new: 0, gone: 0 })
+    } finally {
+      await db.delete(ingestSources).where(eq(ingestSources.id, other!.id)) // cascades items
     }
   })
 
@@ -719,7 +767,7 @@ describe('gone items', () => {
     expect(ids).not.toContain(pendingGone.id)
     expect(ids).not.toContain(resolved.id)
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/ingest/items?view=gone', headers: auth(keyScout) })
+    const res = await app.inject({ method: 'GET', url: listUrl('view=gone'), headers: auth(keyScout) })
     const row = res.json().data.find((i: { id: string }) => i.id === item.id)
     expect(row.status).toBe('accepted')
     expect(row.gone_at).not.toBeNull()

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { linksSchema } from './links.js'
 import { eventCategorySchema, venueDetailEmbedSchema } from './events.js'
+import { cursorQuerySchema } from './pagination.js'
 
 const iso = z.string().datetime({ offset: true })
 const uuid = z.string().uuid()
@@ -108,9 +109,20 @@ export const ingestItemDetailSchema = ingestItemViewSchema.extend({
 
 export type IngestItemDetail = z.infer<typeof ingestItemDetailSchema>
 
-export const ingestListQuerySchema = z.object({
+/** One inbox view, a page at a time, optionally of one source (by slug). */
+export const ingestListQuerySchema = cursorQuerySchema.extend({
   view: z.enum(['new', 'gone']).default('new'),
+  source: z.string().min(1).optional(),
 })
+
+/** A source with items in the listed view, for the inbox's source filter. */
+export const ingestSourceCountSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  count: z.number().int(),
+})
+
+export type IngestSourceCount = z.infer<typeof ingestSourceCountSchema>
 
 export const ingestRejectSchema = z.object({
   ids: z.array(uuid).min(1).max(100),
