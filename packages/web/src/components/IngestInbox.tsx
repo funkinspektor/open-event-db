@@ -2,14 +2,20 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { IngestItemView } from '@open-event-db/shared'
+import type { IngestItemView, IngestView } from '@open-event-db/shared'
 import { ingestAction } from '@/lib/ingest-actions'
 import { IngestItemCard } from './IngestItemCard'
 import { Toast } from './Toast'
 
 interface Props {
   items: IngestItemView[]
-  view: 'new' | 'gone'
+  view: IngestView
+}
+
+const EMPTY: Record<IngestView, string> = {
+  new: 'Nothing new.',
+  filtered: 'Nothing filtered out.',
+  gone: 'Nothing gone from a source.',
 }
 
 interface ToastState {
@@ -93,7 +99,7 @@ export function IngestInbox({ items, view }: Props) {
         </div>
       )}
 
-      {view === 'new' && items.length > 0 && (
+      {view !== 'gone' && items.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-4">
           <label className="flex cursor-pointer items-center gap-3 text-[15px]">
             <input
@@ -116,7 +122,7 @@ export function IngestInbox({ items, view }: Props) {
       )}
 
       {items.length === 0 ? (
-        <p className="kk-empty">{view === 'new' ? 'Nothing new.' : 'Nothing gone from a source.'}</p>
+        <p className="kk-empty">{EMPTY[view]}</p>
       ) : (
         <div>
           <hr className="kk-rule" />

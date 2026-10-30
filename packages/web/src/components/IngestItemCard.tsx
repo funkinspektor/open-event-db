@@ -1,14 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import type { DuplicateCandidate, IngestItemView } from '@open-event-db/shared'
+import type { DuplicateCandidate, IngestItemView, IngestView } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
 import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
 import { Markdown } from './Markdown'
 
 interface Props {
   item: IngestItemView
-  view: 'new' | 'gone'
+  view: IngestView
   selected: boolean
   busy: boolean
   onSelect: (selected: boolean) => void
@@ -17,6 +17,12 @@ interface Props {
   onLink: (eventId: string) => void
   onGone: (action: 'cancel' | 'keep') => void
 }
+
+const VERDICT_BADGE = {
+  fit: { className: 'kk-badge kk-badge--fit', label: 'Fits' },
+  maybe: { className: 'kk-badge kk-badge--scout', label: 'Maybe' },
+  no: { className: 'kk-badge kk-badge--scout', label: "Doesn't fit" },
+} as const
 
 /** A possible duplicate with the button to link the item to it instead of accepting. */
 export function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: boolean; onLink: () => void }) {
@@ -79,6 +85,9 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="kk-badge kk-badge--scout">{item.source.name}</span>
+          {item.fit && (
+            <span className={VERDICT_BADGE[item.fit.verdict].className}>{VERDICT_BADGE[item.fit.verdict].label}</span>
+          )}
           {draft.times_unverified && <span className="kk-badge kk-badge--postponed">Times unverified</span>}
           {gone && <span className="kk-badge kk-badge--cancelled">Gone from source</span>}
           {draft.source_url && (
@@ -92,6 +101,8 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
             </Link>
           )}
         </div>
+
+        {item.fit && <p className="kk-hint m-0 text-[14px]">{item.fit.reason}</p>}
 
         {draft.description.trim() && (
           <details className="kk-disclosure">

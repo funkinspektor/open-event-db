@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getIngestItems, type IngestView } from '@/lib/api'
+import type { IngestView } from '@open-event-db/shared'
+import { getIngestAccuracy, getIngestItems } from '@/lib/api'
 import { getCurrentPublisher, getSessionCookieHeader } from '@/lib/session'
 import { Headline } from '@/components/Headline'
+import { IngestAccuracy } from '@/components/IngestAccuracy'
 import { IngestInbox } from '@/components/IngestInbox'
 import { IngestSourceFilter } from '@/components/IngestSourceFilter'
 import { NextIcon } from '@/components/Icons'
@@ -32,13 +34,18 @@ export default async function IngestPage({ searchParams }: { searchParams: Searc
   if (!me?.is_scout || !cookie) notFound()
 
   const params = await searchParams
-  const view: IngestView = first(params.view) === 'gone' ? 'gone' : 'new'
+  const requested = first(params.view)
+  const view: IngestView = requested === 'filtered' || requested === 'gone' ? requested : 'new'
   const source = first(params.source)
   const cursor = first(params.cursor)
-  const { data, meta } = await getIngestItems({ view, source, cursor, limit: PAGE_SIZE }, cookie)
+  const [{ data, meta }, accuracy] = await Promise.all([
+    getIngestItems({ view, source, cursor, limit: PAGE_SIZE }, cookie),
+    getIngestAccuracy(cookie),
+  ])
 
   const tabs: { view: IngestView; label: string }[] = [
     { view: 'new', label: 'New' },
+    { view: 'filtered', label: 'Filtered out' },
     { view: 'gone', label: 'Gone from source' },
   ]
   const total = meta.sources.reduce((sum, s) => sum + s.count, 0)
@@ -96,6 +103,8 @@ export default async function IngestPage({ searchParams }: { searchParams: Searc
           )}
         </nav>
       )}
+
+      <IngestAccuracy rows={accuracy} />
     </div>
   )
 }

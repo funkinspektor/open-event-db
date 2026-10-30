@@ -91,6 +91,7 @@ button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cu
 .kk-badge--cancelled { background: var(--ink); color: var(--ground); }
 .kk-badge--postponed { border: 1px solid var(--warn); color: var(--warn); }
 .kk-badge--scout { border: 1px solid var(--border); color: var(--muted); }
+.kk-badge--fit { border: 1px solid var(--uv); color: var(--uv); }
 .kk-badge--category { border: 1px solid var(--ink); color: var(--ink); }
 
 /* Section title */

@@ -1,9 +1,11 @@
 import type {
   EventDetail,
   EventSlim,
+  IngestAccuracyRow,
   IngestItemDetail,
   IngestItemView,
   IngestSourceCount,
+  IngestView,
   Meta,
   PublisherMe,
   PublisherPublic,
@@ -85,10 +87,9 @@ async function getScout<T>(path: string, cookieHeader: string): Promise<T> {
 
 export interface IngestCounts {
   new: number
+  filtered: number
   gone: number
 }
-
-export type IngestView = 'new' | 'gone'
 
 export interface IngestPageMeta {
   cursor: string | null
@@ -111,6 +112,11 @@ export async function getIngestItems(
 
 export async function getIngestCount(cookieHeader: string): Promise<IngestCounts> {
   return (await getScout<{ data: IngestCounts }>('/ingest/count', cookieHeader)).data
+}
+
+/** How well the fit verdicts held up against the scouts' decisions, per scout source. */
+export async function getIngestAccuracy(cookieHeader: string): Promise<IngestAccuracyRow[]> {
+  return (await getScout<{ data: IngestAccuracyRow[] }>('/ingest/accuracy', cookieHeader)).data
 }
 
 /** One inbox item with its state; null for an unknown item. */
