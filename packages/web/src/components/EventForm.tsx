@@ -285,7 +285,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
           <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Pasted URLs become links, line breaks are kept.</span>
         </div>
 
-        <LineupEditor value={lineup} onChange={setLineup} />
+        <LineupEditor value={lineup} onChange={setLineup} description={description} />
 
         <div className="kk-field">
           <span id="event-category">

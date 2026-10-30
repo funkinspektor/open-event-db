@@ -12,6 +12,12 @@ export const toLineupRows = (lineup: Lineup): LineupGroupRow[] =>
     acts: g.acts.map((a) => ({ time: a.time ?? '', name: a.name, live: a.live, note: a.note ?? '' })),
   }))
 
+/** A lineup read from the description: it fills an editor without named acts, otherwise goes below them. */
+export function mergeReadLineup(current: LineupGroupRow[], read: Lineup): LineupGroupRow[] {
+  const typed = current.some((g) => g.acts.some((a) => a.name.trim()))
+  return typed ? [...current, ...toLineupRows(read)] : toLineupRows(read)
+}
+
 /** The editor's time pattern: phones type "2330" (the number pad has no colon), others "23:30" or "23.30". */
 export const TIME_INPUT_PATTERN = '([01]?\\d|2[0-3])[:.]?[0-5]\\d'
 

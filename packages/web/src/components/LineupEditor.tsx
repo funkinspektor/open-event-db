@@ -1,19 +1,60 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { TIME_INPUT_PATTERN, emptyRow, parseLineupText, type LineupGroupRow, type LineupRow } from '@/lib/lineup'
+import type { Lineup } from '@open-event-db/shared'
+import {
+  TIME_INPUT_PATTERN,
+  emptyRow,
+  mergeReadLineup,
+  parseLineupText,
+  type LineupGroupRow,
+  type LineupRow,
+} from '@/lib/lineup'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 interface Props {
   value: LineupGroupRow[]
   onChange: (groups: LineupGroupRow[]) => void
+  /** The description as it stands in the form, unsaved edits included. */
+  description: string
 }
 
 /** Lineup groups (floors, "Live" / "DJs") with their acts, in the order the event page shows them. */
-export function LineupEditor({ value: groups, onChange }: Props) {
+export function LineupEditor({ value: groups, onChange, description }: Props) {
   const labelId = useId()
   const pasteId = useId()
   const [pasting, setPasting] = useState(false)
   const [paste, setPaste] = useState('')
+  const [reading, setReading] = useState(false)
+  const [readError, setReadError] = useState<string | null>(null)
+
+  async function readFromDescription() {
+    setReadError(null)
+    setReading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/v1/events/extract-lineup`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: description }),
+      })
+      const json = (await res.json().catch(() => null)) as { data?: { lineup: Lineup }; error?: { code: string; message: string } } | null
+      if (!res.ok || !json?.data) {
+        setReadError(
+          json?.error?.code === 'nothing_extracted'
+            ? json.error.message
+            : 'The lineup couldn’t be read. Try again or fill it in by hand.',
+        )
+        return
+      }
+      onChange(mergeReadLineup(groups, json.data.lineup))
+    } catch {
+      setReadError('The lineup couldn’t be read. Try again or fill it in by hand.')
+    } finally {
+      setReading(false)
+    }
+  }
 
   const setGroup = (gi: number, group: LineupGroupRow) => onChange(groups.map((g, i) => (i === gi ? group : g)))
   const setAct = (gi: number, ai: number, act: Partial<LineupRow>) =>
@@ -35,10 +76,25 @@ export function LineupEditor({ value: groups, onChange }: Props) {
         <span id={labelId}>
           Lineup <span className="kk-field__opt">(optional)</span>
         </span>
-        <button type="button" aria-pressed={pasting} onClick={() => setPasting(!pasting)} className="kk-tag">
-          Paste list
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={readFromDescription}
+            disabled={reading || !description.trim()}
+            className="kk-tag"
+          >
+            {reading ? 'Reading…' : 'Read from description'}
+          </button>
+          <button type="button" aria-pressed={pasting} onClick={() => setPasting(!pasting)} className="kk-tag">
+            Paste list
+          </button>
+        </div>
       </div>
+      {readError && (
+        <span className="kk-hint" role="alert">
+          {readError}
+        </span>
+      )}
 
       {pasting && (
         <div className="kk-lineup-paste">

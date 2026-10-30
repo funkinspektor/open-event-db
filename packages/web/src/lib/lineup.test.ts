@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromLineupRows, parseLineupText, toLineupRows } from './lineup'
+import { fromLineupRows, mergeReadLineup, parseLineupText, toLineupRows } from './lineup'
 
 const row = (name: string, over: Partial<{ time: string; live: boolean; note: string }> = {}) => ({
   time: '',
@@ -36,6 +36,21 @@ describe('parseLineupText', () => {
 
   it('pads a one-digit hour', () => {
     expect(parseLineupText('7:00 Early Bird')[0]!.acts[0]!.time).toBe('07:00')
+  })
+})
+
+describe('mergeReadLineup', () => {
+  const read = [{ name: 'Live', acts: [{ name: 'Volcan', time: null, live: true, note: 'IT' }] }]
+  const readRows = [{ name: 'Live', acts: [row('Volcan', { live: true, note: 'IT' })] }]
+
+  it('fills an editor without any named act', () => {
+    expect(mergeReadLineup([], read)).toEqual(readRows)
+    expect(mergeReadLineup([{ name: '', acts: [row('')] }], read)).toEqual(readRows)
+  })
+
+  it('adds below acts someone already typed, leaving them as they are', () => {
+    const typed = [{ name: '', acts: [row('Dardo', { time: '23:00' }), row('')] }]
+    expect(mergeReadLineup(typed, read)).toEqual([...typed, ...readRows])
   })
 })
 
