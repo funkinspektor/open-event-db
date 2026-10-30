@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import ICAL from 'ical.js'
-import type { IngestSourceConfig } from '@open-event-db/shared'
+import type { IngestSourceConfig, Lineup } from '@open-event-db/shared'
 import { berlinInstant, berlinIso, berlinParts } from '../../extract/normalize.js'
 
 /** The feed could not be read as an iCal calendar (or uses something the adapter does not support). */
@@ -25,6 +25,8 @@ export interface FeedEvent {
   uid: string
   summary: string
   description: string
+  /** Set by adapters whose source lists the lineup as such; the description then leaves it out. */
+  lineup?: Lineup
   start: FeedMoment
   end: FeedMoment | null
   url: string | null

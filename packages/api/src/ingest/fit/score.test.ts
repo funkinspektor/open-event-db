@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { events, ingestItems, ingestSources, publishers, type IngestItem, type IngestSource, type Publisher } from '@open-event-db/db'
+import { ingestDraftSchema } from '@open-event-db/shared'
 import { db } from '../../db.js'
 import { fingerprint, subjectOf } from './prompt.js'
 import { selectExamples, scorePending } from './score.js'
@@ -106,7 +107,8 @@ describe('scorePending', () => {
     await addItem('Gone night', { goneAt: new Date() })
     await addItem('Past night', {}, draftOf('Past night', new Date(Date.now() - 3 * DAY), new Date(Date.now() - 2 * DAY)))
     const currentDraft = draftOf('Current night', new Date(Date.now() + 5 * DAY))
-    const current = subjectOf(currentDraft as never, null, source.name)
+    // As the scorer reads it: parsed, so a stored draft without a lineup gets an empty one
+    const current = subjectOf(ingestDraftSchema.parse(currentDraft), null, source.name)
     await addItem('Current night', { fitVerdict: 'fit', fitFingerprint: fingerprint(current) }, currentDraft)
 
     const result = await score()

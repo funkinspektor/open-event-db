@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { linksSchema } from './links.js'
+import { lineupSchema } from './lineup.js'
 import { eventCategorySchema, venueDetailEmbedSchema } from './events.js'
 import { cursorQuerySchema } from './pagination.js'
 
@@ -49,6 +50,8 @@ export type IngestSourceConfig = z.infer<typeof ingestSourceConfigSchema>
 export const ingestDraftSchema = z.object({
   title: z.string(),
   description: z.string(),
+  /** Drafts stored before lineups existed have none. */
+  lineup: lineupSchema.default([]),
   starts_at: iso,
   ends_at: iso.nullable(),
   venue_id: uuid.nullable(),
@@ -154,7 +157,7 @@ export const ingestRejectSchema = z.object({
 })
 
 /** Event fields a link can take over from the feed's version; `times` is start and end, `place` venue or location. */
-export const ingestMergeFieldSchema = z.enum(['title', 'description', 'times', 'place', 'categories', 'image'])
+export const ingestMergeFieldSchema = z.enum(['title', 'description', 'lineup', 'times', 'place', 'categories', 'image'])
 export type IngestMergeField = z.infer<typeof ingestMergeFieldSchema>
 
 /** The fields the feed keeps current on an event it stays attached to: a synced link takes them all. */

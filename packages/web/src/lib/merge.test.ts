@@ -21,6 +21,7 @@ const event = {
 const draft: IngestDraft = {
   title: 'ARTIST ONE + ARTIST TWO',
   description: 'The promoter presents\n\nArtist One (live)\nArtist Two (DJ)',
+  lineup: [],
   starts_at: '2031-01-11T20:00:00+01:00',
   ends_at: null,
   venue_id: VENUE,

@@ -1,4 +1,4 @@
-import { normalizeCategories, type Extraction, type IngestDraft, type IngestSourceConfig } from '@open-event-db/shared'
+import { capLineup, normalizeCategories, type Extraction, type IngestDraft, type IngestSourceConfig } from '@open-event-db/shared'
 import {
   berlinInstant,
   berlinIso,
@@ -95,6 +95,7 @@ export function normalizeFeedEvent(ev: FeedEvent, config: IngestSourceConfig, ex
   return {
     title: truncate(ev.summary.trim(), MAX_TITLE),
     description: truncate(markdownBreaks(ev.description), MAX_DESCRIPTION),
+    lineup: capLineup(ev.lineup ?? []),
     starts_at: berlinIso(startsAt),
     ends_at: endsAt ? berlinIso(endsAt) : null,
     venue_id: venueId,

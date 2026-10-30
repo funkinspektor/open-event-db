@@ -340,6 +340,7 @@ export async function ingestRoutes(app: FastifyInstance) {
         .values({
           title: draft.title,
           description: draft.description,
+          lineup: draft.lineup,
           startsAt: new Date(draft.starts_at),
           endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
           venueId,

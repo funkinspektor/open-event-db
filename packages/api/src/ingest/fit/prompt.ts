@@ -45,13 +45,16 @@ const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 export function subjectOf(draft: IngestDraft, venueName: string | null, sourceName: string): FitSubject {
   const place = venueName ?? draft.location_text
+  // Adapters keep the lineup out of the text; without one the description (and its fingerprint) stays as it was
+  const names = draft.lineup.flatMap((g) => g.acts.map((a) => a.name))
+  const text = names.length ? `${draft.description}\n\nLineup: ${names.join(', ')}` : draft.description
   return {
     title: oneLine(draft.title),
     place: place === null ? null : oneLine(place),
     source: sourceName,
     starts_at: draft.starts_at,
     categories: draft.categories,
-    description: oneLine(draft.description).slice(0, DESCRIPTION_LIMIT),
+    description: oneLine(text).slice(0, DESCRIPTION_LIMIT),
   }
 }
 

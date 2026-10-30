@@ -19,6 +19,7 @@ export async function mergePatch(
   const patch: Partial<Event> = {}
   if (fields.has('title')) patch.title = draft.title
   if (fields.has('description')) patch.description = draft.description
+  if (fields.has('lineup')) patch.lineup = draft.lineup
   if (fields.has('categories')) patch.categories = draft.categories
   if (fields.has('times')) {
     patch.startsAt = new Date(draft.starts_at)

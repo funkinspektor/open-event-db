@@ -563,6 +563,16 @@ describe('POST /ingest/items/:id/accept', () => {
     expect(oldEvent.categories).toEqual([])
   })
 
+  it('gives the event the lineup of the draft', async () => {
+    const lineup = [{ name: 'Säule', acts: [{ name: 'Timnah', time: '23:59', live: false, note: null }] }]
+    const item = await newItem({}, draftOf({ lineup }))
+    const res = await post(`/items/${item.id}/accept`, keyScout)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+    expect((await eventRow(eventId)).lineup).toEqual(lineup)
+  })
+
   it('accepts without an image when the feed image cannot be fetched', async () => {
     imageStore.setStore(memoryImageStore())
     ingestImages.setFetch((async () => new Response('gone', { status: 404 })) as unknown as typeof fetch)
@@ -853,6 +863,20 @@ describe('POST /ingest/items/:id/link', () => {
       const merge = history.find((h) => (h.diff as { via?: string }).via === 'ingest-link')
       expect(merge?.publisherId).toBe(scout.id)
       expect(Object.keys(merge!.diff as object).sort()).toEqual(['categories', 'description', 'links', 'via'])
+    })
+
+    it('takes the lineup when it is chosen, and only then', async () => {
+      const lineup = [{ name: null, acts: [{ name: 'Linear Movement', time: null, live: true, note: null }] }]
+      const event = await ownEvent()
+      const skipped = await newItem({}, { ...spreeDraft(), lineup })
+      await post(`/items/${skipped.id}/link`, keyScout, { event_id: event.id, fields: ['title'] })
+      expect((await eventRow(event.id)).lineup).toEqual([])
+
+      const other = await ownEvent()
+      const taken = await newItem({}, { ...spreeDraft(), lineup })
+      const res = await post(`/items/${taken.id}/link`, keyScout, { event_id: other.id, fields: ['lineup'] })
+      expect(res.statusCode).toBe(200)
+      expect((await eventRow(other.id)).lineup).toEqual(lineup)
     })
 
     it('replaces a link the event already has when its key is chosen', async () => {

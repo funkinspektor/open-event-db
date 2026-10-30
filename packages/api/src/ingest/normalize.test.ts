@@ -43,6 +43,19 @@ const normalize = (...args: Parameters<typeof normalizeFeedEvent>) => {
 }
 
 describe('normalizeFeedEvent', () => {
+  it('passes the feed lineup through, and gives none when the feed has none', () => {
+    const persian = feed('Persian Love: SHAB SHOD')
+    expect(normalize(persian, acud, null).lineup).toEqual([])
+    const lineup = [{ name: 'Säule', acts: [{ name: 'Timnah', time: '23:59', live: false, note: null }] }]
+    expect(normalize({ ...persian, lineup }, acud, null).lineup).toEqual(lineup)
+  })
+
+  it('caps a huge feed lineup so the draft stays valid', () => {
+    const acts = Array.from({ length: 125 }, (_, i) => ({ name: `Act ${i}`, time: null, live: false, note: null }))
+    const draft = normalize({ ...feed('Persian Love: SHAB SHOD'), lineup: [{ name: 'A', acts }, { name: 'B', acts }] }, acud, null)
+    expect(draft.lineup.flatMap((g) => g.acts)).toHaveLength(200)
+  })
+
   it('takes the times from the description text over the feed (Persian Love)', () => {
     const persian = feed('Persian Love: SHAB SHOD')
     const draft = normalize(persian, acud, extraction({ start_time: '22:00', end_time: '04:00' }))

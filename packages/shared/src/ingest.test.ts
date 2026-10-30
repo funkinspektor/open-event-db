@@ -94,6 +94,7 @@ describe('ingestItemViewSchema', () => {
       draft: {
         title: 'Concert',
         description: 'Verbatim text',
+        lineup: [{ name: null, acts: [{ name: 'Act', time: null, live: true, note: null }] }],
         starts_at: '2026-11-01T20:00:00+01:00',
         ends_at: null,
         venue_id: null,
@@ -125,6 +126,9 @@ describe('ingestItemViewSchema', () => {
     }
     expect(ingestItemViewSchema.parse(view)).toEqual(view)
     expect(ingestItemViewSchema.parse({ ...view, fit: null }).fit).toBeNull()
+    // A draft stored before lineups existed reads as one without
+    const { lineup: _, ...olderDraft } = view.draft
+    expect(ingestItemViewSchema.parse({ ...view, draft: olderDraft }).draft.lineup).toEqual([])
     expect(() => ingestItemViewSchema.parse({ ...view, fit: { verdict: 'great', reason: 'x' } })).toThrow()
   })
 })

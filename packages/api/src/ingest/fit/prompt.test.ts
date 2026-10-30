@@ -5,6 +5,7 @@ import { buildPrompt, fingerprint, subjectOf, type FitSubject } from './prompt.j
 const draft = (over: Partial<IngestDraft> = {}): IngestDraft => ({
   title: 'Dark Wave Night',
   description: 'A night of dark wave.',
+  lineup: [],
   starts_at: '2026-11-07T22:00:00.000Z',
   ends_at: null,
   venue_id: null,
@@ -31,6 +32,18 @@ const subject = (over: Partial<FitSubject> = {}): FitSubject => ({
 describe('subjectOf', () => {
   it('cuts a long description to 1,500 characters', () => {
     expect(subjectOf(draft({ description: 'x'.repeat(3000) }), null, 'src').description).toHaveLength(1500)
+  })
+
+  it('adds the act names to the description, so a lineup out of the text still counts', () => {
+    const lineup = [
+      { name: 'Live', acts: [{ name: 'Volcan', time: null, live: true, note: null }] },
+      { name: 'DJs', acts: [{ name: 'SVTVRA', time: null, live: false, note: null }] },
+    ]
+    expect(subjectOf(draft({ lineup }), null, 'src').description).toBe('A night of dark wave. Lineup: Volcan, SVTVRA')
+  })
+
+  it('leaves the description as it is without a lineup, so its fingerprint stays the same', () => {
+    expect(subjectOf(draft(), null, 'src').description).toBe('A night of dark wave.')
   })
 
   it('collapses whitespace in the description', () => {
