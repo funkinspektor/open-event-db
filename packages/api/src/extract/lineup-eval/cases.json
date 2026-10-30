@@ -1,0 +1,731 @@
+[
+  {
+    "id": "factory",
+    "source": "slaughterhouse",
+    "text": "Party\n\nDoors: 22:00 (Back to the roots: Ab jetzt wieder um 22 Uhr Beginn!)\n\nTickets: 5 vor 12! Bis 12 Uhr 5 Euro, danach 7 Euro\n\nFactory // Oktober 2026 //  \nWave, Gothic, Coldwave, Post-Punk, Indie, Synthpop, 80’s,  \nFactory DJs  \nEvery last Saturday of each month",
+    "expected": []
+  },
+  {
+    "id": "dancing-on-our-graves",
+    "source": "badehaus",
+    "text": "Goth and alternative party, brought to you by Darkstore!\n\nDarkstore x Badehaus Halloween Special\nDatum: 31.10.26 / 23:30 Uhr\nAge limit: 18\nTickets: early bird 8e (only 25 tickets) / pre-sale 12e / 15e at the door (cash only)\n\nSHOW YOUR INNER GHOULS\nDRESS TO DISTRESS\n\nOUTFIT CONTEST\nMAKEUP CONTEST\nKostüme erwünscht, keine Pflicht\nFür euer musikalisches Wohl sorgen:\n\nMain Floor:\nEcate Styx\ndeathrock.postpunk.cold wave\nReferenzen: Dancing On Our Graves, Ball Pink Noir, Present Of The Future\nBen Bloodygrave\npostpunk . wave . ebm\nReferenzen: Echo Beach, Metro Alien\nPhoeniX\ndark wave . cold beats . goth & dark disco\nReferenzen: Vampire Clubbing, Nasty Noire, Beltane-Kreuzmühle\n\nSauna Floor:\nDISCO ELECTRONICA SPECIAL\nitalo . synthwave\nTerrorwave\nReferenzen: Kiss My Blood, Flowers Of Romance, Disco Electronica\nKarocky\nReferenzen: Montagsduncker\n\nWir freuen uns auf Dich!\n\nEs gelten die AGB´s des Veranstalters Darkstore. Umtausch oder Rückgabe nicht möglich.\nYou can buy tickets online: https://www.darkstore.de/ or at Darkstore, Boxhagener Str. 23\n\nDancing on Our Graves is a safe place.",
+    "expected": [
+      {
+        "name": "Main Floor",
+        "acts": [
+          {
+            "name": "Ecate Styx",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Ben Bloodygrave",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "PhoeniX",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      },
+      {
+        "name": "Sauna Floor",
+        "acts": [
+          {
+            "name": "Terrorwave",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Karocky",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "lt-kino",
+    "source": "acud",
+    "text": "LT kino goes Berlin: COME CLOSER TO THE BEAT!  \nSA 5.11, 21H ACUD CLUB  \nFREE ENTRY TO THE PARTY!\n\nLabas! COME CLOSER TO THE BEAT!  \nThe opening night of*Litauisches Kino Goes Berlin starts on screen and continues on the dancefloor!  \nBehind the decks: two Lithuanian artists, Lou Kee B2B Matas Petrikas (live), coming together for the occasion. Expect the unexpected – after all, that's what our festival is all about!  \nLou Kee: https://soundcloud.com/lou_kee  \nMatas Petrikas (live): https://soundcloud.com/matas\n\nJust before the party, at 7 PM, join us at ACUD Kino for our official opening screening COME CLOSER. More info and tickets: http://ltkinogoesberlin.de/come-closer-2/  \nFull festival programme: https://ltkinogoesberlin.de/program  \n---  \nDesign by Tadas Bujanauskas",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Lou Kee B2B Matas Petrikas",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "same-old-madness",
+    "source": "slaughterhouse",
+    "text": "Party\n\ndoors open 21:00 Uhr  \nbox office only 8€  \nSame Old Madness: Pentagon · Edition\n\non decks:  \n▷ Uwe Marx  \n▷ Marko König  \n▷ Ben Bloodygrave  \n▷ Oberst Panizza  \n▷ Ecate Styx\n\nMinimal Wave · EBM · Postpunk · Coldwave",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Uwe Marx",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Marko König",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Ben Bloodygrave",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Oberst Panizza",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Ecate Styx",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "kiss-my-blood",
+    "source": "slaughterhouse",
+    "text": "Party\n\nBeginn: 23 Uhr  \nsynth wave electro…for queers and friends\n\ndjs  \nterrorwave  \nkarocky  \n+ special guest:  \npaura diamante (eisengrau)",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "terrorwave",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "karocky",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "paura diamante",
+            "time": null,
+            "live": false,
+            "note": "eisengrau"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "8mm-fest",
+    "source": "acud",
+    "text": "8MM Fest  \nFR 13.11-14.11, ACUD Club  \nPresale: https://www.eventim-light.com/de/a/5f002783c9f8d46492128f51/e/6a75a40bacd1414618be3a19\n\nOn November 13 and 14, 2026, 8MM Fest returns for two nights across three of Berlin's most distinctive spaces: 8MM Bar in Prenzlauer Berg, ACUD MACHT NEU in Mitte, and the Zionskirche.\n\nDeliberately kept lean, the festival channels 8MM Bar's two-decade reputation for curating the best of the world's underground into a compact, Mitte-centered weekend. This year collaborating on the stages with long running legendary concert series - Shameless / Limitless, New Colossus Festival from New York City, and experimental Berlin collectives - Salon Oblique and Tranceversal Voices.\n\nLine up :  \nABIGAIL TOLL / ACTIVEMIRROR / ALEXANDRA GRUEBLER / ALEKSANDRA SLYZ / BED / BORSCHT / BLACK BORDELLO /CALVIN LOVE / CIRCULAR RUINS / DICTATOR / FADE EVARE /I WANT POETRY / JULES REIDY / LINTD / MAGDA / MAKARA  / OCTOBER AND THE EYES / PAYCHEQUE / PLATTENBAU / SNAKE EYES / THE NIGHTCLUBS / YARD / JAAKKO EINO KALEVI + MORE",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "ABIGAIL TOLL",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "ACTIVEMIRROR",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "ALEXANDRA GRUEBLER",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "ALEKSANDRA SLYZ",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "BED",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "BORSCHT",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "BLACK BORDELLO",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "CALVIN LOVE",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "CIRCULAR RUINS",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "DICTATOR",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "FADE EVARE",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "I WANT POETRY",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "JULES REIDY",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "LINTD",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "MAGDA",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "MAKARA",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "OCTOBER AND THE EYES",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "PAYCHEQUE",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "PLATTENBAU",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "SNAKE EYES",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "THE NIGHTCLUBS",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "YARD",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "JAAKKO EINO KALEVI",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sutcliffe-no-more",
+    "source": "slaughterhouse",
+    "text": "Konzert + Party\n\nBeginn: 20:00  \nTickets:  \n[https://shotgun.live/…/sutcliffe-no-more-control…](https://shotgun.live/events/sutcliffe-no-more-control-kommando-slaughterhouse)  \nhttps://de.ra.co/events/2417695  \nVERY LIMITED CAPACITY!\n\naufnahme + wiedergabe + Raubbau presents:\n\nSutcliffe No More (UK) live  \nex-Sutcliffe Jugend // first time in Berlin  \n[Klanggalerie / Zoharum]  \n[www.klanggalerie.bandcamp.com/album/diving-board](http://www.klanggalerie.bandcamp.com/album/diving-board)\n\nControl (USA) live  \nPower Electronics from Santa Cruz  \n[Cloister / Ant-Zen]  \n[www.control-exsanguinate.bandcamp.com/](http://www.control-exsanguinate.bandcamp.com/)\n\nKommando (GER) live  \nPre-Thorofon incarnation. Reanimated in 2007.  \n[Crimefactory / Ant-Zen]  \n[www.ant-zen.bandcamp.com/album/wage-of-wrath](http://www.ant-zen.bandcamp.com/album/wage-of-wrath)\n\nEric The Red [Tower Transmissions]\n\nPhilipp Strobel [aufnahme + wiedergabe]\n\nSutcliffe No More is the follow-up name for the band known as Sutcliffe Jugend. It was founded by Kevin Tomkins in 1982. It started as a Power Electronics act, quickly gaining a name for itself, before branching out stylistically, creating a distinctive style that drew influence from all manner of genres while keeping true to their roots as a noise act. In its original form Sutcliffe Jugend existed for less than a year before Tomkins stopped the project to join Whitehouse. He reformed the group in 1994 with Paul Taylor who also played on some of the project’s early material. The project ended in 2019. They released one album under a new name, Slaves No More, then continued as Sutcliffe No More.\n\nControl is Thomas Garrison from Santa Cruz who works as a branding / body modification artist and as a mastering engineer at his own Misanthrope Studio and has also initiated the Industrial / Ambient project Exsanguinate. He made a name as one of the finest American Power Electronics acts since the end of the nineties with a multitude of releases and highly regarded live performances in Europe and the U.S..\n\nKommando was Dan Courtman’s pre-Thorofon project which released two cassette tapes and two cds during its initial existence. Four years after the ‚Crimefactory‘ album Kommando was re-established and has releases several albums and singles since then.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Sutcliffe No More",
+            "time": null,
+            "live": true,
+            "note": "UK"
+          },
+          {
+            "name": "Control",
+            "time": null,
+            "live": true,
+            "note": "USA"
+          },
+          {
+            "name": "Kommando",
+            "time": null,
+            "live": true,
+            "note": "GER"
+          },
+          {
+            "name": "Eric The Red",
+            "time": null,
+            "live": false,
+            "note": "Tower Transmissions"
+          },
+          {
+            "name": "Philipp Strobel",
+            "time": null,
+            "live": false,
+            "note": "aufnahme + wiedergabe"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bragolin-carrellee",
+    "source": "urbanspree",
+    "text": "aufnahme + wiedergabe presents\n\nBragolin(live)  \n[Young And Cold]  \nPost Punk / Dark Wave  \n[www.bragolin.bandcamp.com](http://www.bragolin.bandcamp.com/)\n\nCarrellee (live)  \n[Young And Cold]  \nNoir Synth-Pop  \n[www.carrellee.bandcamp.com](http://www.carrellee.bandcamp.com/)\n\nBragolin is a Dutch dark wave/post-punk project led by Edwin van der Velde, known for its strong melodic hooks present on gothic dance floors worldwide. Drawing from ’80s Bass VI lines, ’60s and ’70s organs, and ’90s shoegaze guitars, Bragolin blends vintage and modern elements into a sound inspired by post-apocalyptic and horror cinema. The project takes its name from Italian painter Giovanni Bragolin, famed for his “Crying Boy” paintings.\n\nThe debut album I Saw Nothing Good So I Left (2018) featured the track Into Those Woods, which is now a modern- day dance floor classic. The song surpassed 10 million all-time streams in 2025, establishing Bragolin as a consistent presence within the global dark wave and gothic scene. In 2019, van der Velde collaborated with fellow Dutch artist Adam Tristar on the second album Let Out The Noise Inside, which leaned further into electronic and synth-based production.\n\nIn 2026, Bragolin releases the new album I Don’t Like What It Does To Me, unfolding in gradually revealed chapters. Building on the project’s signature sound, the record combines Bass VI melodies, organ lines, and rich atmospheric production. Field recordings, synthetic ocean textures, water-phones, and experimental sound sources create a layered, immersive listening experience. The album features Feel This Flame Unfold, a duet with dark wave artist Carrellee.\n\nCarrellee overlays delicately sensual vocals over a wall of scorched synths and processed tapes. She had some help crafting her noir synth-pop sound from co-producer Brett Bullion (Low, Poliça, Bad Bad Hats.) Carrellee turned to the microKORG and Yamaha DX7 synths after finding the folk music she had been doing to fall a bit flat in expressing the intensity of the year, including going through a divorce with her personal and musical partner.\n\nTickets:\n\n[https://shotgun.live/.../bragolin-carrellee-urban-spree...](https://shotgun.live/en/events/bragolin-carrellee-urban-spree-berlin)\n\nhttps://de.ra.co/events/2494954\n\nEintritt: 25.00€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Bragolin",
+            "time": null,
+            "live": true,
+            "note": "Young And Cold"
+          },
+          {
+            "name": "Carrellee",
+            "time": null,
+            "live": true,
+            "note": "Young And Cold"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hall-of-bats",
+    "source": "urbanspree",
+    "text": "PROCESS PARTY x EFFETTO NOTTE present\n\nHALL OF BATS\n\nLOVATARAXX  \nHYSTERIC HELEN  \nOLGHA\n\nFriday, 20 November 2026  \nUrban Spree — Revaler Str. 99, Berlin  \nDoors: 20:00\n\nProcess Party and Effetto Notte join forces to launch HALL OF BATS, a new collaborative event series dedicated to darkwave, minimal synth, deathrock, post-punk and the darker corners of electronic music.\n\nFor its first edition, we bring three live acts to Urban Spree, followed by an afterparty until late.\n\nLOVATARAXX — FR\n\nHeadlining the first Hall of Bats are Lovataraxx, a French duo originally from Grenoble and currently based in Lyon.\n\nTheir sound dives into coldwave, minimal synth and dark electronic music through corrosive synthesizers, sharp drum machines, hypnotic voices and a strong post-punk energy.\n\nWith more than 500 shows across Europe and America over the past decade, Lovataraxx have developed an intense and highly dynamic live presence. Their albums Hébéphrénie and Sophomore explore a universe of impulsive beats, haunting synth melodies and sounds that feel simultaneously strange and familiar.\n\nBandcamp:  \n[https://lovataraxx.bandcamp.com/]\n\nHYSTERIC HELEN — SK\n\nHysteric Helen is a darkwave and deathrock project from Bratislava, Slovakia.\n\nTheir sound channels the atmospheric tension and driving rhythms of 1980s post-punk, deathrock and batcave aesthetics. Raw DIY production, haunting melodies and a strong underground attitude shape their distinctly gothic sound.\n\nBandcamp:  \n[https://hysterichelen.bandcamp.com/](\n\nOLGHA — IT / PL\n\nOlgha is a one-person Italian-Polish project combining the melancholic elements of minimal synth-pop with darkwave.\n\nMelting nostalgia for the past with a search for contemporary sounds, Olgha moves between minimal electronics, melancholy and dark synth-pop, with a strong DIY approach.\n\nBandcamp:  \n[https://olgha.bandcamp.com/]\n\nAFTERPARTY\n\nAfter the live shows, Hall of Bats continues with DJ sets by:\n\nPOST TRAUMATIC (Process, Strasbourg)  \nhttps://linktr.ee/Post_Traumatic\n\nHANZEL (Effetto Notte, Berlin)  \nhttps://www.instagram.com/effetto.notte.berlin\n\nDarkwave • Post-Punk • Deathrock • Minimal Synth • EBM • New Wave\n\n━━━━━━━━━━━━━━\n\nEnter the Hall of Bats.\n\nEintritt: 20.35€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Lovataraxx",
+            "time": null,
+            "live": true,
+            "note": "FR"
+          },
+          {
+            "name": "Hysteric Helen",
+            "time": null,
+            "live": true,
+            "note": "SK"
+          },
+          {
+            "name": "Olgha",
+            "time": null,
+            "live": true,
+            "note": "IT / PL"
+          }
+        ]
+      },
+      {
+        "name": "Afterparty",
+        "acts": [
+          {
+            "name": "Post Traumatic",
+            "time": null,
+            "live": false,
+            "note": "Process, Strasbourg"
+          },
+          {
+            "name": "Hanzel",
+            "time": null,
+            "live": false,
+            "note": "Effetto Notte, Berlin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wisborg",
+    "source": "urbanspree",
+    "text": "„Gothic rock is dead... undead, undead, undead!“ Im Herbst 2026 kommen WISBORG – die deutschen Fackelträger des Genres – auf „Phantomschmerz“ Tour und tauchen die Bundesrepublik erneut in tiefes Schwarz. Sechs exklusive Headliner-Shows zum neuen Album mit einer brandneuen Setlist – inklusive neuer und alter Hits, Deep Cuts und Fan Favorites. Bist du dabei?\n\nSpecial Guest: The Fright\n\n20.11.2026 Leipzig, Naumanns  \n21.11.2026 Berlin, Urban Spree  \n27.11.2026 Hannover, Subkultur  \n28.11.2026 Köln, Blue Shell  \n04.12.2026 München, Feierwerk  \n05.12.2026 Frankfurt, Ponyhof\n\nEintritt: 29.97€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "WISBORG",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "The Fright",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dis-tanz",
+    "source": "scout",
+    "text": "A dark queer soli party.",
+    "expected": []
+  },
+  {
+    "id": "spk-alvar",
+    "source": "urbanspree",
+    "text": "aufnahme + wiedergabe presents\n\nSPK (live)  \nAlvar (live)  \nPhilipp Strobel  \nMarko König\n\nSPK are one of the founding names of industrial music. Formed in Sydney in 1978 by Graeme Revell and Neil Hill, the group helped redefine the possibilities of experimental sound, combining electronic music, noise, ritual, performance art and political provocation into a body of work whose influence continues to resonate across industrial, electronic and extreme music today.\n\nAlbums such as Information Overload Unit, Leichenschrei, Auto-Da-Fé and the visionary Zamia Lehmanni established SPK as one of the most innovative and uncompromising acts of the post-industrial era. Their work pushed beyond conventional song structures, fusing machine rhythms, orchestral textures, non-Western instrumentation and cinematic atmosphere years before such approaches became commonplace.\n\nFollowing SPK's final performances in the late 1980s, Graeme Revell went on to become one of Hollywood's most celebrated film composers, scoring over one hundred feature films and games, including The Crow, The Craft, From Dusk Till Dawn, Sin City, Blow, Call of Duty and Dune.\n\nIn 2026, after an absence of almost forty years from the touring circuit, SPK returns to Europe with an entirely new live production. Joined by Robert Revell, Graeme Revell brings SPK's pioneering legacy into the present, combining the group's original spirit of experimentation with cutting-edge digital technologies, immersive visuals and a powerful new sonic architecture. This is not a reunion driven by nostalgia, but the next chapter in one of industrial music's most influential and uncompromising artistic journeys.\n\nAlvar is your fear, bad mood and the knife in your heart.\n\nTickets:  \nhttps://shotgun.live/en/events/spk-urban-spree-berlin\n\nEintritt: 29.00€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "SPK",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Alvar",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Philipp Strobel",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Marko König",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "letzte-welle",
+    "source": "scout",
+    "text": "Devastating Dance Music \n\nDJs: \nPris V (Avant Post, Jinx)\nTestbild\nStian Staub",
+    "expected": [
+      {
+        "name": "DJs",
+        "acts": [
+          {
+            "name": "Pris V",
+            "time": null,
+            "live": false,
+            "note": "Avant Post, Jinx"
+          },
+          {
+            "name": "Testbild",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "Stian Staub",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "twin-noir-hinfort",
+    "source": "urbanspree",
+    "text": "aufnahme + wiedergabe presents\n\nTwin Noir(live)  \n2 Punks And A Tape Machine  \n[www.twinnoir.com](http://www.twinnoir.com/)\n\nHinfort  \n[Young And Cold]  \nPost Punk / Dark Wave  \n[www.hinfort.bandcamp.com](http://www.hinfort.bandcamp.com/)\n\nBerlin-based project TWIN NOIR transforms analog rawness into urban ecstasy. Somewhere between alternative, electro, and modern post-punk elements, they create a sound that gets under your skin. Driving rhythms, striking guitars, and melancholic tones merge into a distinctive style. Minimalist German-language lyrics explore themes that give their music emotional depth.\n\nFollowing tours across Europe, the UK, the Balkans, and Mexico, and support shows for DAF, She Past Away, and Men Without Hats, TWIN NOIR have built a growing international reputation. They have appeared at festivals such as Extramuralhas Festival, Summerside Festival, and Amphi Festival and were featured multiple times by Iggy Pop on Iggy Confidential on BBC Radio 6.\n\nWith their new album “Chapter III”, released via the Berlin label Odyssey Music Network, TWIN NOIR are heading out on an extensive tour across Germany and Europe. Known for their electrifying live shows, TWIN NOIR impress with energetic performances and a danceable sound. Inspired by Berlin’s club culture, punk, and vaudeville, their shows celebrate freedom, creativity, and art, creating an irresistible pull. Made for dark dancefloors and festival stages alike and for those who appreciate intense concerts where you can let go and fully immerse yourself.�\n\nHinfort is a solo project from Cologne that will regularly release dark, melancholic music in the style of post-punk and dark wave starting in October 2024. Its hallmarks are emotional lyrics about isolation and inner darkness, supported by atmospheric, often minimalist soundscapes.\n\nTickets:\n\n[https://shotgun.live/.../twin-noir-hinfort-cassiopeia-berlin](https://shotgun.live/en/events/twin-noir-hinfort-cassiopeia-berlin)\n\nhttps://de.ra.co/events/2437095\n\nEintritt: 25.00€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Twin Noir",
+            "time": null,
+            "live": true,
+            "note": "2 Punks And A Tape Machine"
+          },
+          {
+            "name": "Hinfort",
+            "time": null,
+            "live": true,
+            "note": "Young And Cold"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "35yloki",
+    "source": "slaughterhouse",
+    "text": "Konzert\n\nBeginn: 21:00  \nTickets: https://raubbau.bigcartel.com/product/35yloki-part-one-dtdbin24  \n35LOKI Part One /// Ambient & Tiefgang  \nDeep Audio’s Sonic Lodge /// Der Tag der Befreiung ist nah!!! (24)\n\nBad Sector  \nInade  \nPhelios\n\n[http://loki-found.de](http://loki-found.de/)  \n[http://www.deep-audio.de](http://www.deep-audio.de/)  \nhttps://www.facebook.com/lokifound  \nhttps://www.facebook.com/mailorderdeepaudio  \nhttps://www.instagram.com/loki_found  \n[https://www.raubbau.org](https://www.raubbau.org/)  \nhttps://www.instagram.com/raubbau.label\n\n***IMPORTANT***  \nPlease read ticket order conditions* underneath before buying. Thank you.**  \n*Ticket order conditions:  \nWe do NOT ship hard tickets by post.  \nThe Big Cartel or Paypal payment confirmation is your ticket. Your name and the amount of tickets you’ve ordered is at the box office.  \n**NO REFUNDS**  \n*Ticket order conditions:  \nWir versenden KEINE Tickets per Post.  \nDie Big Cartel email oder Paypal-Zahlungbestätigung ist euer Ticket. Bitte ausdrucken, zum Gig mitbringen und an der Kasse vorlegen.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Bad Sector",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Inade",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Phelios",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ball-pink-noir",
+    "source": "slaughterhouse",
+    "text": "Party\n\nBeginn: 22 Uhr\n\nAlle Jahre wieder: auch diesmal wird bei uns auf zwei Floors wieder kräftig ins Neue Jahr gefeiert, wie immer zu herrlich dunkelbunten Klängen, mit Punsch, Glückskeksen, dem berüchtigten Sehnerv-erschütterten Deko-Inferno, und natürlich den besten Gästen überhaupt! 😉\n\nGothic * Post-/ Oldschool-Punk * Minimal * Synth * UndergrouNDW * 80s Wave & Pop & Trash * Batcave * Gothic-/ Death-/ Glam-Rock * Dark-/ New-/ Cold-Wave * Dark-Elektro * EBM * Indie-Classics * Oddities * Strange Stuff * New Romantic * Avantgarde * Pink Pank * Trashbeats *",
+    "expected": []
+  },
+  {
+    "id": "hands-label-night",
+    "source": "urbanspree",
+    "text": "We're over the moon to announce that we'll celebrate the New Year again with the HANDS LABEL NIGHT BERLIN on Saturday, 2nd January 2027 at Urban Spree!  \nWe prepared a massive line-up for you with 6 live concerts by SONAR, NULLVEKTOR, GREYHOUND, ICD-10, ESPECTRA NEGRA, MARIE and DJ sets by UDO WIESSMANN and HELLS.  \nE-tickets and beautiful limited hard-tickets are available at HANDS band camp and merchandise booths. Get ready for an industrial night from rhythm’n’noise to industrial techno and celebrate the New Year with us!\n\nHANDS LABEL NIGHT BERLIN  \nSat 2nd January 2027 . Urban Spree\n\nlive  \nSONAR  \nNULLVEKTOR  \nGREYHOUND  \nICD-10  \nESPECTRA NEGRA  \nMARIE  \ndj  \nUDO WIESSMANN  \nHELLS\n\nDoors: 19:00 - Start: 19:00\n\nEintritt: 32.00€",
+    "expected": [
+      {
+        "name": "live",
+        "acts": [
+          {
+            "name": "SONAR",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "NULLVEKTOR",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "GREYHOUND",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "ICD-10",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "ESPECTRA NEGRA",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "MARIE",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      },
+      {
+        "name": "dj",
+        "acts": [
+          {
+            "name": "UDO WIESSMANN",
+            "time": null,
+            "live": false,
+            "note": null
+          },
+          {
+            "name": "HELLS",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "linear-movement",
+    "source": "urbanspree",
+    "text": "Wehe! Musik & aufnahme + wiedergabe present\n\nVEITSTANZ w/\n\nLinear Movement (live)  \n[Micrart / Minimal Wave]  \nCult-Classic Belgian Minimal Synth and Synth-Pop  \n[www.linear-movement.bandcamp.com](http://www.linear-movement.bandcamp.com/)\n\nDer Mussikant: Der Künftige Musikant (live)  \n[Wehe! Musik]  \n“Veitstanz” Reissue Release Show  \nGerman Minimal Electronic Pioneer  \n[www.wehemusik.bandcamp.com](http://www.wehemusik.bandcamp.com/)\n\nTwilight Ritual (live)  \n[Micrart / OnderStroom Records]  \nLegendary Experimental Minimal Electronic Duo from Belgium  \n[www.micrart.bandcamp.com](http://www.micrart.bandcamp.com/)\n\nBen Bloodygrave (DJ)  \n[Bloodygrave & Die Lust!]  \n[www.benbloodygrave.bandcamp.com](http://www.benbloodygrave.bandcamp.com/)\n\nLuca Gillian (DJ)  \n[Die Selektion / Wehe! Musik]  \n[www.wehemusik.bandcamp.com](http://www.wehemusik.bandcamp.com/)\n\nPhilipp Strobel (DJ)  \n[aufnahme + wiedergabe]  \n[www.aufnahmeundwiedergabe.bandcamp.com](http://www.aufnahmeundwiedergabe.bandcamp.com/)\n\nTickets:\n\n[https://shotgun.live/.../linear-movement-der-kunftige...](https://shotgun.live/events/linear-movement-der-kunftige-musikant-twilight-ritual)\n\nhttps://de.ra.co/events/2568934\n\nEintritt: 34.56€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Linear Movement",
+            "time": null,
+            "live": true,
+            "note": "Micrart / Minimal Wave"
+          },
+          {
+            "name": "Der Künftige Musikant",
+            "time": null,
+            "live": true,
+            "note": "Wehe! Musik"
+          },
+          {
+            "name": "Twilight Ritual",
+            "time": null,
+            "live": true,
+            "note": "Micrart / OnderStroom Records"
+          },
+          {
+            "name": "Ben Bloodygrave",
+            "time": null,
+            "live": false,
+            "note": "Bloodygrave & Die Lust!"
+          },
+          {
+            "name": "Luca Gillian",
+            "time": null,
+            "live": false,
+            "note": "Die Selektion / Wehe! Musik"
+          },
+          {
+            "name": "Philipp Strobel",
+            "time": null,
+            "live": false,
+            "note": "aufnahme + wiedergabe"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "girls-under-glass",
+    "source": "urbanspree",
+    "text": "Girls Under Glass wurden 1986 in Hamburg gegründet – in einer Zeit tiefgreifender gesellschaftspolitischer Umbrüche, aber jenseits klar definierter musikalischer Szenen.\n\nWährend Gothic und Dark Wave Ende der 1980er zunehmend stilistische Konventionen entwickelten, verfolgte die Band von Beginn an einen eigenständigen Ansatz: dunkel, experimentell, emotional – aber ohne Genreklischees.\n\nGegründet von Sänger Tom Lücke, Keyboarder Hauke Harms und Gitarrist Volker Zacharias, entwickelten Girls Under Glass früh eine unverwechselbare Klangsprache, die sich eher aus Einflüssen wie 80er-Wave, frühem Post-Punk und experimenteller dunkler Elektronik speiste als aus dem klassischen Gothic-Kanon. Bereits die frühen Veröffentlichungen – darunter die Alben Humus (1988) und Flowers (1989) – machten deutlich, dass einfache Zuschreibungen hier nicht greifen würden.\n\nNach dem Ausstieg von Tom Lücke 1990 übernahm Volker Zacharias Gesang und Songwriting und prägte den Sound der Band nachhaltig. Mit dem von Rodney Orpheus (The Cassandra Complex) produzierten Album Positive (1991) etablierten Girls Under Glass ihre bis heute zentrale Stärke: außergewöhnliches Songwriting, das atmosphärische Tiefe, Melodie und stilistische Offenheit miteinander verbindet. Die folgenden Alben (Darius, Christus, Crystals & Stones) führten diese Entwicklung konsequent fort, ohne sich zu wiederholen.\n\nAuch stilistische Ausbrüche – etwa das gitarrenlastigere Firewalker (1997) – waren stets Teil eines künstlerischen Prozesses, der Veränderung nicht als Risiko, sondern als Notwendigkeit verstand. Mit Equilibrium (1999), Minddiver (2001) und Zyklus (2004) fand die Band erneut zu einem fokussierten, vielschichtigen Sound zurück, der auch frühe Einflüsse wieder zuließ. Nach längerer kreativer Pause und weiteren personellen Veränderungen meldeten sich Girls Under Glass schließlich eindrucksvoll mit dem Album Backdraft (2023) zurück – ein Werk, das zeigt, dass kreative Relevanz kein Verfallsdatum kennt.\n\nNach dem Jubiläumsjahr 2026 schlagen Girls Under Glass 2027 ein weiteres Kapitel auf: Clubtour zum neuen Album!\n\nIn den letzten 20 Jahren spielten Girls Under Glass nur eine Handvoll Clubkonzerte. Genau diese unmittelbare Nähe zwischen Band und Publikum wollen sie nun bewusst wieder aufleben lassen.\n\nDie Clubtour 2027 bietet eine der wenigen Gelegenheiten, Girls Under Glass in einem intimen Rahmen zu erleben – nahbar, intensiv und jenseits großer Bühnenroutinen.\n\nFür langjährige Fans wie auch für neue Hörer:innen ist diese Tour mehr als Nostalgie: Sie ist eine Einladung zu einer gemeinsamen, unmittelbaren und intimen Live-Erfahrung gemeinsam einer Band, die sich über 40 Jahre hinweg immer wieder neu erfunden hat – ohne ihren eigenen Kern jemals zu verlieren. Präsentiert werden neben den bekannten Klassikern und Live-Highlights auch Songs aus dem neuen Album, welches im Frühjahr 2027 via Dependent Records erscheinen wird.\n\nEintritt: 25.75€",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Girls Under Glass",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "persian-love",
+    "source": "acud",
+    "text": "Persian Love: SHAB SHOD  \nFR 30.10, ACUD CLUB  \n10PM- 4AM  \n\nPersian Love presents SHAB SHOD (the night is here)\n\nSWANA / Middle Eastern Halloween Dance // MILLI (MEHMOONI LDN all night long)\n\nDress up OPTIONAL",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "MILLI",
+            "time": null,
+            "live": false,
+            "note": "MEHMOONI LDN"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "eighties-inferno",
+    "source": "duncker",
+    "text": "Pop, Dark, Indie aus dem Neon- Jahrzehnt\n\nDJ Funky Henning\n\n[Facebook-Event](https://www.facebook.com/events/1125535683756006)",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "DJ Funky Henning",
+            "time": null,
+            "live": false,
+            "note": null
+          }
+        ]
+      }
+    ]
+  }
+]

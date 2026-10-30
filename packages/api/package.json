@@ -13,6 +13,7 @@
     "ingest": "tsx --env-file-if-exists=../../.env src/ingest/cli.ts",
     "ingest:score": "tsx --env-file-if-exists=../../.env src/ingest/score-cli.ts",
     "eval:extract": "tsx --env-file-if-exists=../../.env src/extract/eval.ts",
+    "eval:lineup": "tsx --env-file-if-exists=../../.env src/extract/lineup-eval.ts",
     "lineup:backfill": "tsx --env-file-if-exists=../../.env src/lineup/backfill-cli.ts"
   },
   "dependencies": {
