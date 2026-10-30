@@ -24,7 +24,12 @@ describe('ingestSourceConfigSchema', () => {
       default_location: null,
       capped: false,
       default_categories: [],
+      lineup_from_text: false,
     })
+  })
+
+  it('reads lineups from text only when the source asks for it', () => {
+    expect(ingestSourceConfigSchema.parse({ lineup_from_text: true }).lineup_from_text).toBe(true)
   })
 
   it('accepts a list of rooms and rejects an empty one', () => {
@@ -105,6 +110,7 @@ describe('ingestItemViewSchema', () => {
         image_url: null,
         source_url: 'https://example.org/e/1',
         times_unverified: true,
+        lineup_from_text: true,
       },
       venue_name: null,
       gone_at: null,
@@ -129,6 +135,9 @@ describe('ingestItemViewSchema', () => {
     // A draft stored before lineups existed reads as one without
     const { lineup: _, ...olderDraft } = view.draft
     expect(ingestItemViewSchema.parse({ ...view, draft: olderDraft }).draft.lineup).toEqual([])
+    // ... and one stored before the lineup step as not read
+    const { lineup_from_text: __, ...unreadDraft } = view.draft
+    expect(ingestItemViewSchema.parse({ ...view, draft: unreadDraft }).draft.lineup_from_text).toBe(false)
     expect(() => ingestItemViewSchema.parse({ ...view, fit: { verdict: 'great', reason: 'x' } })).toThrow()
   })
 })

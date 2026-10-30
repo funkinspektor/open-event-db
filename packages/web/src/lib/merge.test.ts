@@ -37,6 +37,7 @@ const draft: IngestDraft = {
   image_url: 'https://venue.example.org/flyers/artist-one.jpg',
   source_url: 'https://venue.example.org/program/artist-one.html',
   times_unverified: false,
+  lineup_from_text: false,
 }
 
 describe('mergeRows (lineup)', () => {

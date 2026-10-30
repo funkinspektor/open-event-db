@@ -42,6 +42,8 @@ export const ingestSourceConfigSchema = z.object({
   capped: z.boolean().default(false),
   /** Categories for feed events whose text names none (or that are not read at all), e.g. `party` for a club. */
   default_categories: z.array(eventCategorySchema).default([]),
+  /** Read the lineup out of the description text with the text model, for feeds whose adapter has none. */
+  lineup_from_text: z.boolean().default(false),
 })
 
 export type IngestSourceConfig = z.infer<typeof ingestSourceConfigSchema>
@@ -63,6 +65,8 @@ export const ingestDraftSchema = z.object({
   image_url: z.string().url().nullable(),
   source_url: z.string().url().nullable(),
   times_unverified: z.boolean(),
+  /** True once the lineup step read this draft's text (drafts stored before it existed: false). */
+  lineup_from_text: z.boolean().default(false),
 })
 
 export type IngestDraft = z.infer<typeof ingestDraftSchema>

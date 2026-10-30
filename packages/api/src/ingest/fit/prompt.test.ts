@@ -16,6 +16,7 @@ const draft = (over: Partial<IngestDraft> = {}): IngestDraft => ({
   image_url: null,
   source_url: null,
   times_unverified: false,
+  lineup_from_text: false,
   ...over,
 })
 
