@@ -41,7 +41,21 @@ const SOLD_OUT = /^(?:sold[\s-]*out|ausverkauft)\b[\s!:|–—-]*/i
 const SEPARATOR = /\s+[-–—]\s+|\s*[|•@,]\s*/g
 const VENUE_WORDS = new Set(['urban', 'spree', 'berlin', 'live', 'in', 'at', 'show', 'germany'])
 const SHORT_DATE = /^\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4})?$/
+/** A line of the venue's own footer that texts copied from Facebook end with: address, website, profiles. */
+const FOOTER_LINE =
+  /^(?:urban spree(?:\s*\([^)]*\))?(?:\s*[,/•-]\s*berlin)?|revaler str(?:aße|\.)?\s*99\b.*|10245 berlin|\[?(?:https?:\/\/)?(?:www\.)?(?:urbanspree\.com|(?:facebook|instagram)\.com\/urbanspree)\b.*)$/i
+/** Raised when the adapter reads pages differently: every stored item is then read once more. */
+const READING = 2
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/** The text without trailing paragraphs that only give the venue's address and links: the venue says that. */
+function withoutVenueFooter(text: string): string {
+  const paragraphs = text.split('\n\n')
+  while (paragraphs.length > 1 && paragraphs.at(-1)!.split('\n').every((line) => FOOTER_LINE.test(line.trim()))) {
+    paragraphs.pop()
+  }
+  return paragraphs.join('\n\n')
+}
 
 /** "Urban Spree, Berlin", "Berlin Show", "29.10.2026": the place and day, which the event's own fields hold. */
 function isVenueSegment(segment: string): boolean {
@@ -196,7 +210,7 @@ export function parseUrbanSpreeDetail(
 
   const priceText = price ? squash(textOf(price)) : ''
   const entry = /^(?:free(?: entry)?|(?:eintritt )?frei|kostenlos)$/i.test(priceText) ? 'Eintritt frei' : priceText ? `Eintritt: ${priceText}` : ''
-  const description = [header.join('\n'), body ? richText(body) : '', entry].filter(Boolean).join('\n\n')
+  const description = [header.join('\n'), body ? withoutVenueFooter(richText(body)) : '', entry].filter(Boolean).join('\n\n')
 
   const links: Record<string, string> = {}
   const tickets = webUrl(ticket ? attr(ticket, 'href') : null)
@@ -221,7 +235,7 @@ export function parseUrbanSpreeDetail(
     timesStated,
     links,
     raw,
-    hash: createHash('sha256').update(raw).digest('hex'),
+    hash: createHash('sha256').update(`${READING}\n${raw}`).digest('hex'),
   }
 }
 

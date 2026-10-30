@@ -40,7 +40,8 @@ export function webUrl(href: string | null): string | null {
     if (target) url = new URL(target)
     if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname.includes('.')) return null
     for (const key of [...url.searchParams.keys()]) {
-      if (key === 'fbclid' || key.startsWith('utm_')) url.searchParams.delete(key)
+      // fbclid and utm_*, and Facebook's own __cft__[0], __tn__, __xts__ on links copied from a post
+      if (key === 'fbclid' || key.startsWith('utm_') || key.startsWith('__')) url.searchParams.delete(key)
     }
     return url.href
   } catch {
