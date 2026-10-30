@@ -33,6 +33,7 @@ export const editHistoryAction = pgEnum('edit_history_action', [
 
 export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical', 'dunckerclub', 'urbanspree', 'berghain', 'slaughterhouse'])
 export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accepted', 'rejected'])
+export const ingestFitVerdict = pgEnum('ingest_fit_verdict', ['fit', 'maybe', 'no'])
 
 type Links = Record<string, string>
 
@@ -207,6 +208,14 @@ export const ingestItems = pgTable(
     detachedAt: timestamp('detached_at', { withTimezone: true }),
     /** The feed image URL the event's current image was copied from; differs from the draft's until synced. */
     imageSourceUrl: text('image_source_url'),
+    /** LLM verdict on whether the item fits the platform's taste; null until scored. Shadow only, never acted on. */
+    fitVerdict: ingestFitVerdict('fit_verdict'),
+    fitReason: text('fit_reason'),
+    fitScoredAt: timestamp('fit_scored_at', { withTimezone: true }),
+    /** Hash of what the verdict was based on; a changed fingerprint means the item is re-scored. */
+    fitFingerprint: text('fit_fingerprint'),
+    /** The item was merged from several duplicate feed entries. */
+    hadDuplicates: boolean('had_duplicates').notNull().default(false),
   },
   (t) => [
     uniqueIndex('ingest_items_source_external').on(t.sourceId, t.externalId),

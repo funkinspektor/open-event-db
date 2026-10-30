@@ -53,6 +53,27 @@ describe('ingest schema', () => {
     await expect(db.insert(ingestItems).values(values)).rejects.toThrow()
   })
 
+  it('stores a fit verdict and defaults had_duplicates to false', async () => {
+    const [item] = await db
+      .insert(ingestItems)
+      .values({ sourceId: source.id, externalId: 'uid-fit', draft: { title: 'F' }, raw: 'BEGIN:VEVENT' })
+      .returning()
+    expect(item!.hadDuplicates).toBe(false)
+    expect(item!.fitVerdict).toBeNull()
+
+    const fit = { fitVerdict: 'no' as const, fitReason: 'Indie night', fitScoredAt: new Date(), fitFingerprint: 'x' }
+    await db.update(ingestItems).set(fit).where(eq(ingestItems.id, item!.id))
+    const [read] = await db.select().from(ingestItems).where(eq(ingestItems.id, item!.id))
+    expect(read).toMatchObject(fit)
+
+    await expect(
+      db
+        .update(ingestItems)
+        .set({ fitVerdict: 'nope' as never })
+        .where(eq(ingestItems.id, item!.id)),
+    ).rejects.toThrow()
+  })
+
   it('has pg_trgm available', async () => {
     const rows = await db.execute<{ s: number }>(sql`SELECT similarity('Burre', 'Burre w/ Heavenphetamine') AS s`)
     expect(Number(rows[0]!.s)).toBeGreaterThan(0)
