@@ -10,6 +10,7 @@ import {
   ingestLinkSchema,
   ingestListQuerySchema,
   ingestRejectSchema,
+  type IngestAccuracyRow,
   type IngestDraft,
   type IngestItemDetail,
   type IngestItemState,
@@ -87,6 +88,36 @@ async function sourceCounts(view: IngestView): Promise<IngestSourceCount[]> {
     view === 'gone'
       ? await base.innerJoin(events, eq(events.id, ingestItems.eventId)).where(isGone).groupBy(ingestSources.id)
       : await base.where(view === 'new' ? isNew() : isFiltered()).groupBy(ingestSources.id)
+  return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'))
+}
+
+/**
+ * How often the scouts agreed with the model, per source, over the last 60 days. Only scored items a scout decided
+ * count; a reject that happened because the event already existed says nothing about fit and is left out.
+ */
+async function accuracy(): Promise<IngestAccuracyRow[]> {
+  const decidedIn = (verdict: 'fit' | 'no', ...status: ('accepted' | 'rejected')[]) =>
+    sql<number>`count(*) filter (where ${ingestItems.fitVerdict} = ${verdict} and ${inArray(ingestItems.status, status)})`.mapWith(Number)
+  const rows = await db
+    .select({
+      slug: ingestSources.slug,
+      name: ingestSources.name,
+      fit_decided: decidedIn('fit', 'accepted', 'rejected'),
+      fit_accepted: decidedIn('fit', 'accepted'),
+      no_decided: decidedIn('no', 'accepted', 'rejected'),
+      no_rejected: decidedIn('no', 'rejected'),
+      rescued: decidedIn('no', 'accepted'),
+    })
+    .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+    .where(
+      and(
+        sql`${ingestItems.decidedAt} >= now() - interval '60 days'`,
+        isNotNull(ingestItems.fitVerdict),
+        sql`not (${ingestItems.status} = 'rejected' and ${ingestItems.hadDuplicates})`,
+      ),
+    )
+    .groupBy(ingestSources.id)
   return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 
@@ -260,6 +291,11 @@ export async function ingestRoutes(app: FastifyInstance) {
   app.get('/ingest/count', read, async (req) => {
     requireScout(req)
     return { data: await counts() }
+  })
+
+  app.get('/ingest/accuracy', read, async (req) => {
+    requireScout(req)
+    return { data: await accuracy() }
   })
 
   app.post<{ Params: { id: string } }>('/ingest/items/:id/accept', write, async (req) => {

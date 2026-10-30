@@ -441,6 +441,51 @@ describe('GET /ingest/items and /ingest/count', () => {
   })
 })
 
+describe('GET /ingest/accuracy', () => {
+  it('reports per-source accuracy over the last 60 days', async () => {
+    const slug = `inbox-acc-${stamp}`
+    const [src] = await db
+      .insert(ingestSources)
+      .values({ slug, name: `${sourceName} Accuracy`, kind: 'ical', url: 'https://inbox.test/acc.ics', publisherId: feedScout.id })
+      .returning()
+    try {
+      const now = Date.now()
+      const decided = (over: Partial<typeof ingestItems.$inferInsert>) =>
+        newItem({ sourceId: src!.id, decidedAt: new Date(now - 24 * 3600_000), ...over })
+      await decided({ status: 'accepted', fitVerdict: 'fit' })
+      await decided({ status: 'rejected', fitVerdict: 'fit' })
+      await decided({ status: 'rejected', fitVerdict: 'fit', hadDuplicates: true }) // a duplicate reject says nothing about fit
+      await decided({ status: 'rejected', fitVerdict: 'no' })
+      await decided({ status: 'accepted', fitVerdict: 'no' })
+      await decided({ status: 'accepted', fitVerdict: 'maybe' })
+      await decided({ status: 'accepted', fitVerdict: 'fit', decidedAt: new Date(now - 61 * 24 * 3600_000) })
+      await decided({ status: 'accepted' })
+      await newItem({ sourceId: src!.id, fitVerdict: 'fit' }) // still pending
+
+      const res = await app.inject({ method: 'GET', url: '/api/v1/ingest/accuracy', headers: auth(keyScout) })
+      expect(res.statusCode).toBe(200)
+      const rows: { slug: string; name: string }[] = res.json().data
+      expect(rows.find((r) => r.slug === slug)).toEqual({
+        slug,
+        name: `${sourceName} Accuracy`,
+        fit_decided: 2,
+        fit_accepted: 1,
+        no_decided: 2,
+        no_rejected: 1,
+        rescued: 1,
+      })
+
+      const names = rows.map((r) => r.name)
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'de')))
+
+      const alicesTry = await app.inject({ method: 'GET', url: '/api/v1/ingest/accuracy', headers: auth(keyAlice) })
+      expect(alicesTry.statusCode).toBe(403)
+    } finally {
+      await db.delete(ingestSources).where(eq(ingestSources.id, src!.id)) // cascades items
+    }
+  })
+})
+
 describe('public visibility', () => {
   it('never lists a pending inbox item on GET /api/v1/events, only an accepted one', async () => {
     const startsAt = '2031-05-01T20:00:00.000Z'

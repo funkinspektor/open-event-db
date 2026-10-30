@@ -133,6 +133,22 @@ export const ingestSourceCountSchema = z.object({
 
 export type IngestSourceCount = z.infer<typeof ingestSourceCountSchema>
 
+/** How the scouts' decisions of the last 60 days compare with the model's verdicts, for one source. */
+export const ingestAccuracyRowSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  /** Items judged `fit` that a scout accepted or rejected. */
+  fit_decided: z.number().int(),
+  fit_accepted: z.number().int(),
+  /** Items judged `no` that a scout accepted or rejected. */
+  no_decided: z.number().int(),
+  no_rejected: z.number().int(),
+  /** Judged `no` but accepted anyway. */
+  rescued: z.number().int(),
+})
+
+export type IngestAccuracyRow = z.infer<typeof ingestAccuracyRowSchema>
+
 export const ingestRejectSchema = z.object({
   ids: z.array(uuid).min(1).max(100),
 })
