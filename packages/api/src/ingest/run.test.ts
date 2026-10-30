@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   editHistory,
@@ -17,6 +17,7 @@ import type { Extraction } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { textExtraction } from '../extract/text.js'
 import { ExtractionError } from '../extract/vision.js'
+import { fitScoring } from './fit/scorer.js'
 import { feedUrl, runIngest } from './run.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
 import { ingestImages } from './image.js'
@@ -144,7 +145,11 @@ beforeAll(async () => {
   scout = p!
 })
 
-afterEach(() => textExtraction.reset())
+afterEach(() => {
+  textExtraction.reset()
+  fitScoring.reset()
+  vi.restoreAllMocks()
+})
 
 afterAll(async () => {
   if (sourceIds.length) await db.delete(ingestSources).where(inArray(ingestSources.id, sourceIds))
@@ -165,6 +170,27 @@ describe('feedUrl', () => {
 })
 
 describe('runIngest', () => {
+  it('a scoring failure does not fail the run', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    fitScoring.setScorer({
+      async score() {
+        throw new ExtractionError('provider', 'provider down')
+      },
+    })
+    stubExtractor()
+    const source = await newSource()
+    // The fixture's events are dated in the past by now; a far-future copy keeps its items open
+    const future = fixture.replace(/(DT(?:START|END);TZID=:)2026/g, '$12099')
+    const result = await runIngest({ only: source.slug, now: NOW, fetchText: async () => future })
+
+    expect(result.skipped).toBe(false)
+    expect(result.sources).toHaveLength(1)
+    expect(result.sources.every((s) => s.ok)).toBe(true)
+    expect(result.scoring).toMatchObject({ scored: 0 })
+    expect((result.scoring as { failed: number }).failed).toBeGreaterThanOrEqual(1)
+    expect((await itemsOf(source.id)).every((i) => i.fitVerdict === null)).toBe(true)
+  })
+
   it('stores new feed events as pending items', async () => {
     const stub = stubExtractor()
     const source = await newSource()

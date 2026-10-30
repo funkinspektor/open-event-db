@@ -27,7 +27,7 @@ import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
 import { copyItemImage, syncItemImage } from '../ingest/image.js'
 import { mergePatch } from '../ingest/merge.js'
-import { berlinInstant, berlinToday } from '../extract/normalize.js'
+import { draftStartsAt, isOpen, notOver } from '../ingest/open.js'
 import { serializeCoordinates } from '../serializers.js'
 
 const read = { onRequest: requireAuth }
@@ -40,16 +40,8 @@ function requireScout(req: FastifyRequest) {
   return me
 }
 
-const draftStartsAt = sql`(${ingestItems.draft}->>'starts_at')::timestamptz`
-
-const draftEndsAt = sql`coalesce((${ingestItems.draft}->>'ends_at')::timestamptz, ${draftStartsAt})`
-
-/** Midnight in Berlin today: items that ended before it are over and no longer worth a decision. */
-const startOfToday = () => berlinInstant(berlinToday(new Date()), 0).toISOString()
-const notOver = () => sql`${draftEndsAt} >= ${startOfToday()}::timestamptz`
-
 // Pending items still in the feed that are not over yet (a running exhibition stays until its end).
-const isNew = () => and(eq(ingestItems.status, 'pending'), isNull(ingestItems.goneAt), notOver())
+const isNew = isOpen
 // Accepted items that left their feed and still wait for a decision. Detached items (claimed, edited by a
 // human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(

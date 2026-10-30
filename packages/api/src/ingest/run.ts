@@ -29,6 +29,7 @@ import { parseSlaughterhouse } from './adapters/slaughterhouse.js'
 import { readUrbanSpree } from './adapters/urbanspree.js'
 import { calendarDay, normalizeFeedEvent } from './normalize.js'
 import { syncItemImage } from './image.js'
+import { scorePending, type ScoreResult } from './fit/score.js'
 
 export interface SourceRunResult {
   slug: string
@@ -307,28 +308,17 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
 }
 
 /**
- * Fetches every enabled source (or `only`) one after the other into `ingest_items` and syncs accepted events.
- * A run already in progress (cron and CLI share one advisory lock) makes this one return `skipped: true`.
+ * Runs `fn` holding the global ingest advisory lock (cron, `ingest` and `ingest:score` share it).
+ * Returns `null` without running `fn` when another run holds the lock.
  */
-export async function runIngest(opts: RunIngestOptions = {}): Promise<{ skipped: boolean; sources: SourceRunResult[] }> {
-  const now = opts.now ?? new Date()
-  const fetchText = opts.fetchText ?? fetchFeed
-
+export async function withIngestLock<T>(fn: () => Promise<T>): Promise<T | null> {
   // A session-level lock needs one connection for lock and unlock, so reserve one from the pool.
   const conn = await db.$client.reserve()
   try {
     const [row] = await conn`select pg_try_advisory_lock(hashtext('ingest')) as locked`
-    if (!row?.locked) return { skipped: true, sources: [] }
+    if (!row?.locked) return null
     try {
-      const only = opts.only === undefined ? undefined : [opts.only].flat()
-      const sources = await db
-        .select()
-        .from(ingestSources)
-        .where(only ? inArray(ingestSources.slug, only) : eq(ingestSources.enabled, true))
-        .orderBy(asc(ingestSources.slug))
-      const results: SourceRunResult[] = []
-      for (const source of sources) results.push(await runSource(source, now, fetchText))
-      return { skipped: false, sources: results }
+      return await fn()
     } finally {
       await conn`select pg_advisory_unlock(hashtext('ingest'))`
     }
@@ -337,11 +327,50 @@ export async function runIngest(opts: RunIngestOptions = {}): Promise<{ skipped:
   }
 }
 
+export interface IngestRunResult {
+  skipped: boolean
+  sources: SourceRunResult[]
+  /** What the fit-scoring pass after the sources did; absent when the run was skipped. */
+  scoring?: ScoreResult | { error: string }
+}
+
+/**
+ * Fetches every enabled source (or `only`) one after the other into `ingest_items` and syncs accepted events,
+ * then scores the open items for fit. A run already in progress (cron and CLI share one advisory lock) makes
+ * this one return `skipped: true`.
+ */
+export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestRunResult> {
+  const now = opts.now ?? new Date()
+  const fetchText = opts.fetchText ?? fetchFeed
+
+  const result = await withIngestLock(async (): Promise<IngestRunResult> => {
+    const only = opts.only === undefined ? undefined : [opts.only].flat()
+    const sources = await db
+      .select()
+      .from(ingestSources)
+      .where(only ? inArray(ingestSources.slug, only) : eq(ingestSources.enabled, true))
+      .orderBy(asc(ingestSources.slug))
+    const results: SourceRunResult[] = []
+    for (const source of sources) results.push(await runSource(source, now, fetchText))
+
+    // Shadow scoring never fails the run or touches a source result: whatever goes wrong is only reported.
+    let scoring: IngestRunResult['scoring']
+    try {
+      scoring = await scorePending({ only })
+    } catch (err) {
+      console.warn({ err })
+      scoring = { error: err instanceof Error ? err.message : String(err) }
+    }
+    return { skipped: false, sources: results, scoring }
+  })
+  return result ?? { skipped: true, sources: [] }
+}
+
 /**
  * The pipeline call the cron endpoint makes, behind a holder so route tests install a stub and never
  * run the real pipeline (which takes the global advisory lock that run.test.ts also uses).
  */
-type IngestRunFn = () => Promise<{ skipped: boolean; sources: SourceRunResult[] }>
+type IngestRunFn = () => Promise<IngestRunResult>
 
 const defaultRun: IngestRunFn = () => runIngest()
 let currentRun: IngestRunFn = defaultRun
