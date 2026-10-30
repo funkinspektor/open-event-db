@@ -4,7 +4,8 @@ import { callScalewayJson, isTestRun, type ScalewayConfig } from '../../extract/
 
 export const fitJudgementSchema = z.object({
   verdict: ingestFitVerdictSchema,
-  reason: z.string().transform((s) => s.trim().slice(0, 200)),
+  // An empty reason means the model did not answer properly: it counts as a failed call.
+  reason: z.string().trim().min(1).transform((s) => s.slice(0, 200)),
 })
 
 export type FitJudgement = z.infer<typeof fitJudgementSchema>

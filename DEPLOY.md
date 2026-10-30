@@ -68,7 +68,7 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 | `SCALEWAY_REGION` | `fr-par` (region of the verified TEM domain) |
 | `EMAIL_FROM`, `EMAIL_FROM_NAME` | verified TEM sender |
 | `VISION_MODEL` | `mistral-medium-3.5-128b` |
-| `TEXT_MODEL` | optional; model for reading feed descriptions, defaults to `VISION_MODEL` |
+| `TEXT_MODEL` | optional; model for reading feed descriptions and scoring the fit of imported events, defaults to `VISION_MODEL` |
 | `INGEST_CRON_SECRET` 🔒 | `openssl rand -hex 32` — without it `/internal/ingest/run` answers 404 |
 | `S3_ENDPOINT`, `S3_REGION` | `https://s3.nl-ams.scw.cloud`, `nl-ams` |
 | `S3_BUCKET` | the event images bucket (see below); without it events have no images |
@@ -149,6 +149,21 @@ extracts every upcoming event at once, from a laptop with the CLI instead:
 ```bash
 scripts/prod-db.sh pnpm --filter @open-event-db/api ingest acud
 ```
+
+**Fit scoring.** Every run ends with the fit-scoring pass: up to 200 open pending items, 4 LLM calls at a
+time, inside the same request. Normally only the new items are scored (a few dozen), but a backfill is far
+larger, so after the first deploy of this feature, and after every edit of
+`packages/api/src/ingest/fit/taste.ts` or the fit prompt (`fit/prompt.ts`), run it once from the laptop
+instead of waiting for the cron:
+
+```bash
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest:score
+```
+
+Repeat until it reports `scored: 0`; one run scores at most 200 items, `--limit N` changes that. The model is
+`TEXT_MODEL`, else `VISION_MODEL`, with the Scaleway keys above; without a model, scoring is skipped and the
+run result says `scoring: { skipped: 'no model' }`. The cron response carries the pass as its `scoring`
+field. `ingest:score` exits 1 when another ingest run holds the lock, and 2 on bad arguments or a crash.
 
 Sources are added with the admin CLI, for example the ones in production:
 

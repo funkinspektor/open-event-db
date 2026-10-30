@@ -17,7 +17,10 @@ The editors' recent decisions follow as examples of their taste; weigh them, but
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 
-/** Identifies the prompt wording and taste text; an item is re-scored when it changes. */
+/**
+ * Identifies the system prompt (incl. the taste text) and nothing else: changing the user-message format,
+ * the example line format or the model does not trigger a re-score.
+ */
 export const PROMPT_VERSION = sha256(FIT_SYSTEM_PROMPT).slice(0, 16)
 
 /** What the model sees of one event. Key order is part of the fingerprint. */
@@ -38,14 +41,17 @@ export interface FitExamples {
 const DESCRIPTION_LIMIT = 1500
 const EXAMPLE_DESCRIPTION_LIMIT = 150
 
+const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
+
 export function subjectOf(draft: IngestDraft, venueName: string | null, sourceName: string): FitSubject {
+  const place = venueName ?? draft.location_text
   return {
-    title: draft.title,
-    place: venueName ?? draft.location_text,
+    title: oneLine(draft.title),
+    place: place === null ? null : oneLine(place),
     source: sourceName,
     starts_at: draft.starts_at,
     categories: draft.categories,
-    description: draft.description.replace(/\s+/g, ' ').trim().slice(0, DESCRIPTION_LIMIT),
+    description: oneLine(draft.description).slice(0, DESCRIPTION_LIMIT),
   }
 }
 

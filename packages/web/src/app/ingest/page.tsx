@@ -40,7 +40,7 @@ export default async function IngestPage({ searchParams }: { searchParams: Searc
   const cursor = first(params.cursor)
   const [{ data, meta }, accuracy] = await Promise.all([
     getIngestItems({ view, source, cursor, limit: PAGE_SIZE }, cookie),
-    getIngestAccuracy(cookie),
+    getIngestAccuracy(cookie).catch(() => []), // the accuracy block is a nicety: it must not take the inbox down
   ])
 
   const tabs: { view: IngestView; label: string }[] = [

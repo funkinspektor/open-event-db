@@ -37,6 +37,13 @@ describe('subjectOf', () => {
     expect(subjectOf(draft({ description: 'a \n\n  b\t c' }), null, 'src').description).toBe('a b c')
   })
 
+  it('collapses whitespace in title and place', () => {
+    const s = subjectOf(draft({ title: ' Dark\nWave \t Night ', location_text: 'Some\nwhere  1' }), null, 'src')
+    expect(s.title).toBe('Dark Wave Night')
+    expect(s.place).toBe('Some where 1')
+    expect(subjectOf(draft(), ' Bade\nhaus ', 'src').place).toBe('Bade haus')
+  })
+
   it('prefers the venue name over location_text', () => {
     expect(subjectOf(draft(), 'Badehaus', 'src').place).toBe('Badehaus')
     expect(subjectOf(draft(), null, 'src').place).toBe('Somewhere 1')

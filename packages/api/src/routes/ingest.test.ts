@@ -417,6 +417,18 @@ describe('GET /ingest/items and /ingest/count', () => {
       }
     })
 
+    it('lists an item with a verdict but no reason with fit: null', async () => {
+      const [src] = await db.select().from(ingestSources).where(eq(ingestSources.slug, fitSource))
+      const item = await newItem({ sourceId: src!.id, fitVerdict: 'fit', fitReason: null }, draftOf({ starts_at: '2034-05-02T20:00:00.000Z' }))
+      try {
+        const res = await page('view=new&limit=100')
+        const mine = res.json().data.find((i: { id: string }) => i.id === item.id)
+        expect(mine.fit).toBeNull()
+      } finally {
+        await db.delete(ingestItems).where(eq(ingestItems.id, item.id))
+      }
+    })
+
     it('pages across the boundary between fits and maybes', async () => {
       const first = await page('view=new&limit=2')
       expect(idsOf(first)).toEqual([items.fitD2.id, items.fitD3.id])

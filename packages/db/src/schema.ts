@@ -214,7 +214,7 @@ export const ingestItems = pgTable(
     fitScoredAt: timestamp('fit_scored_at', { withTimezone: true }),
     /** Hash of what the verdict was based on; a changed fingerprint means the item is re-scored. */
     fitFingerprint: text('fit_fingerprint'),
-    /** The item was merged from several duplicate feed entries. */
+    /** Set when a scout rejected the item while the inbox showed duplicate candidates for it. */
     hadDuplicates: boolean('had_duplicates').notNull().default(false),
   },
   (t) => [

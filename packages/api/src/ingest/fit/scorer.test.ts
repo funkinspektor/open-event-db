@@ -12,6 +12,11 @@ describe('fitJudgementSchema', () => {
     expect(fitJudgementSchema.parse({ verdict: 'fit', reason: '  Dark wave.  ' }).reason).toBe('Dark wave.')
   })
 
+  it('rejects an empty or blank reason', () => {
+    expect(() => fitJudgementSchema.parse({ verdict: 'no', reason: '   ' })).toThrow()
+    expect(() => fitJudgementSchema.parse({ verdict: 'no', reason: '' })).toThrow()
+  })
+
   it('rejects an unknown verdict', () => {
     expect(() => fitJudgementSchema.parse({ verdict: 'unsure', reason: 'x' })).toThrow()
   })
