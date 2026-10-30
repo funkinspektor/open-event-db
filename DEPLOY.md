@@ -233,6 +233,31 @@ scripts/prod-db.sh pnpm --filter @open-event-db/api lineup:backfill
 scripts/prod-db.sh pnpm --filter @open-event-db/api lineup:backfill --write
 ```
 
+**Lineups from text.** Sources whose adapter brings no lineup can have the text model read it out of the
+description: `lineup_from_text`. Only acts whose name is literally in the text are kept; the description
+itself stays exactly as the feed has it. It reads each new or changed event's text once, and never reads
+rejected or detached items. Switch it on per source:
+
+```bash
+scripts/prod-db.sh pnpm db:cli ingest-set-config urbanspree --config '{"lineup_from_text":true}'
+scripts/prod-db.sh pnpm db:cli ingest-set-config slaughterhouse --config '{"lineup_from_text":true}'
+scripts/prod-db.sh pnpm db:cli ingest-set-config badehaus --config '{"lineup_from_text":true}'
+scripts/prod-db.sh pnpm db:cli ingest-set-config acud --config '{"lineup_from_text":true}'
+```
+
+The first run after that reads every stored, unsettled item of these sources once (for ACUD also its times
+once more), so run it from the laptop, then score until `scored: 0`: pending items of these sources get act
+names in their fit prompt and are scored once more.
+
+```bash
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest:score
+```
+
+The event editor's "Read from description" uses the same reading. It has its own daily limit per account,
+the same number as image import (`EXTRACT_DAILY_LIMIT`), counted separately. `pnpm --filter
+@open-event-db/api eval:lineup [--models a,b]` measures the reading against `src/extract/lineup-eval/cases.json`.
+
 Write patterns without backslashes (`[0-9]`, not `\d`): `pnpm` passes the arguments through a shell and
 doubles every backslash, so `\d` arrives as `\\d` and the source fails with "external_id_pattern … yields no id".
 
