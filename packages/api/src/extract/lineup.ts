@@ -11,6 +11,9 @@ export const LINEUP_SYSTEM_PROMPT = `You read the text of an event announcement 
 
 Rules:
 - One act per performer, band or DJ, with the name spelled exactly as written. A back-to-back pair stays one act ("A b2b B").
+- The name is the name only: leave out role marks in brackets after it, such as "(DJ)", "(live)" or "(DJ-Set)" — "(live)" sets live instead. A "DJ" that is part of the name stays ("DJ Funky Henning").
+- Acts can stand inside a sentence, e.g. "Dark Disco Night // NOCTURNA (Velvet Crew all night long)" → NOCTURNA, note "Velvet Crew".
+- The band a concert text is about counts, even when the text only describes it ("Die Grauzonen wurden 1984 in Bremen gegründet …"), and so does a named support act. Other people and bands that are only mentioned (members, producers, influences, bands they toured with) do not.
 - live: true when the text marks the act as live ("(live)", "live:", a "Live" section) or it is a band in a concert listing; otherwise false.
 - note: a label, crew, collective or origin written right next to the name, e.g. "Young And Cold" from "Bragolin (live) [Young And Cold]", "eisengrau" from "paura diamante (eisengrau)", "FR" from "Lavion FR". Otherwise null.
 - time: only a set time written next to the act, as "HH:MM". Otherwise null.
