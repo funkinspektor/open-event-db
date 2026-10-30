@@ -85,6 +85,16 @@ async function sourceCounts(view: 'new' | 'gone'): Promise<IngestSourceCount[]> 
   return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 
+/** Existing events that a draft may duplicate: what the inbox shows next to an item, and what a reject records. */
+const duplicatesFor = (draft: IngestDraft) =>
+  findDuplicateCandidates({
+    venueId: draft.venue_id,
+    locationText: draft.location_text,
+    startsAt: new Date(draft.starts_at),
+    endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
+    title: draft.title,
+  })
+
 /** The API view of a stored item; duplicates are looked up for items that still wait for a decision. */
 async function toView(
   item: IngestItem,
@@ -93,15 +103,7 @@ async function toView(
   draft: IngestDraft,
   withDuplicates: boolean,
 ): Promise<IngestItemView> {
-  const duplicates = withDuplicates
-    ? await findDuplicateCandidates({
-        venueId: draft.venue_id,
-        locationText: draft.location_text,
-        startsAt: new Date(draft.starts_at),
-        endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
-        title: draft.title,
-      })
-    : []
+  const duplicates = withDuplicates ? await duplicatesFor(draft) : []
   return {
     id: item.id,
     status: item.status,
@@ -310,12 +312,30 @@ export async function ingestRoutes(app: FastifyInstance) {
   app.post('/ingest/items/reject', write, async (req) => {
     const me = requireScout(req)
     const { ids } = ingestRejectSchema.parse(req.body)
-    const rejected = await db
-      .update(ingestItems)
-      .set({ status: 'rejected', decidedBy: me.id, decidedAt: new Date() })
+    // Record whether the scout saw duplicate candidates: the fit scoring reads it as a decision signal
+    const pending = await db
+      .select({ id: ingestItems.id, draft: ingestItems.draft })
+      .from(ingestItems)
       .where(and(inArray(ingestItems.id, ids), eq(ingestItems.status, 'pending')))
-      .returning({ id: ingestItems.id })
-    return { data: { rejected: rejected.length } }
+    const withDuplicates: string[] = []
+    const withoutDuplicates: string[] = []
+    for (const item of pending) {
+      const parsed = ingestDraftSchema.safeParse(item.draft)
+      const hadDuplicates = parsed.success && (await duplicatesFor(parsed.data)).length > 0
+      ;(hadDuplicates ? withDuplicates : withoutDuplicates).push(item.id)
+    }
+    const decidedAt = new Date()
+    let rejected = 0
+    for (const [group, hadDuplicates] of [[withDuplicates, true], [withoutDuplicates, false]] as const) {
+      if (!group.length) continue
+      const done = await db
+        .update(ingestItems)
+        .set({ status: 'rejected', decidedBy: me.id, decidedAt, hadDuplicates })
+        .where(and(inArray(ingestItems.id, group), eq(ingestItems.status, 'pending')))
+        .returning({ id: ingestItems.id })
+      rejected += done.length
+    }
+    return { data: { rejected } }
   })
 
   app.post<{ Params: { id: string } }>('/ingest/items/:id/link', write, async (req) => {

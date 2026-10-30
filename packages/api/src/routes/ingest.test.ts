@@ -541,6 +541,32 @@ describe('POST /ingest/items/reject', () => {
     expect(ids).not.toContain(b.id)
   })
 
+  it('marks items that had duplicate candidates', async () => {
+    const dupDraft = draftOf({ venue_id: venue.id, starts_at: '2031-06-01T20:00:00.000Z', title: `Reject dup ${stamp}` })
+    const [twin] = await db
+      .insert(events)
+      .values({ title: dupDraft.title, startsAt: new Date(dupDraft.starts_at), venueId: venue.id, city: venue.city, createdBy: alice.id })
+      .returning()
+    eventIds.push(twin!.id)
+    const withTwin = await newItem({}, dupDraft)
+    const alone = await newItem({}, draftOf({ starts_at: '2031-06-02T20:00:00.000Z', title: `Reject alone ${stamp}` }))
+
+    const res = await post('/items/reject', keyScout, { ids: [withTwin.id, alone.id] })
+    expect(res.json().data).toEqual({ rejected: 2 })
+    expect((await itemRow(withTwin.id)).hadDuplicates).toBe(true)
+    expect((await itemRow(alone.id)).hadDuplicates).toBe(false)
+  })
+
+  it('still rejects an item with a broken draft', async () => {
+    const { title: _title, ...broken } = draftOf()
+    const item = await newItem({}, broken)
+    const res = await post('/items/reject', keyScout, { ids: [item.id] })
+    expect(res.json().data).toEqual({ rejected: 1 })
+    const row = await itemRow(item.id)
+    expect(row.status).toBe('rejected')
+    expect(row.hadDuplicates).toBe(false)
+  })
+
   it('validates the body', async () => {
     expect((await post('/items/reject', keyScout, { ids: [] })).statusCode).toBe(400)
     expect((await post('/items/reject', keyScout, { ids: ['nope'] })).statusCode).toBe(400)
