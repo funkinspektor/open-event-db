@@ -74,8 +74,8 @@ export default async function DashboardPage() {
           <Headline text={me.name} style={{ fontSize: 'clamp(64px, 9vw, 120px)' }} />
           {scoutView ? (
             <p className="m-0 text-body text-muted">
-              <span className="kk-badge kk-badge--scout">Scout</span> Events you add stay unconfirmed until
-              their organizer claims them.
+              <span className="kk-badge kk-badge--scout">Scout</span> Events you add go live right away. They count as
+              the venue’s once its website lists them, and as the organizer’s once they claim them.
             </p>
           ) : (
             <Link href={`/publishers/${me.slug}`} className="text-body text-muted">

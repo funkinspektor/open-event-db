@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   eventOwners,
   events,
@@ -9,7 +9,7 @@ import {
   type Event,
   type Venue,
 } from '@open-event-db/db'
-import type { EventAddedBy, EventDetail, EventOwnerRole, EventSlim } from '@open-event-db/shared'
+import type { EventAddedBy, EventDetail, EventOwnerRole, EventProvenance, EventSlim } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
@@ -41,6 +41,22 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
   }
 }
 
+const hasOwners = sql`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`
+
+/** An official source lists the event right now: accepted (synced or not) and not gone from the site. */
+const listedByVenue = and(
+  eq(ingestItems.eventId, events.id),
+  eq(ingestItems.status, 'accepted'),
+  isNull(ingestItems.goneAt),
+  eq(ingestSources.official, true),
+)
+
+/** The event's provenance; correlated on `events`, usable in a select or a where. */
+export const provenanceSql = sql<EventProvenance>`case
+  when ${hasOwners} then 'organizer'
+  when exists (select 1 from ${ingestItems} inner join ${ingestSources} on ${ingestSources.id} = ${ingestItems.sourceId} where ${listedByVenue}) then 'venue_site'
+  else 'scout' end`
+
 /** Columns for slim event rows; use with `.from(events).leftJoin(venues, …)`. */
 export const slimEventColumns = {
   id: events.id,
@@ -60,7 +76,8 @@ export const slimEventColumns = {
   venueName: venues.name,
   venueCity: venues.city,
   // Unclaimed (scout-added) events have no owner rows
-  claimed: sql<boolean>`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`,
+  claimed: sql<boolean>`${hasOwners}`,
+  provenance: provenanceSql,
 }
 
 interface SlimEventRow {
@@ -81,6 +98,7 @@ interface SlimEventRow {
   venueName: string | null
   venueCity: string | null
   claimed: boolean
+  provenance: EventProvenance
 }
 
 export function serializeSlimEvent(r: SlimEventRow): EventSlim {
@@ -100,6 +118,7 @@ export function serializeSlimEvent(r: SlimEventRow): EventSlim {
     venue: r.venueId ? { id: r.venueId, name: r.venueName!, city: r.venueCity! } : null,
     image_url: imageUrlOf(r.imageKey),
     claimed: r.claimed,
+    provenance: r.provenance,
   }
 }
 
@@ -109,6 +128,7 @@ function serializeEventDetail(
   addedBy: EventAddedBy,
   owners: { publisherId: string; slug: string; name: string; role: EventOwnerRole }[],
   syncedFrom: EventDetail['synced_from'],
+  venueListing: EventDetail['venue_listing'],
 ): EventDetail {
   return {
     id: e.id,
@@ -127,6 +147,7 @@ function serializeEventDetail(
     image_url: imageUrlOf(e.imageKey),
     added_by: addedBy,
     claimed: owners.length > 0,
+    provenance: owners.length > 0 ? 'organizer' : venueListing ? 'venue_site' : 'scout',
     created_at: e.createdAt.toISOString(),
     updated_at: e.updatedAt.toISOString(),
     venue: v
@@ -145,6 +166,7 @@ function serializeEventDetail(
       role: o.role,
     })),
     synced_from: syncedFrom,
+    venue_listing: venueListing,
   }
 }
 
@@ -183,11 +205,22 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
     .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
     .where(eq(eventOwners.eventId, id))
 
+  const [listing] = await db
+    .select({ sourceName: ingestSources.name, itemDraft: ingestItems.draft, lastSeenAt: ingestItems.lastSeenAt })
+    .from(ingestItems)
+    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+    .innerJoin(events, eq(events.id, ingestItems.eventId))
+    .where(and(eq(events.id, id), listedByVenue))
+    .orderBy(desc(ingestItems.lastSeenAt))
+    .limit(1)
+
+  const sourceUrl = (draft: Record<string, unknown> | null) => (draft?.source_url as string | null | undefined) ?? null
   const syncedFrom =
-    row.sourceName === null
-      ? null
-      : { source_name: row.sourceName, source_url: (row.itemDraft?.source_url as string | null | undefined) ?? null }
-  return serializeEventDetail(row.event, row.venue, row.addedBy, owners, syncedFrom)
+    row.sourceName === null ? null : { source_name: row.sourceName, source_url: sourceUrl(row.itemDraft) }
+  const venueListing = listing
+    ? { source_name: listing.sourceName, source_url: sourceUrl(listing.itemDraft), last_seen_at: listing.lastSeenAt.toISOString() }
+    : null
+  return serializeEventDetail(row.event, row.venue, row.addedBy, owners, syncedFrom, venueListing)
 }
 
 /** Cancels an event, logs it and stops feed sync. No-op for an already cancelled event. */

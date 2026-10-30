@@ -812,3 +812,69 @@ describe('synced_from on event detail', () => {
     expect(after.json().data.synced_from).toBeNull()
   })
 })
+
+describe('provenance', () => {
+  const city = `Provtown-${stamp}`
+  const scoutEvent = async () => {
+    const [e] = await db
+      .insert(events)
+      .values({ title: `Scout tip ${stamp}-${++seq}`, startsAt: new Date('2033-02-01T20:00:00Z'), city, createdBy: scout.id })
+      .returning()
+    eventIds.push(e!.id)
+    return e!
+  }
+  const detailOf = async (id: string) => (await app.inject({ method: 'GET', url: `/api/v1/events/${id}` })).json().data
+  const listed = async (provenance: string) => {
+    const res = await app.inject({ method: 'GET', url: `/api/v1/events?city=${city}&provenance=${provenance}` })
+    expect(res.statusCode).toBe(200)
+    return res.json().data.map((e: { id: string; provenance: string }) => e.id)
+  }
+
+  it('a scout event becomes venue_site once the venue lists it, and falls back when it is gone', async () => {
+    const e = await scoutEvent()
+    expect((await detailOf(e.id)).provenance).toBe('scout')
+    expect(await listed('scout')).toContain(e.id)
+
+    // The venue's site lists it later; a plain link (no sync) is enough
+    const item = await newItem()
+    expect((await post(`/items/${item.id}/link`, keyScout, { event_id: e.id })).statusCode).toBe(200)
+    const detail = await detailOf(e.id)
+    expect(detail.provenance).toBe('venue_site')
+    expect(detail.venue_listing).toEqual(
+      expect.objectContaining({ source_name: sourceName, source_url: 'https://feed.test/e' }),
+    )
+    expect(await listed('venue_site')).toContain(e.id)
+    expect(await listed('scout')).not.toContain(e.id)
+
+    await db.update(ingestItems).set({ goneAt: new Date() }).where(eq(ingestItems.id, item.id))
+    const gone = await detailOf(e.id)
+    expect(gone.provenance).toBe('scout')
+    expect(gone.venue_listing).toBeNull()
+  })
+
+  it('an unofficial source does not vouch for an event', async () => {
+    const [src] = await db
+      .insert(ingestSources)
+      .values({ slug: `prov-agg-${stamp}`, name: 'Aggregator', kind: 'ical', url: 'https://agg.test/feed.ics', publisherId: feedScout.id, official: false })
+      .returning()
+    try {
+      const e = await scoutEvent()
+      await newItem({ sourceId: src!.id, status: 'accepted', eventId: e.id })
+      const detail = await detailOf(e.id)
+      expect(detail.provenance).toBe('scout')
+      expect(detail.venue_listing).toBeNull()
+    } finally {
+      await db.delete(ingestSources).where(eq(ingestSources.id, src!.id))
+    }
+  })
+
+  it('an organizer claim outranks the venue listing', async () => {
+    const e = await scoutEvent()
+    await newItem({ status: 'accepted', eventId: e.id })
+    await db.insert(eventOwners).values({ eventId: e.id, publisherId: alice.id, role: 'creator' })
+    const detail = await detailOf(e.id)
+    expect(detail.provenance).toBe('organizer')
+    expect(detail.venue_listing).not.toBeNull()
+    expect(await listed('organizer')).toContain(e.id)
+  })
+})

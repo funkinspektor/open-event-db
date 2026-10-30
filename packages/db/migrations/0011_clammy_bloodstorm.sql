@@ -1,0 +1,1 @@
+ALTER TABLE "ingest_sources" ADD COLUMN "official" boolean DEFAULT true NOT NULL;

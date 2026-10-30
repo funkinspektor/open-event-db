@@ -174,6 +174,8 @@ export const ingestSources = pgTable('ingest_sources', {
     .notNull()
     .references(() => publishers.id, { onDelete: 'restrict' }),
   config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  /** The venue's or organizer's own site: an event it lists counts as confirmed by the venue. False for aggregators. */
+  official: boolean('official').notNull().default(true),
   enabled: boolean('enabled').notNull().default(true),
   lastRunAt: timestamp('last_run_at', { withTimezone: true }),
   lastError: text('last_error'),

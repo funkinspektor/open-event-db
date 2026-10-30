@@ -47,6 +47,7 @@ import {
   eventSnapshot,
   getEventDetail,
   getOwners,
+  provenanceSql,
   serializeSlimEvent,
   slimEventColumns,
 } from '../queries/events.js'
@@ -99,7 +100,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.get('/events', async (req) => {
     const query = eventListQuerySchema.parse(req.query)
-    const { limit, cursor, city, from, to, tags, categories, venue_id, publisher_id, added_by, q, order } = query
+    const { limit, cursor, city, from, to, tags, categories, venue_id, publisher_id, added_by, provenance, q, order } = query
     const status: EventStatus[] = query.status?.length
       ? query.status
       : ['scheduled', 'postponed']
@@ -123,6 +124,7 @@ export async function eventRoutes(app: FastifyInstance) {
       conditions.push(inArray(events.id, ownedIds))
     }
     if (added_by) conditions.push(eq(events.createdBy, added_by))
+    if (provenance?.length) conditions.push(inArray(provenanceSql, provenance))
     if (decoded) {
       const cursorDate = new Date(decoded.starts_at)
       const after = order === 'desc' ? lt : gt

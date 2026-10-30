@@ -8,6 +8,13 @@ export const EVENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 export const eventStatusSchema = z.enum(['scheduled', 'cancelled', 'postponed'])
 export type EventStatus = z.infer<typeof eventStatusSchema>
 
+/**
+ * Who stands behind an event, strongest first: its organizer claimed it, the venue's own website lists it
+ * (an official feed source), or only the scout who added it.
+ */
+export const eventProvenanceSchema = z.enum(['organizer', 'venue_site', 'scout'])
+export type EventProvenance = z.infer<typeof eventProvenanceSchema>
+
 /** What kind of event it is. Several at once are allowed: a concert with a party afterwards has both. */
 export const EVENT_CATEGORIES = ['concert', 'party'] as const
 export const eventCategorySchema = z.enum(EVENT_CATEGORIES)
@@ -40,6 +47,7 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   /** Events added by this account (`created_by`), whether claimed or not. */
   added_by: z.string().uuid().optional(),
   status: csvOrArray(eventStatusSchema),
+  provenance: csvOrArray(eventProvenanceSchema),
   q: z.string().min(1).optional(),
   /** Sort by start time: `asc` (soonest first, default) or `desc` (newest first, e.g. for past events). */
   order: z.enum(['asc', 'desc']).default('asc'),
@@ -69,8 +77,9 @@ export const eventSlimSchema = z.object({
   recurrence: z.string().nullable(),
   venue: venueSummarySchema.nullable(),
   image_url: z.string().url().nullable(),
-  /** False while the event has no owner (added by a scout, not yet confirmed by the organizer). */
+  /** False while the event has no owner (added by a scout, not yet claimed by the organizer). */
   claimed: z.boolean(),
+  provenance: eventProvenanceSchema,
 })
 
 export type EventSlim = z.infer<typeof eventSlimSchema>
@@ -121,6 +130,10 @@ export const eventDetailSchema = eventSlimSchema
     owners: z.array(eventOwnerSchema),
     /** Set while a feed keeps this event in sync; editing detaches it. */
     synced_from: z.object({ source_name: z.string(), source_url: z.string().url().nullable() }).nullable(),
+    /** The official source that lists this event, while it still does; set whether or not it syncs. */
+    venue_listing: z
+      .object({ source_name: z.string(), source_url: z.string().url().nullable(), last_seen_at: z.string().datetime({ offset: true }) })
+      .nullable(),
   })
 
 export type EventDetail = z.infer<typeof eventDetailSchema>

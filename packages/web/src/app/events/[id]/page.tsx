@@ -5,9 +5,10 @@ import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
 import { getCurrentPublisher } from '@/lib/session'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
-import { dayKey, formatDateTime } from '@/lib/format'
+import { dayKey, formatDate, formatDateTime } from '@/lib/format'
 import { markdownToPlainText } from '@/lib/plaintext'
 import { EventDetailBody } from '@/components/EventDetailBody'
+import { ExtIcon } from '@/components/Icons'
 import { JsonLd } from '@/components/JsonLd'
 import { Toast } from '@/components/Toast'
 import { CONTACT_EMAIL } from '@/content/legal/operator'
@@ -164,12 +165,26 @@ export default async function EventPage({ params, searchParams }: { params: Para
           </section>
         ) : (
           <section className="flex flex-col gap-3.5">
-            <h2 className="kk-eyebrow">Added by</h2>
-            <p className="m-0 text-[17px]">
-              <span className="font-bold">{e.added_by.name}</span>
+            <h2 className="kk-eyebrow">Source</h2>
+            {e.venue_listing && (
+              <p className="m-0 text-[17px]">
+                Listed on the venue’s website
+                {e.venue_listing.source_url && (
+                  <>
+                    {' · '}
+                    <a href={e.venue_listing.source_url} target="_blank" rel="noopener noreferrer" className="font-bold">
+                      {e.venue_listing.source_name}
+                      <ExtIcon />
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+            <p className={e.venue_listing ? 'm-0 text-[14px] text-muted' : 'm-0 text-[17px]'}>
+              Added by <span className={e.venue_listing ? undefined : 'font-bold'}>{e.added_by.name}</span>
               {e.added_by.is_scout && <span className="text-muted"> · Scout</span>}
+              {e.venue_listing && ` · last checked ${formatDate(e.venue_listing.last_seen_at)}`}
             </p>
-            <p className="m-0 text-[14px] text-muted">Not yet confirmed by the organizer</p>
           </section>
         )}
 

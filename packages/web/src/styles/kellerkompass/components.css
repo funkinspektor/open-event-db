@@ -90,7 +90,6 @@ button.kk-pill { border: 0; font: inherit; font-size: 15px; font-weight: 500; cu
 .kk-badge--now { background: var(--uv); color: var(--on-accent); box-shadow: var(--glow-md); }
 .kk-badge--cancelled { background: var(--ink); color: var(--ground); }
 .kk-badge--postponed { border: 1px solid var(--warn); color: var(--warn); }
-.kk-badge--unconfirmed { border: 1px dashed var(--border); color: var(--muted); font-weight: 400; }
 .kk-badge--scout { border: 1px solid var(--border); color: var(--muted); }
 .kk-badge--category { border: 1px solid var(--ink); color: var(--ink); }
 

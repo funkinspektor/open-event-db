@@ -40,8 +40,9 @@ function usage(): never {
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
-  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse] [--config '<json>']
-                                                        Add a feed source (default: iCal) whose events a scout reviews
+  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse] [--config '<json>'] [--unofficial]
+                                                        Add a feed source (default: iCal) whose events a scout reviews;
+                                                        --unofficial for an aggregator, not the venue's own site
   pnpm db:cli ingest-set-config <slug> --config '<json>'
                                                         Change a feed source's config: the given keys replace the stored ones
   pnpm db:cli ingest-list                               List feed sources: last run, last error, items per status
@@ -323,8 +324,11 @@ switch (cmd) {
     const [taken] = await db.select({ id: ingestSources.id }).from(ingestSources).where(eq(ingestSources.slug, slug)).limit(1)
     if (taken) fail(`Source "${slug}" already exists`)
 
-    await db.insert(ingestSources).values({ slug, name, kind: kind as (typeof kinds)[number], url: feedUrl, publisherId: scout.id, config })
-    console.log(`Added source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
+    const official = !flags.has('--unofficial')
+    await db
+      .insert(ingestSources)
+      .values({ slug, name, kind: kind as (typeof kinds)[number], url: feedUrl, publisherId: scout.id, config, official })
+    console.log(`Added ${official ? 'official' : 'unofficial'} source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
     break
   }
   case 'ingest-set-config': {
@@ -350,7 +354,7 @@ switch (cmd) {
     for (const s of sources) {
       const byStatus = new Map(counts.filter((c) => c.sourceId === s.id).map((c) => [c.status, c.count]))
       const items = (['pending', 'accepted', 'rejected'] as const).map((st) => `${st} ${byStatus.get(st) ?? 0}`).join(', ')
-      console.log(`${s.slug}  ${s.kind}  ${s.enabled ? 'enabled' : 'disabled'}  "${s.name}"`)
+      console.log(`${s.slug}  ${s.kind}  ${s.enabled ? 'enabled' : 'disabled'}  ${s.official ? 'official' : 'unofficial'}  "${s.name}"`)
       console.log(`  last run:   ${s.lastRunAt ? s.lastRunAt.toISOString() : 'never'}`)
       console.log(`  last error: ${s.lastError ?? '-'}`)
       console.log(`  items:      ${items}`)
