@@ -210,6 +210,26 @@ The next run reads every item stored before categories existed once more and syn
 accepted events. With `extract_from_text` newly set that is one extraction per stored item, so run it from
 the laptop as above, not in the scheduled request.
 
+**Lineups.** The Berghain/Kantine and Dunckerclub adapters write the lineup into its own field and leave it
+out of the description. After the deploy that brought this, the next run reads every item stored before
+lineups existed once more; events still synced from their feed take the lineup and the shorter
+description then. With `extract_from_text` on (Duncker) that is one extraction per stored item, so run those
+sources from the laptop first:
+
+```bash
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest berghain kantine duncker
+```
+
+Events whose lineup sits in the description as a Markdown list (the flyer import's `**Lineup**` list, or
+`**Live**` / `**DJs**` groups typed by scouts) move over with a one-off script. Without `--write` it only
+lists what it would do; check that list, then run it again with `--write`. Each moved event gets one history
+entry (`via: cli`); events a feed keeps in sync are left to the feed.
+
+```bash
+scripts/prod-db.sh pnpm --filter @open-event-db/api lineup:backfill
+scripts/prod-db.sh pnpm --filter @open-event-db/api lineup:backfill --write
+```
+
 Write patterns without backslashes (`[0-9]`, not `\d`): `pnpm` passes the arguments through a shell and
 doubles every backslash, so `\d` arrives as `\\d` and the source fails with "external_id_pattern … yields no id".
 
