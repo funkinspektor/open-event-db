@@ -83,9 +83,19 @@ describe('readBerghain (fixtures)', () => {
       timesStated: true,
       links: { tickets: 'https://ticketingv2.berghain.de/event/event-24418-2026' },
     })
-    expect(ev.description).toMatch(
-      /^Berghain\n19:00 ASIA\n20:30 Jonathan Fitoussi \(Live\) – Transversales Disques\n21:30 Grand River \(Live\) – Editions Mego\n22:30 Alessandro Cortini \(Live\) – Mute\n\nTickets: 36,00€ via Berghain · 38,00€ Abendkasse\n\nOctober 28-30, 2026\n/,
-    )
+    expect(ev.lineup).toEqual([
+      {
+        name: 'Berghain',
+        acts: [
+          { time: '19:00', name: 'ASIA', live: false, note: null },
+          { time: '20:30', name: 'Jonathan Fitoussi', live: true, note: 'Transversales Disques' },
+          { time: '21:30', name: 'Grand River', live: true, note: 'Editions Mego' },
+          { time: '22:30', name: 'Alessandro Cortini', live: true, note: 'Mute' },
+        ],
+      },
+    ])
+    // The running order is in the lineup, not in the text
+    expect(ev.description).toMatch(/^Tickets: 36,00€ via Berghain · 38,00€ Abendkasse\n\nOctober 28-30, 2026\n/)
   })
 
   it('lists a Klubnacht floor by floor, starting at 23:59, ending with its last set', async () => {
@@ -98,14 +108,26 @@ describe('readBerghain (fixtures)', () => {
       locationText: 'Berghain, Panorama Bar',
       links: {},
     })
-    expect(ev.description).toContain('01:30 GiGi FM – Sea~rène\n\nPanorama Bar\n23:59 Alex Kassian – Love On The Rocks\n')
+    expect(ev.lineup?.map((g) => g.name)).toEqual(['Berghain', 'Panorama Bar'])
+    expect(ev.lineup?.[0]?.acts.at(-1)).toEqual({ time: '01:30', name: 'GiGi FM', live: false, note: 'Sea~rène' })
+    expect(ev.lineup?.[1]?.acts[0]).toEqual({ time: '23:59', name: 'Alex Kassian', live: false, note: 'Love On The Rocks' })
+    expect(ev.description).not.toContain('Alex Kassian')
   })
 
   it('keeps b2b acts on one line and drops the stand-in artwork', async () => {
     const ev = byId(await read(club), '80851')
-    expect(ev.description).toBe(
-      'Säule\nDonia (Live)\nSampi (Live)\nSpekki Webu b2b Lilian Stark\nV:SONNTAG\n\nTickets: 14,00€ via Berghain · 16,00€ Abendkasse',
-    )
+    expect(ev.lineup).toEqual([
+      {
+        name: 'Säule',
+        acts: [
+          { time: null, name: 'Donia', live: true, note: null },
+          { time: null, name: 'Sampi', live: true, note: null },
+          { time: null, name: 'Spekki Webu b2b Lilian Stark', live: false, note: null },
+          { time: null, name: 'V:SONNTAG', live: false, note: null },
+        ],
+      },
+    ])
+    expect(ev.description).toBe('Tickets: 14,00€ via Berghain · 16,00€ Abendkasse')
     expect(ev.imageUrl).toBeNull()
     expect(ev.end).toBeNull()
   })
@@ -131,7 +153,17 @@ describe('readBerghain (fixtures)', () => {
       locationRoom: 'Kantine am Berghain',
       links: { tickets: 'https://www.tixforgigs.com/Event/76500' },
     })
-    expect(byId(events, '81644').description).toMatch(/^Einlass 19:00\n\nzeug \(Live\)\nvold \(Live\)\n\nTickets: 17,60€ via Tix for Gigs\n\n/)
+    // The Kantine's one floor has no name
+    expect(byId(events, '81644').lineup).toEqual([
+      {
+        name: null,
+        acts: [
+          { time: null, name: 'zeug', live: true, note: null },
+          { time: null, name: 'vold', live: true, note: null },
+        ],
+      },
+    ])
+    expect(byId(events, '81644').description).toMatch(/^Einlass 19:00\n\nTickets: 17,60€ via Tix for Gigs\n\n/)
     expect(byId(events, '81644').description).toMatch(/\n\nEine Veranstaltung von \[Beyond Booking\]\(https:\/\/www\.beyondbooking\.live\/\)$/)
   })
 

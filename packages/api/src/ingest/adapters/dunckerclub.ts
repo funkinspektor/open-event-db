@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { parse, serializeOuter } from 'parse5'
-import type { IngestSourceConfig } from '@open-event-db/shared'
+import type { IngestSourceConfig, Lineup } from '@open-event-db/shared'
 import { berlinToday, fmtDay, nextDay, parseTime, type CalendarDay } from '../../extract/normalize.js'
 import { FeedParseError, type FeedEvent } from './ical.js'
 import { attr, berlinMoment, elements, hasClass, isElement, squash, textOf, type Element, type Node } from './page.js'
@@ -30,9 +30,10 @@ function titleOf(name: Element): string {
 
 /**
  * The event cell after the title: genres, then a flyer, then the lineup. Genres wrap with <br> mid-list,
- * so they become one line; lineup lines stay separate. The Facebook event, if linked, goes last.
+ * so they become one line; each lineup line is an act, kept out of the description. The Facebook event,
+ * if linked, goes last.
  */
-function detailsOf(cellEl: Element, pageUrl: string): { description: string; imageUrl: string | null } {
+function detailsOf(cellEl: Element, pageUrl: string): { description: string; lineup: Lineup; imageUrl: string | null } {
   const genres: string[] = []
   const lineup: string[] = []
   let imageUrl: string | null = null
@@ -64,17 +65,18 @@ function detailsOf(cellEl: Element, pageUrl: string): { description: string; ima
   }
   walk(cellEl)
 
-  const parts = [
-    squash(genres.join(' ')),
-    lineup
-      .join('')
-      .split('\n')
-      .map((line) => squash(line).replace(/\s*\/+$/, ''))
-      .filter(Boolean)
-      .join('\n'),
-    facebook ? `[Facebook-Event](${facebook})` : '',
-  ]
-  return { description: parts.filter(Boolean).join('\n\n'), imageUrl }
+  const acts = lineup
+    .join('')
+    .split('\n')
+    .map((line) => squash(line).replace(/\s*\/+$/, ''))
+    .filter(Boolean)
+    .map((name) => ({ name, time: null, live: false, note: null }))
+  const parts = [squash(genres.join(' ')), facebook ? `[Facebook-Event](${facebook})` : '']
+  return {
+    description: parts.filter(Boolean).join('\n\n'),
+    lineup: acts.length ? [{ name: null, acts }] : [],
+    imageUrl,
+  }
 }
 
 function exists({ year, month, day }: CalendarDay): boolean {
@@ -139,7 +141,7 @@ export function parseDunckerclub(html: string, config: IngestSourceConfig, opts:
     const timeCell = cell(row, 'tabletime')
     const times = timesOf(timeCell ? textOf(timeCell) : '')
     const endDay = times.start !== null && times.end !== null && times.end <= times.start ? nextDay(day) : day
-    const { description, imageUrl } = detailsOf(eventCell, opts.pageUrl)
+    const { description, lineup, imageUrl } = detailsOf(eventCell, opts.pageUrl)
     const raw = serializeOuter(row)
 
     events.set(externalId, {
@@ -147,6 +149,7 @@ export function parseDunckerclub(html: string, config: IngestSourceConfig, opts:
       uid: externalId,
       summary,
       description,
+      lineup,
       start: berlinMoment(day, times.start),
       end: times.end === null ? null : berlinMoment(endDay, times.end),
       url: opts.pageUrl,

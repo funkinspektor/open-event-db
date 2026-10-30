@@ -51,9 +51,10 @@ describe('parseDunckerclub (fixture)', () => {
     expect(samhain.start).toEqual({ date: '2026-10-31', time: '21:00', iso: '2026-10-31T21:00:00+01:00' })
     expect(samhain.end).toEqual({ date: '2026-11-01', time: '04:00', iso: '2026-11-01T04:00:00+01:00' })
     expect(samhain.description).toBe(
-      'Pagan, Ethereal, Neofolk, Goth, Postpunk, NewColdDarkSynthWave, DeathRock\n\nDJ Ørlög\n\n' +
+      'Pagan, Ethereal, Neofolk, Goth, Postpunk, NewColdDarkSynthWave, DeathRock\n\n' +
         '[Facebook-Event](https://www.facebook.com/events/1399803252337452)',
     )
+    expect(samhain.lineup).toEqual([{ name: null, acts: [{ name: 'DJ Ørlög', time: null, live: false, note: null }] }])
     expect(samhain.url).toBe(PAGE)
     expect(samhain.imageUrl).toBe('https://www.dunckerclub.de/bilder/samhain_2026.jpg')
     expect(samhain.locationRoom).toBe('Dunckerclub')
@@ -65,14 +66,15 @@ describe('parseDunckerclub (fixture)', () => {
 
   it('ignores a commented-out Facebook link and takes the lineup outside the link', () => {
     const boris = byDate(events, '2026-11-02')
-    expect(boris.description).toBe('goth, deathrock, postpunk, newdarkcoldsynthwave, indie, ebm, industrial\n\nDJ Boris')
+    expect(boris.description).toBe('goth, deathrock, postpunk, newdarkcoldsynthwave, indie, ebm, industrial')
+    expect(boris.lineup?.[0]?.acts.map((a) => a.name)).toEqual(['DJ Boris'])
     expect(boris.end?.iso).toBe('2026-11-03T04:00:00+01:00')
 
     const inferno = byDate(events, '2026-10-30')
     expect(inferno.description).toBe(
-      'Pop, Dark, Indie aus dem Neon- Jahrzehnt\n\nDJ Funky Henning\n\n' +
-        '[Facebook-Event](https://www.facebook.com/events/1125535683756006)',
+      'Pop, Dark, Indie aus dem Neon- Jahrzehnt\n\n[Facebook-Event](https://www.facebook.com/events/1125535683756006)',
     )
+    expect(inferno.lineup?.[0]?.acts.map((a) => a.name)).toEqual(['DJ Funky Henning'])
   })
 
   it('strips dash decoration from title parts', () => {

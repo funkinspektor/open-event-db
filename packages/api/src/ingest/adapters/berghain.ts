@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { parse, serializeOuter } from 'parse5'
-import type { IngestSourceConfig } from '@open-event-db/shared'
+import type { IngestSourceConfig, Lineup, LineupAct } from '@open-event-db/shared'
 import { berlinToday, fmtDay, parseTime, type CalendarDay } from '../../extract/normalize.js'
 import { FeedParseError, type FeedEvent, type FeedMoment } from './ical.js'
 import { attr, berlinMoment, elements, hasClass, isElement, richText, squash, textOf, webUrl, type Element, type Node } from './page.js'
@@ -73,7 +73,7 @@ export function parseBerghainListing(html: string, pageUrl: string): BerghainCar
 }
 
 /** One entry of the running order: "20:30 Jonathan Fitoussi (Live) – Transversales Disques". */
-function setLine(li: Element): { line: string; end: string | null } | null {
+function setOf(li: Element): { act: LineupAct; end: string | null } | null {
   const info = [...elements(li)].find((el) => hasClass(el, 'running-order-set__info'))
   const actEl = info?.childNodes.find((c): c is Element => isElement(c) && c.tagName === 'span')
   if (!actEl) return null
@@ -88,8 +88,10 @@ function setLine(li: Element): { line: string; end: string | null } | null {
   const act = squash(name.join(' '))
   if (!act) return null
   const time = [...elements(li)].find((el) => el.tagName === 'time')
-  const parts = [time ? squash(textOf(time)) : '', act, live ? '(Live)' : ''].filter(Boolean).join(' ')
-  return { line: label ? `${parts} – ${label}` : parts, end: attr(li, 'data-set-item-end') || null }
+  return {
+    act: { name: act, time: (time && squash(textOf(time))) || null, live, note: label || null },
+    end: attr(li, 'data-set-item-end') || null,
+  }
 }
 
 /** The latest end of any set, if the running order has times. */
@@ -116,17 +118,17 @@ export function parseBerghainDetail(html: string, card: BerghainCard): FeedEvent
   withoutScripts(main)
   const all = [...elements(main)]
 
-  const lineup: string[] = []
+  const lineup: Lineup = []
   const ends: string[] = []
   for (const floor of all.filter((el) => attr(el, 'data-set-floor') !== null)) {
     const sets = [...elements(floor)]
       .filter((el) => el.tagName === 'li' && attr(el, 'data-set-item') !== null)
-      .map(setLine)
+      .map(setOf)
       .filter((set) => set !== null)
     if (sets.length === 0) continue
     // The Kantine's single floor has no heading of its own
     const heading = [...elements(floor)].find((el) => el.tagName === 'h2')
-    lineup.push([heading ? squash(textOf(heading)) : '', ...sets.map((s) => s.line)].filter(Boolean).join('\n'))
+    lineup.push({ name: (heading && squash(textOf(heading))) || null, acts: sets.map((s) => s.act) })
     ends.push(...sets.flatMap((s) => (s.end ? [s.end] : [])))
   }
 
@@ -141,7 +143,6 @@ export function parseBerghainDetail(html: string, card: BerghainCard): FeedEvent
 
   const description = [
     card.doors ? `Einlass ${card.doors}` : '',
-    ...lineup,
     ticketLines.length > 0 ? `Tickets: ${ticketLines.join(' · ')}` : '',
     ...texts,
   ]
@@ -170,6 +171,7 @@ export function parseBerghainDetail(html: string, card: BerghainCard): FeedEvent
     uid: card.url,
     summary: card.title,
     description,
+    lineup,
     start: berlinMoment(card.day, parseTime(card.start)),
     end: endOf(ends),
     url: card.url,
