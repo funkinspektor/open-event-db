@@ -691,6 +691,77 @@ describe('runIngest (Dunckerclub page)', () => {
     })
   })
 
+  const SAMHAIN = '2026-10-31'
+  const samhainLineup = [{ name: null, acts: [{ name: 'DJ Ørlög', time: null, live: false, note: null }] }]
+  /** The night's lineup line as the page has it, moved to another DJ. */
+  const newDj = (html: string) => html.replace('DJ Ørlög //<br>', 'DJ Nachtmahr //<br>')
+
+  /** A stored draft from before lineups: the lineup line in the text, no `lineup` key. */
+  async function asBeforeLineups(itemId: string) {
+    const item = (await db.select().from(ingestItems).where(eq(ingestItems.id, itemId)))[0]!
+    const { lineup: _, ...draft } = item.draft as { description: string; lineup: unknown }
+    const description = draft.description.replace('\n\n[Facebook', '\n\nDJ Ørlög\n\n[Facebook')
+    await db.update(ingestItems).set({ draft: { ...draft, description } }).where(eq(ingestItems.id, itemId))
+    return description
+  }
+
+  it('stores the night lineup in the draft', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    expect((await itemOf(source.id, SAMHAIN)).draft).toMatchObject({ lineup: samhainLineup })
+  })
+
+  it('syncs a changed lineup into the accepted event', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    const item = await itemOf(source.id, SAMHAIN)
+    const event = await accept(item)
+
+    const result = await run(source, newDj(page), LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, synced: 1 })
+    expect((await eventRow(event.id)).lineup).toEqual([{ name: null, acts: [{ ...samhainLineup[0]!.acts[0]!, name: 'DJ Nachtmahr' }] }])
+  })
+
+  it('reads a draft stored before lineups once more and moves an untouched event over', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    const item = await itemOf(source.id, SAMHAIN)
+    const oldDescription = await asBeforeLineups(item.id)
+    const event = await accept(item)
+    await db.update(events).set({ description: oldDescription }).where(eq(events.id, event.id))
+
+    const result = await run(source, page, LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, created: 0 })
+    expect((await itemOf(source.id, SAMHAIN)).draft).toMatchObject({ lineup: samhainLineup })
+    const moved = await eventRow(event.id)
+    expect(moved.lineup).toEqual(samhainLineup)
+    expect(moved.description).not.toContain('DJ Ørlög')
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))
+    expect(history.map((h) => (h.diff as { via?: string }).via)).toEqual(['ingest'])
+
+    // Only once
+    const again = await run(source, page, LATEST)
+    expect(again.sources[0]).toMatchObject({ ok: true, updated: 0 })
+  })
+
+  it('leaves an event edited by hand (its item detached) as it is', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    const item = await itemOf(source.id, SAMHAIN)
+    await asBeforeLineups(item.id)
+    const event = await accept(item, { detachedAt: NOW })
+    await db.update(events).set({ description: 'Our own words' }).where(eq(events.id, event.id))
+
+    await run(source, page, LATER)
+    const after = await eventRow(event.id)
+    expect(after.description).toBe('Our own words')
+    expect(after.lineup).toEqual([])
+  })
+
   it('marks a night gone when it leaves the page', async () => {
     stubExtractor()
     const source = await newSource({}, '', 'dunckerclub')

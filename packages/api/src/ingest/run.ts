@@ -124,6 +124,7 @@ async function syncEvent(tx: DbOrTx, source: IngestSource, eventId: string, draf
   const patch = {
     title: draft.title,
     description: draft.description,
+    lineup: draft.lineup,
     startsAt: new Date(draft.starts_at),
     endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
     venueId,
@@ -160,8 +161,9 @@ async function ingestEvent(
   now: Date,
   result: SourceRunResult,
 ): Promise<void> {
-  // A draft stored before categories existed is read once more, so feed events get theirs
-  if (item && item.contentHash === ev.hash && 'categories' in item.draft) {
+  // A draft stored before categories or lineups existed is read once more, so feed events get theirs
+  // (an attached event takes the lineup, and the description without it, through the sync)
+  if (item && item.contentHash === ev.hash && 'categories' in item.draft && 'lineup' in item.draft) {
     await db
       .update(ingestItems)
       .set({ lastSeenAt: now, ...reappeared(item) })
