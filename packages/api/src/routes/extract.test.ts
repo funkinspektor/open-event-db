@@ -2,9 +2,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { inArray } from 'drizzle-orm'
 import { generateApiKey, publishers, type Publisher } from '@open-event-db/db'
-import { EXTRACT_DAILY_LIMIT, EXTRACT_MAX_IMAGES, type Extraction } from '@open-event-db/shared'
+import { EXTRACT_DAILY_LIMIT, EXTRACT_MAX_IMAGES, type Extraction, type Lineup } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { lineupReading } from '../extract/lineup.js'
 import { ExtractionError, vision, type ExtractImage } from '../extract/vision.js'
 
 let app: FastifyInstance
@@ -238,5 +239,79 @@ describe('POST /events/extract', () => {
     expect(res.json().error.code).toBe('rate_limited')
     // Other accounts keep their own counter
     expect((await post(keys.scout, PNG)).statusCode).toBe(200)
+  })
+})
+
+describe('POST /events/extract-lineup', () => {
+  const lineup: Lineup = [{ name: 'Live', acts: [{ name: 'Volcan', time: null, live: true, note: null }] }]
+  let texts: string[] = []
+  const stubReader = (read: () => Promise<Lineup>) =>
+    lineupReading.setReader({
+      async read(text) {
+        texts.push(text)
+        return read()
+      },
+    })
+  const postText = (key: string | null, payload: unknown) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/events/extract-lineup',
+      headers: key ? { authorization: `Bearer ${key}` } : {},
+      payload: payload as Record<string, unknown>,
+    })
+
+  beforeEach(() => {
+    texts = []
+    stubReader(async () => lineup)
+  })
+  afterAll(() => lineupReading.reset())
+
+  it('requires authentication', async () => {
+    expect((await postText(null, { text: 'Live: Volcan' })).statusCode).toBe(401)
+    expect(texts).toEqual([])
+  })
+
+  it('returns the lineup read from the text', async () => {
+    const res = await postText(keys.publisher, { text: 'Live: Volcan' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: { lineup } })
+    expect(texts).toEqual(['Live: Volcan'])
+  })
+
+  it('rejects an empty or overlong text', async () => {
+    expect((await postText(keys.publisher, { text: '   ' })).statusCode).toBe(400)
+    expect((await postText(keys.publisher, { text: 'x'.repeat(10_001) })).statusCode).toBe(400)
+    expect((await postText(keys.publisher, {})).statusCode).toBe(400)
+    expect(texts).toEqual([])
+  })
+
+  it.each([
+    ['unavailable', 503, 'extraction_unavailable'],
+    ['timeout', 504, 'extraction_timeout'],
+    ['provider', 502, 'extraction_provider_error'],
+    ['invalid_output', 422, 'extraction_failed'],
+  ] as const)('maps a %s failure to %i', async (kind, status, code) => {
+    stubReader(async () => {
+      throw new ExtractionError(kind, 'secret provider detail')
+    })
+    const res = await postText(keys.publisher, { text: 'Live: Volcan' })
+    expect(res.statusCode).toBe(status)
+    expect(res.json().error.code).toBe(code)
+    expect(res.json().error.message).toMatch(/lineup/i)
+    expect(res.body).not.toContain('secret provider detail')
+  })
+
+  it('reports a text without a lineup', async () => {
+    stubReader(async () => [])
+    const res = await postText(keys.publisher, { text: 'A night of dark wave.' })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toMatchObject({ code: 'nothing_extracted', message: 'No lineup found in the description' })
+  })
+
+  it('counts against a daily limit per account', async () => {
+    const remaining = async () => Number((await postText(keys.scout, { text: 'Live: Volcan' })).headers['x-ratelimit-remaining'])
+    const first = await remaining()
+    expect(first).toBeLessThan(EXTRACT_DAILY_LIMIT)
+    expect(await remaining()).toBe(first - 1)
   })
 })

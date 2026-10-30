@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
 import {
   EXTRACT_DAILY_LIMIT,
   EXTRACT_IMAGE_TYPES,
@@ -7,6 +8,7 @@ import {
 } from '@open-event-db/shared'
 import { ApiError } from '../errors.js'
 import { requireAuth } from '../auth.js'
+import { lineupReading } from '../extract/lineup.js'
 import { isEmptyDraft, normalizeExtraction } from '../extract/normalize.js'
 import { sniffImageType } from '../images/sniff.js'
 import { ExtractionError, vision, type ExtractImage, type ExtractionErrorKind } from '../extract/vision.js'
@@ -46,11 +48,25 @@ async function imagesFromBody(body: unknown): Promise<ExtractImage[]> {
   )
 }
 
-const failures: Record<ExtractionErrorKind, [number, string, string]> = {
-  unavailable: [503, 'extraction_unavailable', 'Image import is not available right now'],
-  timeout: [504, 'extraction_timeout', 'Reading the image took too long'],
-  provider: [502, 'extraction_provider_error', 'The image could not be read right now'],
-  invalid_output: [422, 'extraction_failed', 'The image could not be read'],
+// Its own counter (each route keeps one) with the same daily limit; a text call costs a fraction of an image call
+const lineupRateLimit = {
+  max: EXTRACT_DAILY_LIMIT,
+  timeWindow: '1 day',
+  keyGenerator: (req: FastifyRequest) => `extract-lineup:${req.publisher?.id ?? req.ip}`,
+}
+
+const lineupBodySchema = z.object({ text: z.string().trim().min(1).max(10_000) })
+
+/** A failed model call as an API error, worded for what was read ("image" or "lineup"). */
+function extractionFailure(err: ExtractionError, noun: 'image' | 'lineup'): ApiError {
+  const failures: Record<ExtractionErrorKind, [number, string, string]> = {
+    unavailable: [503, 'extraction_unavailable', noun === 'image' ? 'Image import is not available right now' : 'Reading the lineup is not available right now'],
+    timeout: [504, 'extraction_timeout', `Reading the ${noun} took too long`],
+    provider: [502, 'extraction_provider_error', `The ${noun} could not be read right now`],
+    invalid_output: [422, 'extraction_failed', `The ${noun} could not be read`],
+  }
+  const [status, code, message] = failures[err.kind]
+  return new ApiError(status, code, message)
 }
 
 export async function extractRoutes(app: FastifyInstance) {
@@ -81,8 +97,7 @@ export async function extractRoutes(app: FastifyInstance) {
       } catch (err) {
         if (!(err instanceof ExtractionError)) throw err
         req.log.warn({ kind: err.kind, reason: err.message }, 'event extraction failed')
-        const [status, code, message] = failures[err.kind]
-        throw new ApiError(status, code, message)
+        throw extractionFailure(err, 'image')
       }
 
       const draft = normalizeExtraction(extraction, new Date())
@@ -90,4 +105,19 @@ export async function extractRoutes(app: FastifyInstance) {
       return { data: draft }
     },
   )
+
+  // The editor's "Read from description": the same checked reading the ingest uses; nothing is stored
+  app.post('/events/extract-lineup', { onRequest: requireAuth, config: { rateLimit: lineupRateLimit } }, async (req) => {
+    const { text } = lineupBodySchema.parse(req.body)
+    let lineup
+    try {
+      lineup = await lineupReading.reader.read(text)
+    } catch (err) {
+      if (!(err instanceof ExtractionError)) throw err
+      req.log.warn({ kind: err.kind, reason: err.message }, 'lineup reading failed')
+      throw extractionFailure(err, 'lineup')
+    }
+    if (!lineup.length) throw new ApiError(422, 'nothing_extracted', 'No lineup found in the description')
+    return { data: { lineup } }
+  })
 }
