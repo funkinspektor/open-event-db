@@ -2,38 +2,38 @@ import { describe, expect, it } from 'vitest'
 import type { IngestDraft } from '@open-event-db/shared'
 import { linkBody, mergeRows } from './merge'
 
-const VENUE = '85d9f518-1ba5-4f85-841a-fb2409c32442'
+const VENUE = '00000000-0000-4000-8000-000000000001'
 
-// The VEITSTANZ night at Urban Spree: entered by hand, then found in the Urban Spree feed
+// A night entered by hand, then found in a venue's feed
 const event = {
-  title: 'VEITSTANZ',
-  description: 'A minimal electronic music event featuring live acts and DJs.',
-  starts_at: '2027-01-09T19:00:00.000Z',
+  title: 'Hand-entered night',
+  description: 'Live acts and DJs.',
+  starts_at: '2031-01-11T19:00:00.000Z',
   start_time_known: true,
   ends_at: null,
   location_text: null,
   categories: [],
-  links: { tickets: 'https://aufnahmeundwiedergabe.de/tickets' },
+  links: { tickets: 'https://tickets.example.org/night' },
   image_url: null,
   venue: { id: VENUE },
 }
 
 const draft: IngestDraft = {
-  title: 'LINEAR MOVEMENT + DER KÜNFTIGE MUSIKANT + TWILIGHT RITUAL',
-  description: 'Wehe! Musik & aufnahme + wiedergabe present\n\nVEITSTANZ w/',
-  starts_at: '2027-01-09T20:00:00+01:00',
+  title: 'ARTIST ONE + ARTIST TWO',
+  description: 'The promoter presents\n\nArtist One (live)\nArtist Two (DJ)',
+  starts_at: '2031-01-11T20:00:00+01:00',
   ends_at: null,
   venue_id: VENUE,
-  location_text: 'Urban Spree',
+  location_text: 'Feed Venue',
   city: 'Berlin',
   categories: ['concert'],
   links: {
-    website: 'https://www.urbanspree.com/program/concerts/linear-movement.html',
-    tickets: 'https://shotgun.live/en/events/linear-movement-der-kunftige-musikant-twilight-ritual',
-    facebook: 'https://www.facebook.com/events/2698407777240408',
+    website: 'https://venue.example.org/program/artist-one.html',
+    tickets: 'https://shop.example.org/artist-one',
+    facebook: 'https://www.facebook.com/events/1234567890',
   },
-  image_url: 'https://www.urbanspree.com/assets/project/urbanspree/mediasource/IMG_3093.JPG',
-  source_url: 'https://www.urbanspree.com/program/concerts/linear-movement.html',
+  image_url: 'https://venue.example.org/flyers/artist-one.jpg',
+  source_url: 'https://venue.example.org/program/artist-one.html',
   times_unverified: false,
 }
 
@@ -54,7 +54,7 @@ describe('mergeRows', () => {
   })
 
   it('offers the feed times for a day without a time, unless the feed only guessed them', () => {
-    const dayOnly = { ...event, start_time_known: false, starts_at: '2027-01-08T23:00:00.000Z' }
+    const dayOnly = { ...event, start_time_known: false, starts_at: '2031-01-10T23:00:00.000Z' }
     expect(mergeRows(dayOnly, draft).find((r) => r.key === 'times')?.initial).toBe('feed')
     expect(mergeRows(dayOnly, { ...draft, times_unverified: true }).find((r) => r.key === 'times')?.initial).toBe('event')
   })

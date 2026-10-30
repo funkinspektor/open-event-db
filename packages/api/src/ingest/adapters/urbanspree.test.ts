@@ -184,7 +184,7 @@ describe('readUrbanSpree (fixtures)', () => {
 })
 
 describe('parseUrbanSpreeDetail', () => {
-  // VEITSTANZ, copied from its Facebook event: ends with the venue's address block and tracked links
+  // A text copied from the Facebook event: ends with the venue's address block and tracked links
   const card: UrbanSpreeCard = {
     kind: 'concert',
     externalId: 'concerts/linear-movement-der-künftige-musikant-twilight-ritual',
@@ -196,22 +196,22 @@ describe('parseUrbanSpreeDetail', () => {
     imageUrl: null,
     raw: '',
   }
-  const veitstanz = () => parseUrbanSpreeDetail(fixture('veitstanz'), card, { today: { year: 2026, month: 10, day: 29 }, cards: [card] })!
+  const linearMovement = () => parseUrbanSpreeDetail(fixture('linear-movement'), card, { today: { year: 2026, month: 10, day: 29 }, cards: [card] })!
 
   it("drops the venue's own address and links at the end of the text", () => {
-    const { description } = veitstanz()
+    const { description } = linearMovement()
     expect(description).toMatch(/\n\nhttps:\/\/de\.ra\.co\/events\/2568934\n\nEintritt: 34\.56€$/)
     expect(description).not.toMatch(/RAW-Area|Revaler|10245|facebook\.com\/UrbanSpree/i)
   })
 
   it("strips Facebook's tracking parameters from links in the text", () => {
-    const { description } = veitstanz()
+    const { description } = linearMovement()
     expect(description).toContain('(http://www.linear-movement.bandcamp.com/)')
     expect(description).not.toMatch(/fbclid|__cft__|__tn__/)
   })
 
   it('keeps a trailing paragraph that says more than where the venue is', () => {
-    const page = fixture('veitstanz').replace('Urban Spree (RAW-Area)<br class="html-br" />', 'Urban Spree (RAW-Area)<br class="html-br" />Einlass 19 Uhr<br class="html-br" />')
+    const page = fixture('linear-movement').replace('Urban Spree (RAW-Area)<br class="html-br" />', 'Urban Spree (RAW-Area)<br class="html-br" />Einlass 19 Uhr<br class="html-br" />')
     expect(parseUrbanSpreeDetail(page, card, { today: { year: 2026, month: 10, day: 29 }, cards: [card] })!.description).toContain(
       'Urban Spree (RAW-Area)\nEinlass 19 Uhr\nRevaler Str. 99/Warschauer Str.',
     )

@@ -592,9 +592,9 @@ describe('POST /ingest/items/:id/link', () => {
     expect((await eventRow(eventId)).status).toBe('scheduled')
   })
 
-  describe('taking fields from the feed (VEITSTANZ, Urban Spree, 2027-01-09)', () => {
+  describe('taking fields from the feed (a concert entered by hand, then listed by Urban Spree)', () => {
     const SPREE = 'https://www.urbanspree.com/program/concerts/linear-movement-der-k%C3%BCnftige-musikant-twilight-ritual.html'
-    const OWN_TICKETS = 'https://aufnahmeundwiedergabe.de/tickets'
+    const OWN_TICKETS = 'https://tickets.example.org/night'
 
     afterEach(() => {
       imageStore.reset()
@@ -614,7 +614,7 @@ describe('POST /ingest/items/:id/link', () => {
         imageUrl: 'https://www.urbanspree.com/assets/project/urbanspree/mediasource/IMG_3093.JPG',
         raw: '',
       }
-      const html = readFileSync(fileURLToPath(new URL('../ingest/fixtures/urbanspree/veitstanz.html', import.meta.url)), 'utf8')
+      const html = readFileSync(fileURLToPath(new URL('../ingest/fixtures/urbanspree/linear-movement.html', import.meta.url)), 'utf8')
       const ev = parseUrbanSpreeDetail(html, card, { today: { year: 2026, month: 10, day: 29 }, cards: [card] })
       const config = ingestSourceConfigSchema.parse({ venues: { 'Urban Spree': venue.id }, default_categories: ['concert'] })
       return normalizeFeedEvent(ev!, config, null)
@@ -625,8 +625,8 @@ describe('POST /ingest/items/:id/link', () => {
       const [event] = await db
         .insert(events)
         .values({
-          title: 'VEITSTANZ',
-          description: 'A minimal electronic music event featuring live acts and DJs.',
+          title: 'Hand-entered night',
+          description: 'Live acts and DJs.',
           startsAt: new Date('2027-01-09T19:00:00Z'),
           venueId: venue.id,
           city: 'Berlin',
@@ -651,7 +651,7 @@ describe('POST /ingest/items/:id/link', () => {
       const store = stubImages()
       const draft = spreeDraft()
       expect(draft.title).toBe('LINEAR MOVEMENT + DER KÜNFTIGE MUSIKANT + TWILIGHT RITUAL')
-      expect(draft.description).toMatch(/^Wehe! Musik & aufnahme \+ wiedergabe present\n\nVEITSTANZ w\/\n\nLinear Movement \(live\)/)
+      expect(draft.description).toContain('Linear Movement (live)')
       const event = await ownEvent()
       const item = await newItem({}, draft)
 
@@ -663,7 +663,7 @@ describe('POST /ingest/items/:id/link', () => {
       expect(res.statusCode).toBe(200)
 
       const after = await eventRow(event.id)
-      expect(after.title).toBe('VEITSTANZ')
+      expect(after.title).toBe('Hand-entered night')
       expect(after.description).toBe(draft.description)
       expect(after.categories).toEqual(draft.categories)
       expect(after.tags).toEqual(['minimal', 'synth'])
