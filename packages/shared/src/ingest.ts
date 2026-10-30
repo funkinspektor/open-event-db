@@ -92,13 +92,15 @@ export const ingestItemViewSchema = z.object({
   venue_name: z.string().nullable(),
   gone_at: iso.nullable(),
   event_id: uuid.nullable(),
+  /** The model's verdict on the item and why; null while unscored. */
+  fit: z.object({ verdict: ingestFitVerdictSchema, reason: z.string() }).nullable(),
   duplicates: z.array(duplicateCandidateSchema),
 })
 
 export type IngestItemView = z.infer<typeof ingestItemViewSchema>
 
 /**
- * Where an item stands for a scout: `new` and `gone` are the inbox views (with their actions); `accepted`
+ * Where an item stands for a scout: `new` (including filtered-out items) and `gone` are the inbox views (with their actions); `accepted`
  * and `rejected` are decided; `over` ended before a decision; `removed` left its feed before a decision.
  */
 export const ingestItemStateSchema = z.enum(['new', 'gone', 'accepted', 'rejected', 'over', 'removed'])
@@ -112,9 +114,13 @@ export const ingestItemDetailSchema = ingestItemViewSchema.extend({
 
 export type IngestItemDetail = z.infer<typeof ingestItemDetailSchema>
 
+/** The inbox views: `filtered` holds the pending items the model judged not to fit; `new` the rest. */
+export const ingestViewSchema = z.enum(['new', 'filtered', 'gone'])
+export type IngestView = z.infer<typeof ingestViewSchema>
+
 /** One inbox view, a page at a time, optionally of one source (by slug). */
 export const ingestListQuerySchema = cursorQuerySchema.extend({
-  view: z.enum(['new', 'gone']).default('new'),
+  view: ingestViewSchema.default('new'),
   source: z.string().min(1).optional(),
 })
 

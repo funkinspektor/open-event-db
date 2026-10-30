@@ -17,6 +17,7 @@ import {
   type Venue,
 } from '@open-event-db/db'
 import { ingestSourceConfigSchema } from '@open-event-db/shared'
+import { encodeCursor } from '../cursor.js'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
@@ -68,7 +69,7 @@ const itemRow = async (id: string) => (await db.select().from(ingestItems).where
 const eventRow = async (id: string) => (await db.select().from(events).where(eq(events.id, id)))[0]!
 
 /** The view's items of this file's source, every page of it. */
-async function listIds(view: 'new' | 'gone'): Promise<string[]> {
+async function listIds(view: 'new' | 'filtered' | 'gone'): Promise<string[]> {
   const ids: string[] = []
   let cursor: string | null = null
   do {
@@ -212,7 +213,7 @@ async function acceptedGoneItem() {
 describe('GET /ingest/items and /ingest/count', () => {
   it('lists pending items by draft start with duplicates and counts', async () => {
     const count0 = await app.inject({ method: 'GET', url: '/api/v1/ingest/count', headers: auth(keyScout) })
-    const before = count0.json().data as { new: number; gone: number }
+    const before = count0.json().data as { new: number; filtered: number; gone: number }
 
     const [dup] = await db
       .insert(events)
@@ -231,6 +232,7 @@ describe('GET /ingest/items and /ingest/count', () => {
     const offset = await newItem({}, draftOf({ starts_at: '2032-06-01T23:00:00.000+02:00' }))
     const hidden = await newItem({ goneAt: new Date() })
     const rejected = await newItem({ status: 'rejected' })
+    const misfit = await newItem({ fitVerdict: 'no', fitReason: 'Not our thing' }, draftOf({ starts_at: '2032-08-01T20:00:00.000Z' }))
 
     const res = await app.inject({ method: 'GET', url: listUrl('view=new'), headers: auth(keyScout) })
     expect(res.statusCode).toBe(200)
@@ -240,6 +242,7 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(ids.filter((id: string) => [early.id, offset.id, late.id].includes(id))).toEqual([early.id, offset.id, late.id])
     expect(ids).not.toContain(hidden.id)
     expect(ids).not.toContain(rejected.id)
+    expect(ids).not.toContain(misfit.id)
 
     const first = mine.find((i: { id: string }) => i.id === early.id)
     expect(first.source).toEqual({ slug: `inbox-${stamp}`, name: sourceName })
@@ -257,6 +260,8 @@ describe('GET /ingest/items and /ingest/count', () => {
 
     const count = await app.inject({ method: 'GET', url: '/api/v1/ingest/count', headers: auth(keyScout) })
     expect(count.json().data.new).toBeGreaterThanOrEqual(before.new + 3)
+    // The misfit is counted as filtered (other test files may add more), and not as new: see counts.new above
+    expect(count.json().data.filtered).toBeGreaterThanOrEqual(before.filtered + 1)
   })
 
   it('leaves out pending items that are over, but keeps running ones', async () => {
@@ -320,7 +325,7 @@ describe('GET /ingest/items and /ingest/count', () => {
       const first = await page('limit=2')
       expect(first.statusCode).toBe(200)
       expect(first.json().data.map((i: { id: string }) => i.id)).toEqual(tied.map((i) => i.id))
-      expect(first.json().meta).toMatchObject({ has_more: true, counts: { new: 3, gone: 0 } })
+      expect(first.json().meta).toMatchObject({ has_more: true, counts: { new: 3, filtered: 0, gone: 0 } })
 
       const second = await page(`limit=2&cursor=${first.json().meta.cursor}`)
       expect(second.json().data.map((i: { id: string }) => i.id)).toEqual([late.id])
@@ -337,10 +342,95 @@ describe('GET /ingest/items and /ingest/count', () => {
       const unknown = await app.inject({ method: 'GET', url: `/api/v1/ingest/items?source=nope-${stamp}`, headers: auth(keyScout) })
       expect(unknown.statusCode).toBe(200)
       expect(unknown.json().data).toEqual([])
-      expect(unknown.json().meta.counts).toEqual({ new: 0, gone: 0 })
+      expect(unknown.json().meta.counts).toEqual({ new: 0, filtered: 0, gone: 0 })
     } finally {
       await db.delete(ingestSources).where(eq(ingestSources.id, other!.id)) // cascades items
     }
+  })
+
+  describe('fit verdicts', () => {
+    const items: { fitD2: IngestItem; fitD3: IngestItem; maybeD1: IngestItem; unscoredD2: IngestItem; noD1: IngestItem } = {} as never
+    let fitSource: string
+    const day = (d: number) => `2034-04-0${d}T20:00:00.000Z`
+    const page = (query: string) =>
+      app.inject({ method: 'GET', url: `/api/v1/ingest/items?source=${fitSource}&${query}`, headers: auth(keyScout) })
+    const idsOf = (res: { json: () => { data: { id: string }[] } }) => res.json().data.map((i) => i.id)
+
+    beforeAll(async () => {
+      fitSource = `inbox-fit-${stamp}`
+      const [src] = await db
+        .insert(ingestSources)
+        .values({ slug: fitSource, name: `${sourceName} Fit`, kind: 'ical', url: 'https://inbox.test/fit.ics', publisherId: feedScout.id })
+        .returning()
+      const at = (d: number, verdict?: 'fit' | 'maybe' | 'no') =>
+        newItem(
+          { sourceId: src!.id, ...(verdict ? { fitVerdict: verdict, fitReason: `Reason ${verdict}` } : {}) },
+          draftOf({ starts_at: day(d) }),
+        )
+      items.maybeD1 = await at(1, 'maybe')
+      items.fitD3 = await at(3, 'fit')
+      items.unscoredD2 = await at(2)
+      items.noD1 = await at(1, 'no')
+      items.fitD2 = await at(2, 'fit')
+    })
+
+    afterAll(async () => {
+      await db.delete(ingestSources).where(eq(ingestSources.slug, fitSource)) // cascades items
+    })
+
+    const newOrder = () => [items.fitD2.id, items.fitD3.id, items.maybeD1.id, items.unscoredD2.id]
+
+    it('sorts fits first and moves misfits to the filtered view', async () => {
+      const res = await page('view=new&limit=100')
+      expect(idsOf(res)).toEqual(newOrder())
+      expect(res.json().meta.counts).toEqual({ new: 4, filtered: 1, gone: 0 })
+      const fitView = res.json().data.find((i: { id: string }) => i.id === items.fitD2.id)
+      expect(fitView.fit).toEqual({ verdict: 'fit', reason: 'Reason fit' })
+      expect(res.json().data.find((i: { id: string }) => i.id === items.unscoredD2.id).fit).toBeNull()
+
+      const filtered = await page('view=filtered&limit=100')
+      expect(idsOf(filtered)).toEqual([items.noD1.id])
+      expect(filtered.json().data[0].fit).toEqual({ verdict: 'no', reason: 'Reason no' })
+      expect(filtered.json().meta.counts).toEqual({ new: 4, filtered: 1, gone: 0 })
+      expect(filtered.json().meta.sources).toContainEqual({ slug: fitSource, name: `${sourceName} Fit`, count: 1 })
+
+      // A filtered item's detail page keeps its actions: its state is still new
+      const detail = await app.inject({ method: 'GET', url: `/api/v1/ingest/items/${items.noD1.id}`, headers: auth(keyScout) })
+      expect(detail.json().data).toMatchObject({ state: 'new', fit: { verdict: 'no', reason: 'Reason no' } })
+    })
+
+    it('looks up duplicates for filtered items too', async () => {
+      const draft = draftOf({ starts_at: '2034-05-01T20:00:00.000Z', venue_id: venue.id, title: `Filtered dup ${stamp}` })
+      const [twin] = await db
+        .insert(events)
+        .values({ title: draft.title, startsAt: new Date(draft.starts_at), venueId: venue.id, city: venue.city, createdBy: alice.id })
+        .returning()
+      eventIds.push(twin!.id)
+      const [src] = await db.select().from(ingestSources).where(eq(ingestSources.slug, fitSource))
+      const item = await newItem({ sourceId: src!.id, fitVerdict: 'no', fitReason: 'Nope' }, draft)
+      try {
+        const res = await page('view=filtered&limit=100')
+        const mine = res.json().data.find((i: { id: string }) => i.id === item.id)
+        expect(mine.duplicates.map((d: { id: string }) => d.id)).toContain(twin!.id)
+      } finally {
+        await db.delete(ingestItems).where(eq(ingestItems.id, item.id))
+      }
+    })
+
+    it('pages across the boundary between fits and maybes', async () => {
+      const first = await page('view=new&limit=2')
+      expect(idsOf(first)).toEqual([items.fitD2.id, items.fitD3.id])
+      expect(first.json().meta.has_more).toBe(true)
+      const second = await page(`view=new&limit=2&cursor=${first.json().meta.cursor}`)
+      expect(idsOf(second)).toEqual([items.maybeD1.id, items.unscoredD2.id])
+      expect(second.json().meta).toMatchObject({ has_more: false, cursor: null })
+    })
+
+    it('a cursor without a rank starts from the top', async () => {
+      const old = encodeCursor({ starts_at: day(2), id: items.fitD2.id })
+      const res = await page(`view=new&limit=2&cursor=${old}`)
+      expect(idsOf(res)).toEqual([items.fitD2.id, items.fitD3.id])
+    })
   })
 
   it('defaults to the new view and rejects an unknown view', async () => {

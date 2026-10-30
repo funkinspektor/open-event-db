@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql, type SQL } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
 import {
   canEdit,
   INGEST_SYNCED_FIELDS,
@@ -15,6 +15,7 @@ import {
   type IngestItemState,
   type IngestItemView,
   type IngestSourceCount,
+  type IngestView,
 } from '@open-event-db/shared'
 import { events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
@@ -40,8 +41,10 @@ function requireScout(req: FastifyRequest) {
   return me
 }
 
-// Pending items still in the feed that are not over yet (a running exhibition stays until its end).
-const isNew = isOpen
+// Open items (pending, still in the feed, not over: a running exhibition stays until its end) the model did not
+// judge a misfit; those it did are Filtered out. A filtered item is still an open item with every action.
+const isNew = () => and(isOpen(), or(isNull(ingestItems.fitVerdict), ne(ingestItems.fitVerdict, 'no')))
+const isFiltered = () => and(isOpen(), eq(ingestItems.fitVerdict, 'no'))
 // Accepted items that left their feed and still wait for a decision. Detached items (claimed, edited by a
 // human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(
@@ -56,32 +59,34 @@ const isGone = and(
 const itemCount = sql<number>`count(*)::int`
 
 /** Items in each view, of one source (by slug) if given. */
-async function counts(source?: string): Promise<{ new: number; gone: number }> {
+async function counts(source?: string): Promise<{ new: number; filtered: number; gone: number }> {
   const ofSource = source ? eq(ingestSources.slug, source) : undefined
-  const [n] = await db
-    .select({ n: itemCount })
-    .from(ingestItems)
-    .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
-    .where(and(isNew(), ofSource))
+  const open = (inView: SQL | undefined) =>
+    db
+      .select({ n: itemCount })
+      .from(ingestItems)
+      .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+      .where(and(inView, ofSource))
+  const [[n], [f]] = await Promise.all([open(isNew()), open(isFiltered())])
   const [g] = await db
     .select({ n: itemCount })
     .from(ingestItems)
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
     .innerJoin(events, eq(events.id, ingestItems.eventId))
     .where(and(isGone, ofSource))
-  return { new: n?.n ?? 0, gone: g?.n ?? 0 }
+  return { new: n?.n ?? 0, filtered: f?.n ?? 0, gone: g?.n ?? 0 }
 }
 
 /** The sources with items in a view and how many, by name: the inbox's source filter. */
-async function sourceCounts(view: 'new' | 'gone'): Promise<IngestSourceCount[]> {
+async function sourceCounts(view: IngestView): Promise<IngestSourceCount[]> {
   const base = db
     .select({ slug: ingestSources.slug, name: ingestSources.name, count: itemCount })
     .from(ingestItems)
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
   const rows =
-    view === 'new'
-      ? await base.where(isNew()).groupBy(ingestSources.id)
-      : await base.innerJoin(events, eq(events.id, ingestItems.eventId)).where(isGone).groupBy(ingestSources.id)
+    view === 'gone'
+      ? await base.innerJoin(events, eq(events.id, ingestItems.eventId)).where(isGone).groupBy(ingestSources.id)
+      : await base.where(view === 'new' ? isNew() : isFiltered()).groupBy(ingestSources.id)
   return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 
@@ -95,7 +100,7 @@ const duplicatesFor = (draft: IngestDraft) =>
     title: draft.title,
   })
 
-/** The API view of a stored item; duplicates are looked up for items that still wait for a decision. */
+/** The API view of a stored item; duplicates are looked up for items that still wait for a decision (new or filtered). */
 async function toView(
   item: IngestItem,
   source: { slug: string; name: string },
@@ -112,6 +117,7 @@ async function toView(
     venue_name: venueName,
     gone_at: item.goneAt?.toISOString() ?? null,
     event_id: item.eventId,
+    fit: item.fitVerdict && item.fitReason ? { verdict: item.fitVerdict, reason: item.fitReason } : null,
     duplicates,
   }
 }
@@ -123,7 +129,8 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
       item: ingestItems,
       source: { slug: ingestSources.slug, name: ingestSources.name },
       venue: venues,
-      isNew: sql<boolean>`coalesce(${isNew()}, false)`,
+      // A filtered item is still new here: it keeps its actions, whichever tab it sits in
+      isNew: sql<boolean>`coalesce(${isOpen()}, false)`,
       isGone: sql<boolean>`coalesce(${isGone}, false)`,
       isOver: sql<boolean>`not coalesce(${notOver()}, true)`,
     })
@@ -155,11 +162,24 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
   }
 }
 
-/** Where a page of a view ends: the draft start as an ISO instant, then the id (the list order). */
-const itemCursorSchema = z.object({ starts_at: z.string().datetime({ offset: true }), id: z.string().uuid() })
+/**
+ * Where a page of a view ends: the rank, the draft start as an ISO instant, then the id (the list order).
+ * A cursor without a rank (from before fit scoring) does not parse and starts from the top.
+ */
+const itemCursorSchema = z.object({
+  rank: z.number().int().min(0).max(2),
+  starts_at: z.string().datetime({ offset: true }),
+  id: z.string().uuid(),
+})
+
+/** Fits first, then maybes, then the rest, in New; the other views have no rank. One expression for select, keyset and order. */
+const rankOf = (view: IngestView) =>
+  view === 'new'
+    ? sql<number>`(case ${ingestItems.fitVerdict} when 'fit' then 0 when 'maybe' then 1 else 2 end)::int`
+    : sql<number>`0::int` // cast: a bare 0 in ORDER BY would be a column position
 
 interface ListQuery {
-  view: 'new' | 'gone'
+  view: IngestView
   source?: string
   limit: number
   cursor?: string
@@ -169,12 +189,15 @@ async function listItems(
   { view, source, limit, cursor }: ListQuery,
   log: FastifyBaseLogger,
 ): Promise<{ items: IngestItemView[]; cursor: string | null; hasMore: boolean }> {
-  const conditions: (SQL | undefined)[] = [view === 'new' ? isNew() : isGone]
+  const conditions: (SQL | undefined)[] = [view === 'new' ? isNew() : view === 'filtered' ? isFiltered() : isGone]
   if (source) conditions.push(eq(ingestSources.slug, source))
+  const rank = rankOf(view)
   // An unreadable cursor starts from the top, as on GET /events
   const after = itemCursorSchema.safeParse(cursor ? decodeCursor(cursor) : null)
   if (after.success) {
-    conditions.push(sql`(${draftStartsAt}, ${ingestItems.id}) > (${after.data.starts_at}::timestamptz, ${after.data.id}::uuid)`)
+    conditions.push(
+      sql`(${rank}, ${draftStartsAt}, ${ingestItems.id}) > (${after.data.rank}::int, ${after.data.starts_at}::timestamptz, ${after.data.id}::uuid)`,
+    )
   }
 
   const base = db
@@ -182,6 +205,7 @@ async function listItems(
       item: ingestItems,
       source: { slug: ingestSources.slug, name: ingestSources.name },
       venueName: venues.name,
+      rank: sql<number>`${rank}`.as('rank'),
       // Read from the row, not the parsed draft: a page may end on a broken one
       startsAt: sql<string>`to_json(${draftStartsAt}) #>> '{}'`,
     })
@@ -189,16 +213,16 @@ async function listItems(
     .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
     // Compared as text: a broken stored venue_id must not make the uuid cast fail the whole list
     .leftJoin(venues, sql`${venues.id}::text = ${ingestItems.draft}->>'venue_id'`)
-  const query = view === 'new' ? base : base.innerJoin(events, eq(events.id, ingestItems.eventId))
+  const query = view === 'gone' ? base.innerJoin(events, eq(events.id, ingestItems.eventId)) : base
   const rows = await query
     .where(and(...conditions))
-    .orderBy(asc(draftStartsAt), asc(ingestItems.id))
+    .orderBy(asc(rank), asc(draftStartsAt), asc(ingestItems.id))
     .limit(limit + 1)
 
   const hasMore = rows.length > limit
   const page = hasMore ? rows.slice(0, limit) : rows
   const last = page[page.length - 1]
-  const nextCursor = hasMore && last ? encodeCursor({ starts_at: last.startsAt, id: last.item.id }) : null
+  const nextCursor = hasMore && last ? encodeCursor({ rank: last.rank, starts_at: last.startsAt, id: last.item.id }) : null
 
   // A broken stored draft must not take the inbox down for every scout: skip it and log it
   const valid = page.flatMap(({ item, source, venueName }) => {
@@ -209,7 +233,7 @@ async function listItems(
   })
 
   const items = await Promise.all(
-    valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view === 'new')),
+    valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view !== 'gone')),
   )
   return { items, cursor: nextCursor, hasMore }
 }

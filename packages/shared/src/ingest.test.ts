@@ -64,6 +64,7 @@ describe('ingest request schemas', () => {
       source: 'berghain',
       limit: 50,
     })
+    expect(ingestListQuerySchema.parse({ view: 'filtered' }).view).toBe('filtered')
     expect(() => ingestListQuerySchema.parse({ view: 'all' })).toThrow()
   })
 
@@ -107,6 +108,7 @@ describe('ingestItemViewSchema', () => {
       venue_name: null,
       gone_at: null,
       event_id: null,
+      fit: { verdict: 'maybe', reason: 'Fine, but mainstream' },
       duplicates: [
         {
           id: uuid,
@@ -122,5 +124,7 @@ describe('ingestItemViewSchema', () => {
       ],
     }
     expect(ingestItemViewSchema.parse(view)).toEqual(view)
+    expect(ingestItemViewSchema.parse({ ...view, fit: null }).fit).toBeNull()
+    expect(() => ingestItemViewSchema.parse({ ...view, fit: { verdict: 'great', reason: 'x' } })).toThrow()
   })
 })
