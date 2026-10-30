@@ -36,6 +36,8 @@ export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accept
 export const ingestFitVerdict = pgEnum('ingest_fit_verdict', ['fit', 'maybe', 'no'])
 
 type Links = Record<string, string>
+/** Same shape as `Lineup` in @open-event-db/shared, which validates it. */
+type Lineup = { name: string | null; acts: { name: string; time: string | null; live: boolean; note: string | null }[] }[]
 
 export const publishers = pgTable('publishers', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -71,6 +73,8 @@ export const events = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
+    /** Groups of acts in listed order; `[]` when only the description names them (or nobody does). */
+    lineup: jsonb('lineup').$type<Lineup>().notNull().default([]),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     /** False when only the day is known (flyers often have no time): starts_at is then 00:00 Berlin that day. */
     startTimeKnown: boolean('start_time_known').notNull().default(true),

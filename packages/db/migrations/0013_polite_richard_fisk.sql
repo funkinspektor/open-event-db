@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "lineup" jsonb DEFAULT '[]'::jsonb NOT NULL;

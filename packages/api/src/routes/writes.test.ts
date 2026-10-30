@@ -402,6 +402,59 @@ describe('event categories', () => {
   })
 })
 
+describe('event lineup', () => {
+  const lineup = [
+    { name: 'Panorama Bar', acts: [{ name: 'Daphni', time: '02:30', note: 'Jiaolong' }, { name: 'Z@P', time: '04:30', live: true }] },
+    { name: 'Säule', acts: [{ name: 'Timnah', time: '23:59' }] },
+  ]
+  const create = (payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: 'Lineup night', starts_at: '2031-06-01T20:00:00Z', venue_id: venue.id, ...payload },
+    })
+
+  it('stores the lineup in listed order and returns it on the event', async () => {
+    const res = await create({ lineup })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.lineup).toEqual([
+      {
+        name: 'Panorama Bar',
+        acts: [
+          { name: 'Daphni', time: '02:30', live: false, note: 'Jiaolong' },
+          { name: 'Z@P', time: '04:30', live: true, note: null },
+        ],
+      },
+      { name: 'Säule', acts: [{ name: 'Timnah', time: '23:59', live: false, note: null }] },
+    ])
+  })
+
+  it('returns an empty lineup for an event created without one', async () => {
+    const res = await create({})
+    expect(res.json().data.lineup).toEqual([])
+  })
+
+  it('clears the lineup on PUT and logs it in the history', async () => {
+    const id = (await create({ lineup })).json().data.id as string
+    const res = await app.inject({ method: 'PUT', url: `/api/v1/events/${id}`, headers: auth(keyA), payload: { lineup: [] } })
+    expect(res.json().data.lineup).toEqual([])
+    const [last] = await db
+      .select()
+      .from(editHistory)
+      .where(eq(editHistory.entityId, id))
+      .orderBy(desc(editHistory.createdAt))
+      .limit(1)
+    expect((last!.diff as Record<string, { after: unknown }>).lineup?.after).toEqual([])
+  })
+
+  it('rejects more than 200 acts', async () => {
+    const acts = Array.from({ length: 201 }, (_, i) => ({ name: `Act ${i}` }))
+    const res = await create({ lineup: [{ acts }] })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
 describe('events without a start time', () => {
   it('stores a bare day as 00:00 Berlin with start_time_known false, and a timestamp turns it back on', async () => {
     const created = await app.inject({

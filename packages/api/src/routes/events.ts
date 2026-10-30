@@ -195,6 +195,7 @@ export async function eventRoutes(app: FastifyInstance) {
         .values({
           title: body.title,
           description: body.description ?? '',
+          lineup: body.lineup ?? [],
           startsAt,
           startTimeKnown,
           endsAt,
@@ -238,6 +239,7 @@ export async function eventRoutes(app: FastifyInstance) {
     const patch: Partial<typeof events.$inferInsert> = {}
     if (body.title !== undefined) patch.title = body.title
     if (body.description !== undefined) patch.description = body.description
+    if (body.lineup !== undefined) patch.lineup = body.lineup
     if (body.starts_at !== undefined) Object.assign(patch, startOf(body.starts_at))
     if (body.ends_at !== undefined) patch.endsAt = body.ends_at ? new Date(body.ends_at) : null
     if (body.location_text !== undefined) patch.locationText = body.location_text

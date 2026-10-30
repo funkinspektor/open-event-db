@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { cursorQuerySchema, metaSchema } from './pagination.js'
 import { linksSchema } from './links.js'
+import { lineupSchema } from './lineup.js'
 
 /** Largest event image the API stores, uploaded or fetched from a feed. */
 export const EVENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
@@ -123,6 +124,7 @@ export const eventDetailSchema = eventSlimSchema
   .omit({ venue: true })
   .extend({
     links: linksSchema,
+    lineup: lineupSchema,
     added_by: eventAddedBySchema,
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
@@ -156,6 +158,7 @@ export const eventCreateSchema = z.object({
   starts_at: z.union([z.string().datetime({ offset: true }), eventDaySchema]),
   ends_at: z.string().datetime({ offset: true }).nullable().optional(),
   description: z.string().max(10_000).optional(),
+  lineup: lineupSchema.optional(),
   venue_id: z.string().uuid().nullable().optional(),
   location_text: z.string().trim().max(300).nullable().optional(),
   city: z.string().trim().min(1).max(100).optional(),

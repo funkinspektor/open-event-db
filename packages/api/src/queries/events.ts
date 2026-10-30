@@ -26,6 +26,7 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
   return {
     title: e.title,
     description: e.description,
+    lineup: e.lineup,
     starts_at: e.startsAt.toISOString(),
     start_time_known: e.startTimeKnown,
     ends_at: e.endsAt?.toISOString() ?? null,
@@ -141,6 +142,7 @@ function serializeEventDetail(
     categories: e.categories,
     tags: e.tags,
     links: e.links,
+    lineup: e.lineup,
     recurrence: e.recurrence,
     location_text: e.locationText,
     city: e.city,
