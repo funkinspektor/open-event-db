@@ -71,7 +71,7 @@ it('reads a draft stored before the lineup step as not read', () => {
 
 - [ ] **Step 2: Run them.** `pnpm --filter @open-event-db/shared test -- ingest` → FAIL (property undefined).
 - [ ] **Step 3: Add both fields.** Add `lineup_from_text: false` wherever test fixtures build full drafts and the typecheck asks for it.
-- [ ] **Step 4: Run** `pnpm --filter @open-event-db/shared test` and `pnpm -r typecheck` → PASS.
+- [ ] **Step 4: Run** `pnpm --filter @open-event-db/shared test` and `pnpm typecheck` → PASS.
 - [ ] **Step 5: Commit** "Lineup reading: config and draft fields".
 
 ### Task 2: The lineup reader and the name check
@@ -114,7 +114,7 @@ it('reads a draft stored before the lineup step as not read', () => {
   - **Call:** `label: 'Lineup'`, `schemaName: 'lineup'`, `maxTokens: 4000`.
   - **`LINEUP_SYSTEM_PROMPT`** states the spec's prompt rules (§1 "Prompt rules") as a list. Add one short worked example in the prompt: "on decks: ▷ A ▷ B" → one unnamed group with A and B.
 
-- [ ] **Step 5: Run** the tests → PASS. Run `pnpm -r typecheck` → PASS.
+- [ ] **Step 5: Run** the tests → PASS. Run `pnpm typecheck` → PASS.
 - [ ] **Step 6: Commit** "Lineup reading: reader and name check".
 
 ### Task 3: Ingest reads lineups
@@ -193,7 +193,7 @@ it('reads a draft stored before the lineup step as not read', () => {
   - On success it calls `onChange(mergeReadLineup(groups, json.data.lineup))`.
   - On failure it shows a `kk-hint` error line: the server message for `nothing_extracted`, otherwise "The lineup couldn’t be read. Try again or fill it in by hand."
   - `EventForm` passes `description={description}`.
-- [ ] **Step 4: Run** `pnpm --filter @open-event-db/web test` and `pnpm -r typecheck` → PASS.
+- [ ] **Step 4: Run** `pnpm --filter @open-event-db/web test` and `pnpm typecheck` → PASS.
 - [ ] **Step 5: Browser check** on the worktree dev servers (`web-lineup` and `api-lineup`, with a stub-free local `.env`).
   - Open an event with acts in its description, edit the description without saving, and press the button. The lineup fills from the edited text.
   - Press it again: the groups are appended.
@@ -240,5 +240,5 @@ it('reads a draft stored before the lineup step as not read', () => {
   - That the first run after switching a source on reads every stored, unsettled item of that source once, so run it from the laptop with `scripts/prod-db.sh pnpm --filter @open-event-db/api ingest`, then `ingest:score` until `scored: 0`.
   - That pending items of these sources are scored once more.
   - That the editor button shares no counter with image import but has the same daily limit.
-- [ ] **Step 2: Run the full suite.** `pnpm -r test` and `pnpm -r typecheck` → PASS.
+- [ ] **Step 2: Run the full suite.** `pnpm test` and `pnpm typecheck` → PASS.
 - [ ] **Step 3: Commit** "Deploy notes: lineups from text".
