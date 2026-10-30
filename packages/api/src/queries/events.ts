@@ -9,7 +9,14 @@ import {
   type Event,
   type Venue,
 } from '@open-event-db/db'
-import type { EventAddedBy, EventDetail, EventOwnerRole, EventProvenance, EventSlim } from '@open-event-db/shared'
+import {
+  canonicalLineup,
+  type EventAddedBy,
+  type EventDetail,
+  type EventOwnerRole,
+  type EventProvenance,
+  type EventSlim,
+} from '@open-event-db/shared'
 import { db } from '../db.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
@@ -26,7 +33,8 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
   return {
     title: e.title,
     description: e.description,
-    lineup: e.lineup,
+    // jsonb reorders keys: canonical, so an unchanged lineup diffs as unchanged
+    lineup: canonicalLineup(e.lineup),
     starts_at: e.startsAt.toISOString(),
     start_time_known: e.startTimeKnown,
     ends_at: e.endsAt?.toISOString() ?? null,

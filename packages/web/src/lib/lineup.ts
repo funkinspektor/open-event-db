@@ -12,6 +12,15 @@ export const toLineupRows = (lineup: Lineup): LineupGroupRow[] =>
     acts: g.acts.map((a) => ({ time: a.time ?? '', name: a.name, live: a.live, note: a.note ?? '' })),
   }))
 
+/** The editor's time pattern: phones type "2330" (the number pad has no colon), others "23:30" or "23.30". */
+export const TIME_INPUT_PATTERN = '([01]?\\d|2[0-3])[:.]?[0-5]\\d'
+
+/** "2330", "23.30", "7:00" → "23:30", "23:30", "07:00"; anything else is left for the API to reject. */
+export function normalizeTime(time: string): string {
+  const m = time.trim().match(/^(\d{1,2})[:.]?(\d{2})$/)
+  return m ? `${m[1]!.padStart(2, '0')}:${m[2]}` : time.trim()
+}
+
 /** What the API stores: acts without a name and groups left without acts are dropped. */
 export function fromLineupRows(groups: LineupGroupRow[]): Lineup {
   return groups
@@ -19,7 +28,7 @@ export function fromLineupRows(groups: LineupGroupRow[]): Lineup {
       name: g.name.trim() || null,
       acts: g.acts
         .filter((a) => a.name.trim())
-        .map((a) => ({ name: a.name.trim(), time: a.time.trim() || null, live: a.live, note: a.note.trim() || null })),
+        .map((a) => ({ name: a.name.trim(), time: normalizeTime(a.time) || null, live: a.live, note: a.note.trim() || null })),
     }))
     .filter((g) => g.acts.length > 0)
 }

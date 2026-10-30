@@ -53,6 +53,11 @@ describe('fromLineupRows', () => {
     ])
   })
 
+  it('accepts times typed without a colon, with a dot or a one-digit hour', () => {
+    const times = ['2330', '23.30', '7:00', '0030', '23:30'].map((time) => fromLineupRows([{ name: '', acts: [row('A', { time })] }])[0]!.acts[0]!.time)
+    expect(times).toEqual(['23:30', '23:30', '07:00', '00:30', '23:30'])
+  })
+
   it('reads an all-blank editor as no lineup', () => {
     expect(fromLineupRows([{ name: '', acts: [row('')] }])).toEqual([])
   })

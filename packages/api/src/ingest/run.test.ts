@@ -724,6 +724,20 @@ describe('runIngest (Dunckerclub page)', () => {
     expect((await eventRow(event.id)).lineup).toEqual([{ name: null, acts: [{ ...samhainLineup[0]!.acts[0]!, name: 'DJ Nachtmahr' }] }])
   })
 
+  it('does not count an unchanged lineup as a change when the page changes elsewhere', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'dunckerclub')
+    await run(source, page, NOW)
+    const event = await accept(await itemOf(source.id, SAMHAIN))
+    await run(source, page.replace('DJ Ørlög //<br>', 'DJ Ørlög  //<br>'), LATER)
+    const logged = (await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))).length
+
+    // Same night, same lineup; only the markup of the row differs (same day, so the feed URL is the same too)
+    const result = await run(source, page.replace('DJ Ørlög //<br>', 'DJ Ørlög   //<br>'), LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, updated: 1, synced: 0 })
+    expect(await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))).toHaveLength(logged)
+  })
+
   it('reads a draft stored before lineups once more and moves an untouched event over', async () => {
     stubExtractor()
     const source = await newSource({}, '', 'dunckerclub')

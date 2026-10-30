@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { emptyRow, parseLineupText, type LineupGroupRow, type LineupRow } from '@/lib/lineup'
+import { TIME_INPUT_PATTERN, emptyRow, parseLineupText, type LineupGroupRow, type LineupRow } from '@/lib/lineup'
 
 interface Props {
   value: LineupGroupRow[]
@@ -92,8 +92,8 @@ export function LineupEditor({ value: groups, onChange }: Props) {
                     onChange={(e) => setAct(gi, ai, { time: e.target.value })}
                     placeholder="Time"
                     inputMode="numeric"
-                    pattern="([01]\d|2[0-3]):[0-5]\d"
-                    title="HH:MM, e.g. 23:30"
+                    pattern={TIME_INPUT_PATTERN}
+                    title="A time like 23:30 or 2330"
                     aria-label="Set time (optional)"
                     className="kk-input kk-lineup-row__time"
                   />

@@ -211,14 +211,17 @@ accepted events. With `extract_from_text` newly set that is one extraction per s
 the laptop as above, not in the scheduled request.
 
 **Lineups.** The Berghain/Kantine and Dunckerclub adapters write the lineup into its own field and leave it
-out of the description. After the deploy that brought this, the next run reads every item stored before
-lineups existed once more; events still synced from their feed take the lineup and the shorter
-description then. With `extract_from_text` on (Duncker) that is one extraction per stored item, so run those
-sources from the laptop first:
+out of the description. After the deploy that brought this, the next run reads every stored item of every
+source once more (the drafts gain a `lineup` field); events still synced from their feed take the lineup and
+the shorter description then. Sources with `extract_from_text` (ACUD, Duncker) make one extraction per
+stored item, so run all enabled sources from the laptop right after the deploy, not in the cron request:
 
 ```bash
-scripts/prod-db.sh pnpm --filter @open-event-db/api ingest berghain kantine duncker
+scripts/prod-db.sh pnpm --filter @open-event-db/api ingest
 ```
+
+Open Berghain/Kantine and Duncker items get scored once more, since the act names now come first in their
+fit prompt; follow up with `ingest:score` as above until it reports `scored: 0`.
 
 Events whose lineup sits in the description as a Markdown list (the flyer import's `**Lineup**` list, or
 `**Live**` / `**DJs**` groups typed by scouts) move over with a one-off script. Without `--write` it only

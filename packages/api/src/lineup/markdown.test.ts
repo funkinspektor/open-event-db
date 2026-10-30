@@ -58,6 +58,18 @@ describe('splitMarkdownLineup', () => {
     expect(splitMarkdownLineup(text)).toEqual({ lineup: [{ name: null, acts: [act('A')] }], description: 'Intro.\n\nDoors at 22:00.' })
   })
 
+  it('stops at a block after the lineup that is not part of it', () => {
+    const text = 'Intro.\n\n**Lineup**\n- A\n- B\n\n**Tickets**\n- Presale 10€\n- Door 15€\n\nInfo:\n- Einlass 22 Uhr'
+    expect(splitMarkdownLineup(text)).toEqual({
+      lineup: [{ name: null, acts: [act('A'), act('B')] }],
+      description: 'Intro.\n\n**Tickets**\n- Presale 10€\n- Door 15€\n\nInfo:\n- Einlass 22 Uhr',
+    })
+  })
+
+  it('reads "Line-up:" as the unnamed group and skips empty items', () => {
+    expect(splitMarkdownLineup('**Line-up:**\n- A\n-   \n- B')?.lineup).toEqual([{ name: null, acts: [act('A'), act('B')] }])
+  })
+
   it('leaves a list that is not a lineup alone', () => {
     expect(splitMarkdownLineup('**Tickets**\n- Presale 10€\n- Door 15€')).toBeNull()
     expect(splitMarkdownLineup('Just text.')).toBeNull()

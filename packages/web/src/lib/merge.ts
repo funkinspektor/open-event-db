@@ -1,4 +1,4 @@
-import { SYNCED_LINK, type EventDetail, type IngestDraft, type IngestLinkInput, type IngestMergeField } from '@open-event-db/shared'
+import { SYNCED_LINK, canonicalLineup, type EventDetail, type IngestDraft, type IngestLinkInput, type IngestMergeField } from '@open-event-db/shared'
 import { linkLabel } from './format'
 
 /** A field of the merge, or one link by its key (`link:tickets`). */
@@ -48,7 +48,8 @@ export function mergeRows(event: MergeEvent, draft: IngestDraft): MergeRow[] {
   if (!samePlace) row('place', 'Place', !event.venue && !event.location_text)
   if (!sameSet(event.categories, draft.categories)) row('categories', 'Category', event.categories.length === 0)
   if (event.description.trim() !== draft.description.trim()) row('description', 'Description', !event.description.trim())
-  if (JSON.stringify(event.lineup) !== JSON.stringify(draft.lineup)) row('lineup', 'Lineup', event.lineup.length === 0)
+  const sameLineup = JSON.stringify(canonicalLineup(event.lineup)) === JSON.stringify(canonicalLineup(draft.lineup))
+  if (!sameLineup) row('lineup', 'Lineup', event.lineup.length === 0)
   if (draft.image_url) row('image', 'Image', !event.image_url)
   for (const [key, url] of Object.entries(draft.links)) {
     if (event.links[key] !== url) row(`link:${key}`, linkLabel(key), !event.links[key])

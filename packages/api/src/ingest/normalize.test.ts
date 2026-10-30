@@ -50,6 +50,13 @@ describe('normalizeFeedEvent', () => {
     expect(normalize({ ...persian, lineup }, acud, null).lineup).toEqual(lineup)
   })
 
+  it('cleans an odd feed lineup so the draft stays valid', () => {
+    const lineup = [{ name: null, acts: [{ name: 'N'.repeat(250), time: '0:30', live: false, note: null }] }]
+    const draft = normalize({ ...feed('Persian Love: SHAB SHOD'), lineup }, acud, null)
+    expect(draft.lineup[0]!.acts[0]).toMatchObject({ time: '00:30' })
+    expect(draft.lineup[0]!.acts[0]!.name).toHaveLength(200)
+  })
+
   it('caps a huge feed lineup so the draft stays valid', () => {
     const acts = Array.from({ length: 125 }, (_, i) => ({ name: `Act ${i}`, time: null, live: false, note: null }))
     const draft = normalize({ ...feed('Persian Love: SHAB SHOD'), lineup: [{ name: 'A', acts }, { name: 'B', acts }] }, acud, null)

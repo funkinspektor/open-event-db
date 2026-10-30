@@ -55,6 +55,11 @@ describe('mergeRows (lineup)', () => {
   it('has no row when the lineups match', () => {
     expect(mergeRows({ ...event, lineup }, { ...draft, lineup }).some((r) => r.key === 'lineup')).toBe(false)
   })
+
+  it('has no row when the event lineup comes back from the database with its keys reordered', () => {
+    const fromDb = [{ acts: [{ live: true, name: 'Artist One', note: null, time: null }], name: null }]
+    expect(mergeRows({ ...event, lineup: fromDb }, { ...draft, lineup }).some((r) => r.key === 'lineup')).toBe(false)
+  })
 })
 
 describe('mergeRows', () => {

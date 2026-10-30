@@ -1,16 +1,27 @@
-import { capLineup, type Lineup } from '@open-event-db/shared'
+import { sanitizeLineup, type Lineup } from '@open-event-db/shared'
 
 /** The heading of the first block must say it is a lineup: "Lineup", "Line-up", "Live", "DJs", "Dj Lineup after …". */
 const LINEUP_HEAD = /^(dj\s*)?(line-?up|live|djs?)\b/i
 const BOLD_HEADING = /^\*\*(.+?)\*\*:?$/
 const ITEM = /^\s*[-*]\s+(.+)$/
 
+/** Blocks that often follow a lineup but are not part of it. */
+const NOT_LINEUP = /^(tickets?|presale|vvk|vorverkauf|abendkasse|eintritt|preise?|prices?|infos?|einlass|doors?|awareness|hinweise?|notes?|anfahrt|access)\b/i
+
 const isItem = (line: string | undefined) => line !== undefined && ITEM.test(line)
-/** A plain line can name a floor ("BLACK (hosted by Jiãla)") once a lineup has started. */
-const isHeading = (line: string | undefined) => line !== undefined && !!line.trim() && !isItem(line) && line.trim().length <= 80
 const headingText = (line: string) => {
   const t = line.trim()
-  return (t.match(BOLD_HEADING)?.[1] ?? t).trim()
+  return (t.match(BOLD_HEADING)?.[1] ?? t).replace(/:$/, '').trim()
+}
+/**
+ * A further group once a lineup has started: a bold heading, or a plain line naming a floor ("BLACK (hosted
+ * by Jiãla)") but not one like "Info:"; never a heading for tickets, doors and the like.
+ */
+function isGroupHeading(line: string | undefined): boolean {
+  if (line === undefined || isItem(line)) return false
+  const t = line.trim()
+  if (!t || t.length > 80 || NOT_LINEUP.test(headingText(t))) return false
+  return BOLD_HEADING.test(t) || !t.endsWith(':')
 }
 
 /**
@@ -41,7 +52,7 @@ export function splitMarkdownLineup(description: string): { lineup: Lineup; desc
     // Another heading with a list right after (blank lines between) belongs to the same lineup
     let after = next
     while (after < lines.length && !lines[after]!.trim()) after++
-    if (isHeading(lines[after]) && isItem(lines[after + 1])) at = after
+    if (isGroupHeading(lines[after]) && isItem(lines[after + 1])) at = after
     else break
   }
 
@@ -49,5 +60,7 @@ export function splitMarkdownLineup(description: string): { lineup: Lineup; desc
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-  return { lineup: capLineup(lineup), description: rest }
+  // Valid as stored: empty items dropped, lengths cut, at most 200 acts
+  const clean = sanitizeLineup(lineup)
+  return clean.length ? { lineup: clean, description: rest } : null
 }

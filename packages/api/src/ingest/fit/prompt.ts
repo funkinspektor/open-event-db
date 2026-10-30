@@ -45,9 +45,10 @@ const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 export function subjectOf(draft: IngestDraft, venueName: string | null, sourceName: string): FitSubject {
   const place = venueName ?? draft.location_text
-  // Adapters keep the lineup out of the text; without one the description (and its fingerprint) stays as it was
+  // Adapters keep the lineup out of the text. It goes first, so cutting a long text keeps it; without a
+  // lineup the description (and its fingerprint) stays as it was
   const names = draft.lineup.flatMap((g) => g.acts.map((a) => a.name))
-  const text = names.length ? `${draft.description}\n\nLineup: ${names.join(', ')}` : draft.description
+  const text = names.length ? `Lineup: ${names.join(', ')}.\n\n${draft.description}` : draft.description
   return {
     title: oneLine(draft.title),
     place: place === null ? null : oneLine(place),

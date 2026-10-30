@@ -39,7 +39,12 @@ describe('subjectOf', () => {
       { name: 'Live', acts: [{ name: 'Volcan', time: null, live: true, note: null }] },
       { name: 'DJs', acts: [{ name: 'SVTVRA', time: null, live: false, note: null }] },
     ]
-    expect(subjectOf(draft({ lineup }), null, 'src').description).toBe('A night of dark wave. Lineup: Volcan, SVTVRA')
+    expect(subjectOf(draft({ lineup }), null, 'src').description).toBe('Lineup: Volcan, SVTVRA. A night of dark wave.')
+  })
+
+  it('keeps the act names when a long description is cut', () => {
+    const lineup = [{ name: null, acts: [{ name: 'Surgeon', time: null, live: true, note: null }] }]
+    expect(subjectOf(draft({ lineup, description: 'x'.repeat(3000) }), null, 'src').description).toMatch(/^Lineup: Surgeon\. x/)
   })
 
   it('leaves the description as it is without a lineup, so its fingerprint stays the same', () => {

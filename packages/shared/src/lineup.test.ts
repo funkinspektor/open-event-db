@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { capLineup, lineupSchema, type Lineup } from './lineup.js'
+import { canonicalLineup, capLineup, lineupSchema, sanitizeLineup, type Lineup } from './lineup.js'
 
 const acts = (n: number, prefix = 'Act') => Array.from({ length: n }, (_, i) => ({ name: `${prefix} ${i + 1}` }))
 
@@ -36,6 +36,32 @@ describe('lineupSchema', () => {
     const result = lineupSchema.safeParse([{ acts: acts(100) }, { acts: acts(101) }])
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.message).toMatch(/200/)
+  })
+})
+
+describe('canonicalLineup', () => {
+  it('writes keys in one order, so a lineup read back from jsonb compares equal', () => {
+    const fromDb = [{ acts: [{ live: false, name: 'A', note: null, time: null }], name: null }]
+    const fromZod = lineupSchema.parse([{ name: null, acts: [{ name: 'A' }] }])
+    expect(JSON.stringify(canonicalLineup(fromDb as never))).toBe(JSON.stringify(canonicalLineup(fromZod)))
+  })
+})
+
+describe('sanitizeLineup', () => {
+  const act = (over: Record<string, unknown>) => ({ name: 'A', time: null, live: false, note: null, ...over })
+
+  it('makes an odd source lineup valid instead of failing the draft', () => {
+    const clean = sanitizeLineup([
+      { name: 'F'.repeat(150), acts: [act({ name: 'N'.repeat(250), note: 'L'.repeat(250), time: '0:30' }), act({ name: '  ' }), act({ time: 'tba' })] },
+      { name: 'Empty', acts: [act({ name: '' })] },
+    ] as never)
+    expect(lineupSchema.safeParse(clean).success).toBe(true)
+    expect(clean).toHaveLength(1)
+    expect(clean[0]!.name).toHaveLength(100)
+    expect(clean[0]!.acts.map((a) => [a.name.length, a.note?.length, a.time])).toEqual([
+      [200, 200, '00:30'],
+      [1, undefined, null],
+    ])
   })
 })
 
