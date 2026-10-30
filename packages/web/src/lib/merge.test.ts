@@ -8,6 +8,7 @@ const VENUE = '00000000-0000-4000-8000-000000000001'
 const event = {
   title: 'Hand-entered night',
   description: 'Live acts and DJs.',
+  lineup: [],
   starts_at: '2031-01-11T19:00:00.000Z',
   start_time_known: true,
   ends_at: null,
@@ -37,6 +38,24 @@ const draft: IngestDraft = {
   source_url: 'https://venue.example.org/program/artist-one.html',
   times_unverified: false,
 }
+
+describe('mergeRows (lineup)', () => {
+  const lineup = [{ name: null, acts: [{ name: 'Artist One', time: null, live: true, note: null }] }]
+
+  it('offers the feed lineup, picked already when the event has none', () => {
+    const rows = mergeRows({ ...event, lineup: [] }, { ...draft, lineup })
+    expect(rows.find((r) => r.key === 'lineup')).toEqual({ key: 'lineup', label: 'Lineup', synced: true, initial: 'feed' })
+  })
+
+  it('keeps the event lineup by default when both have one', () => {
+    const own = [{ name: null, acts: [{ name: 'Someone else', time: null, live: false, note: null }] }]
+    expect(mergeRows({ ...event, lineup: own }, { ...draft, lineup }).find((r) => r.key === 'lineup')?.initial).toBe('event')
+  })
+
+  it('has no row when the lineups match', () => {
+    expect(mergeRows({ ...event, lineup }, { ...draft, lineup }).some((r) => r.key === 'lineup')).toBe(false)
+  })
+})
 
 describe('mergeRows', () => {
   it('lists only what differs, and picks the feed where the event has nothing yet', () => {

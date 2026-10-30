@@ -1,4 +1,4 @@
-import type { EventCategory, EventDraft } from '@open-event-db/shared'
+import type { EventCategory, EventDraft, Lineup } from '@open-event-db/shared'
 
 /** What the create form starts with after an image import. Empty strings mean "not read from the image". */
 export interface EventPrefill {
@@ -9,6 +9,7 @@ export interface EventPrefill {
   startTime: string
   endsAt: string
   description: string
+  lineup: Lineup
   city: string
   /** Address without a venue name: goes into the free-text location. */
   locationText: string
@@ -34,13 +35,6 @@ export function toLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** The lineup goes below the description as a Markdown list. */
-export function withLineup(description: string | null, lineup: string[]): string {
-  const parts = [description?.trim() ?? '']
-  if (lineup.length) parts.push(`**Lineup**\n${lineup.map((name) => `- ${name}`).join('\n')}`)
-  return parts.filter(Boolean).join('\n\n')
-}
-
 export function draftToPrefill(draft: EventDraft, knownTags: string[]): EventPrefill {
   const known = new Set(knownTags)
   const [startDate, startTime] = toLocalInput(draft.starts_at).split('T')
@@ -49,7 +43,11 @@ export function draftToPrefill(draft: EventDraft, knownTags: string[]): EventPre
     startDate: startDate || (draft.start_date ?? ''),
     startTime: startTime ?? '',
     endsAt: toLocalInput(draft.ends_at),
-    description: withLineup(draft.description, draft.lineup),
+    description: draft.description?.trim() ?? '',
+    // The image names the acts, never their order across floors: one unnamed group
+    lineup: draft.lineup.length
+      ? [{ name: null, acts: draft.lineup.map((name) => ({ name, time: null, live: false, note: null })) }]
+      : [],
     city: draft.city,
     locationText: draft.venue_name ? '' : (draft.address ?? ''),
     categories: draft.categories,

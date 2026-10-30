@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EventDraft } from '@open-event-db/shared'
-import { draftToPrefill, pickVenue, toLocalInput, venueQueries, withLineup } from './draft'
+import { draftToPrefill, pickVenue, toLocalInput, venueQueries } from './draft'
 
 const draft: EventDraft = {
   title: 'Metro Alien',
@@ -26,12 +26,19 @@ describe('draftToPrefill', () => {
     expect(p.suggestedTags).toEqual(['minimal wave'])
   })
 
-  it('puts the lineup under the description', () => {
-    expect(draftToPrefill(draft, []).description).toBe(
-      'A night with synth and wave.\n\n**Lineup**\n- Der Schrauber\n- Bloodygrave',
-    )
-    expect(withLineup(null, [])).toBe('')
-    expect(withLineup(null, ['A'])).toBe('**Lineup**\n- A')
+  it('puts the lineup into the lineup field and leaves the description as read', () => {
+    const p = draftToPrefill(draft, [])
+    expect(p.description).toBe('A night with synth and wave.')
+    expect(p.lineup).toEqual([
+      {
+        name: null,
+        acts: [
+          { name: 'Der Schrauber', time: null, live: false, note: null },
+          { name: 'Bloodygrave', time: null, live: false, note: null },
+        ],
+      },
+    ])
+    expect(draftToPrefill({ ...draft, lineup: [], description: null }, []).lineup).toEqual([])
   })
 
   it('fills the date without a time when the image has none', () => {

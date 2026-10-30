@@ -16,7 +16,16 @@ export interface MergeRow {
 
 type MergeEvent = Pick<
   EventDetail,
-  'title' | 'description' | 'starts_at' | 'start_time_known' | 'ends_at' | 'location_text' | 'categories' | 'links' | 'image_url'
+  | 'title'
+  | 'description'
+  | 'lineup'
+  | 'starts_at'
+  | 'start_time_known'
+  | 'ends_at'
+  | 'location_text'
+  | 'categories'
+  | 'links'
+  | 'image_url'
 > & { venue: { id: string } | null }
 
 const sameInstant = (a: string | null, b: string | null) => (a && b ? Date.parse(a) === Date.parse(b) : a === b)
@@ -39,6 +48,7 @@ export function mergeRows(event: MergeEvent, draft: IngestDraft): MergeRow[] {
   if (!samePlace) row('place', 'Place', !event.venue && !event.location_text)
   if (!sameSet(event.categories, draft.categories)) row('categories', 'Category', event.categories.length === 0)
   if (event.description.trim() !== draft.description.trim()) row('description', 'Description', !event.description.trim())
+  if (JSON.stringify(event.lineup) !== JSON.stringify(draft.lineup)) row('lineup', 'Lineup', event.lineup.length === 0)
   if (draft.image_url) row('image', 'Image', !event.image_url)
   for (const [key, url] of Object.entries(draft.links)) {
     if (event.links[key] !== url) row(`link:${key}`, linkLabel(key), !event.links[key])
