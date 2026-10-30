@@ -183,7 +183,11 @@ async function ingestEvent(
   const settled = item !== undefined && (item.status === 'rejected' || item.detachedAt !== null)
   // A source switched to lineup_from_text reads its unread items once, however old their text
   const lineupUnread =
-    config.lineup_from_text && !ev.lineup?.length && !settled && (item?.draft as { lineup_from_text?: boolean })?.lineup_from_text !== true
+    config.lineup_from_text &&
+    !ev.lineup?.length &&
+    ev.description.trim() !== '' &&
+    !settled &&
+    (item?.draft as { lineup_from_text?: boolean })?.lineup_from_text !== true
 
   // A draft stored before categories or lineups existed is read once more, so feed events get theirs
   // (an attached event takes the lineup, and the description without it, through the sync)
@@ -200,13 +204,18 @@ async function ingestEvent(
 
   const times = settled ? { extraction: null, failed: false } : await extractTimes(ev, config)
   const read = settled ? { lineup: null, failed: false } : await readLineup(ev, config)
-  const failed = times.failed || read.failed
   const normalized = normalizeFeedEvent(ev, config, times.extraction)
+  // A failed lineup read keeps the lineup the item had, so the rest still syncs without wiping it
+  const before = item ? ingestDraftSchema.safeParse(item.draft) : null
+  const lineup = read.lineup
+    ? { lineup: read.lineup, lineup_from_text: true }
+    : read.failed && before?.success
+      ? { lineup: before.data.lineup, lineup_from_text: before.data.lineup_from_text }
+      : {}
   // Checked before it is stored: an invalid draft fails the source instead of breaking the inbox later
-  const draft = ingestDraftSchema.parse(
-    read.lineup ? { ...normalized, lineup: read.lineup, lineup_from_text: true } : normalized,
-  )
-  const contentHash = failed ? null : ev.hash
+  const draft = ingestDraftSchema.parse({ ...normalized, ...lineup })
+  // Either failure is retried on the next run
+  const contentHash = times.failed || read.failed ? null : ev.hash
 
   if (!item) {
     await db.insert(ingestItems).values({
@@ -237,8 +246,9 @@ async function ingestEvent(
       .where(eq(ingestItems.id, item.id))
       .returning()
     // Pending items only get the new draft; rejected and detached ones stay as decided. Without a
-    // successful extraction the times are the feed's unverified ones: they wait for the next run.
-    if (!failed && current?.status === 'accepted' && current.eventId && !current.detachedAt) {
+    // successful extraction the times are the feed's unverified ones: they wait for the next run. (A failed
+    // lineup read does not hold the sync back: the draft kept the lineup it had.)
+    if (!times.failed && current?.status === 'accepted' && current.eventId && !current.detachedAt) {
       if (await syncEvent(tx, source, current.eventId, draft)) result.synced++
     }
     return current

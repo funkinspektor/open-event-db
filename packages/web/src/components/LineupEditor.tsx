@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { Lineup } from '@open-event-db/shared'
 import {
   TIME_INPUT_PATTERN,
@@ -28,6 +28,9 @@ export function LineupEditor({ value: groups, onChange, description }: Props) {
   const [paste, setPaste] = useState('')
   const [reading, setReading] = useState(false)
   const [readError, setReadError] = useState<string | null>(null)
+  // A read takes seconds: it merges into the rows as they are when it returns, not as they were at the click
+  const latest = useRef(groups)
+  latest.current = groups
 
   async function readFromDescription() {
     setReadError(null)
@@ -48,7 +51,7 @@ export function LineupEditor({ value: groups, onChange, description }: Props) {
         )
         return
       }
-      onChange(mergeReadLineup(groups, json.data.lineup))
+      onChange(mergeReadLineup(latest.current, json.data.lineup))
     } catch {
       setReadError('The lineup couldn’t be read. Try again or fill it in by hand.')
     } finally {

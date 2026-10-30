@@ -1106,6 +1106,10 @@ describe('runIngest (lineup from text)', () => {
     await run(source, fixture.replace(/DESCRIPTION:Persian Love[^\r]*\r\n(?: [^\r]*\r\n)*/, ''), NOW)
     expect(draftOf(await itemOf(source.id, PERSIAN))).toMatchObject({ lineup: [], lineup_from_text: false })
     expect(texts.some((t) => t.includes('SHAB SHOD'))).toBe(false)
+
+    // ... and an item without text is not re-written on every run because it has nothing to read
+    const again = await run(source, fixture.replace(/DESCRIPTION:Persian Love[^\r]*\r\n(?: [^\r]*\r\n)*/, ''), LATER)
+    expect(again.sources[0]).toMatchObject({ ok: true, updated: 0 })
   })
 
   it('keeps the lineup a page adapter delivered and does not read that text', async () => {
@@ -1158,7 +1162,7 @@ describe('runIngest (lineup from text)', () => {
     expect(again.sources[0]).toMatchObject({ ok: true, updated: 0 })
   })
 
-  it('keeps the event lineup when reading a changed text fails, and retries on the next run', async () => {
+  it('keeps the lineup it had when reading a changed text fails, still syncs the rest, and retries', async () => {
     stubReader()
     const source = await newSource(ON)
     await run(source, fixture, NOW)
@@ -1168,20 +1172,23 @@ describe('runIngest (lineup from text)', () => {
     stubReader(async () => {
       throw new ExtractionError('timeout', 'slow')
     })
-    const changed = fixture.replace('Dress up OPTIONAL', 'Dress up REQUIRED')
+    const changed = fixture
+      .replace('Dress up OPTIONAL', 'Dress up REQUIRED')
+      .replace('SUMMARY:Persian Love: SHAB SHOD', 'SUMMARY:Persian Love: SHAB SHOD (moved)')
     const failed = await run(source, changed, LATER)
-    expect(failed.sources[0]).toMatchObject({ ok: true, synced: 0 })
-    expect((await eventRow(event.id)).lineup).toEqual(milli)
+    expect(failed.sources[0]).toMatchObject({ ok: true, synced: 1 })
+    const synced = await eventRow(event.id)
+    expect(synced.title).toBe('Persian Love: SHAB SHOD (moved)')
+    expect(synced.lineup).toEqual(milli)
     const item = await itemOf(source.id, PERSIAN)
     expect(item.contentHash).toBeNull()
-    expect(draftOf(item).lineup_from_text).toBe(false)
+    expect(draftOf(item).lineup).toEqual(milli)
 
-    stubReader()
-    const retried = await run(source, changed, LATEST)
-    expect(retried.sources[0]).toMatchObject({ ok: true, synced: 1 })
-    const after = await eventRow(event.id)
-    expect(after.lineup).toEqual(milli)
-    expect(after.description).toContain('REQUIRED')
+    const texts = stubReader()
+    await run(source, changed, LATEST)
+    expect(texts).toHaveLength(1)
+    expect((await itemOf(source.id, PERSIAN)).contentHash).not.toBeNull()
+    expect((await eventRow(event.id)).lineup).toEqual(milli)
   })
 
   it('fails the source when lineup reading is not configured', async () => {
