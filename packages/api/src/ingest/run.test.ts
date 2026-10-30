@@ -975,6 +975,50 @@ describe('runIngest (Slaughterhouse page)', () => {
   })
 })
 
+describe('runIngest (Squarespace events)', () => {
+  const json = readFileSync(fileURLToPath(new URL('./fixtures/squarespace/8mmbar-program.json', import.meta.url)), 'utf8')
+  // Friday 2026-10-30, the day the fixture was saved
+  const SQ_NOW = new Date('2026-10-30T10:00:00Z')
+  const SQ_LATER = new Date('2026-10-30T16:00:00Z')
+  const CUTOUTS = '6ada114e1691ec78fbfe566e'
+
+  it('reads the collection, maps the bar to its venue and trusts its times', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `8MM Bar ${stamp}`, address: 'Schönhauser Allee 177B', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { '8MM Bar': venue!.id } }, '', 'squarespace')
+    const result = await run(source, json, SQ_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 9, created: 9 })
+    expect(stub.calls).toBe(0)
+    // The event's path, on the host of the source URL
+    const page = `https://${source.slug}.test/program/2026/11/2/8mm-live-cutouts-nyc`
+    expect((await itemOf(source.id, CUTOUTS)).draft).toMatchObject({
+      title: '8MM Live: CUTOUTS (NYC)',
+      starts_at: '2026-11-02T20:45:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: { website: page, tickets: 'https://www.eventim-light.com/de/a/5f002783c9f8d46492128f51/e/6ad8d1bcb8d9e60371d0dc9f' },
+      source_url: page,
+      times_unverified: false,
+    })
+  })
+
+  it('marks an event gone when it leaves the collection', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'squarespace')
+    await run(source, json, SQ_NOW)
+    const data = JSON.parse(json) as { upcoming: { id: string }[] }
+    data.upcoming = data.upcoming.filter((ev) => ev.id !== CUTOUTS)
+    const result = await run(source, JSON.stringify(data), SQ_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 8, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, CUTOUTS)).goneAt?.getTime()).toBe(SQ_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

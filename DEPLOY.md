@@ -175,6 +175,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source urbanspree "Urban Spree" 'https
 scripts/prod-db.sh pnpm db:cli ingest-add-source berghain "Berghain" 'https://www.berghain.berlin/de/program/' kellerkompass-import --kind berghain --config '{"venues":{"Berghain":"<venue id>","Panorama Bar":"<venue id>","Säule":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" 'https://www.berghain.berlin/de/program/kantine-am-berghain/' kellerkompass-import --kind berghain --config '{"venues":{"Kantine am Berghain":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source slaughterhouse "Slaughterhouse" 'https://slaughterhouse-berlin.de/konzerte/' kellerkompass-import --kind slaughterhouse --config '{"venues":{"Slaughterhouse":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source 8mm "8MM Bar" 'https://www.8mmbar.de/program?format=json&view=list' kellerkompass-import --kind squarespace --config '{"venues":{"8MM Bar":"<venue id>"}}' --venue <venue id>
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -187,6 +188,13 @@ The Slaughterhouse page (WordPress) writes its programme as plain paragraphs: a 
 ("Party: Factory", the kind goes to the description), the text, a rule. There are no event pages or ids, so
 the date is the id, as with the Dunckerclub; a second event on one day gets "-2". The start is "Beginn",
 else the doors.
+
+The `squarespace` kind reads any Squarespace events collection as JSON: the source URL is the collection
+page with `?format=json&view=list`, whose `upcoming` list holds every coming event (the calendar view holds
+one month and is refused). The id is Squarespace's own. A show time in the text ("Showtime: 20:45", "Shows
+start 20:00") replaces the event's time, as the 8MM Bar enters the doors; the one-hour end Squarespace gives
+every event is dropped. The room is the event's location title ("8MM Bar"). Tickets are the link on a
+"Tickets" line, else the first link to a known ticket shop.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one
