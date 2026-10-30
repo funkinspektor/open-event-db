@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import { EVENT_CATEGORIES, extractionSchema, type Extraction, type ExtractImageType } from '@open-event-db/shared'
 
 export interface ExtractImage {
@@ -126,11 +127,21 @@ export interface ChatMessage {
   content: string | Record<string, unknown>[]
 }
 
+export interface ScalewayJsonOptions<T> {
+  /** Names the model kind in error messages ("Vision model did not answer…"). */
+  label: string
+  schemaName: string
+  jsonSchema: object
+  parse: z.ZodType<T>
+  maxTokens?: number
+}
+
 /**
- * Scaleway Generative APIs (OpenAI-compatible chat completions) with structured output → validated
- * `Extraction`. `label` only names the model kind in error messages ("Vision model did not answer…").
+ * Scaleway Generative APIs (OpenAI-compatible chat completions) with structured output, validated
+ * against `opts.parse`. Failures are `ExtractionError`s of kind timeout, provider or invalid_output.
  */
-export async function callScaleway(config: ScalewayConfig, messages: ChatMessage[], label = 'Vision'): Promise<Extraction> {
+export async function callScalewayJson<T>(config: ScalewayConfig, messages: ChatMessage[], opts: ScalewayJsonOptions<T>): Promise<T> {
+  const { label } = opts
   const endpoint = `https://api.scaleway.ai/${config.projectId}/v1/chat/completions`
 
   let res: Response
@@ -142,10 +153,10 @@ export async function callScaleway(config: ScalewayConfig, messages: ChatMessage
       body: JSON.stringify({
         model: config.model,
         temperature: 0,
-        max_tokens: 2000,
+        max_tokens: opts.maxTokens ?? 2000,
         response_format: {
           type: 'json_schema',
-          json_schema: { name: 'event_extraction', strict: true, schema: EXTRACTION_JSON_SCHEMA },
+          json_schema: { name: opts.schemaName, strict: true, schema: opts.jsonSchema },
         },
         messages,
       }),
@@ -173,11 +184,22 @@ export async function callScaleway(config: ScalewayConfig, messages: ChatMessage
   } catch {
     throw new ExtractionError('invalid_output', `${label} model returned invalid JSON`)
   }
-  const result = extractionSchema.safeParse(parsed)
+  const result = opts.parse.safeParse(parsed)
   if (!result.success) {
     throw new ExtractionError('invalid_output', `${label} output failed validation: ${result.error.message.slice(0, 500)}`)
   }
   return result.data
+}
+
+/** Event extraction through `callScalewayJson`. `label` names the model kind in error messages. */
+export function callScaleway(config: ScalewayConfig, messages: ChatMessage[], label = 'Vision'): Promise<Extraction> {
+  return callScalewayJson(config, messages, {
+    label,
+    schemaName: 'event_extraction',
+    jsonSchema: EXTRACTION_JSON_SCHEMA,
+    parse: extractionSchema,
+    maxTokens: 2000,
+  })
 }
 
 /** Scaleway Generative APIs with image input. */
