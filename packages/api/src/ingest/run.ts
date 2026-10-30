@@ -15,8 +15,10 @@ import {
   type Extraction,
   type IngestDraft,
   type IngestSourceConfig,
+  type Lineup,
 } from '@open-event-db/shared'
 import { db } from '../db.js'
+import { lineupReading } from '../extract/lineup.js'
 import { textExtraction } from '../extract/text.js'
 import { ExtractionError } from '../extract/vision.js'
 import { berlinInstant, berlinToday, fmtDay, nextDay, type CalendarDay } from '../extract/normalize.js'
@@ -95,6 +97,22 @@ async function extractTimes(ev: FeedEvent, config: IngestSourceConfig): Promise<
 }
 
 /**
+ * The lineup from the description text, if the source asks for it and the adapter brought none. A failed
+ * call yields null, so the next run retries. Reading that is not configured at all fails the source.
+ */
+async function readLineup(ev: FeedEvent, config: IngestSourceConfig): Promise<{ lineup: Lineup | null; failed: boolean }> {
+  if (!config.lineup_from_text || ev.lineup?.length || !ev.description.trim()) return { lineup: null, failed: false }
+  try {
+    return { lineup: await lineupReading.reader.read(ev.description), failed: false }
+  } catch (err) {
+    if (err instanceof ExtractionError && err.kind === 'unavailable') {
+      throw new Error(`Source sets lineup_from_text, but lineup reading is unavailable: ${err.message}`)
+    }
+    return { lineup: null, failed: true }
+  }
+}
+
+/**
  * Copies the synced fields of a draft onto its accepted event and logs the change as an ingest edit.
  * Writes `events` directly: the event routes would detach the item. Returns whether anything changed.
  */
@@ -161,9 +179,15 @@ async function ingestEvent(
   now: Date,
   result: SourceRunResult,
 ): Promise<void> {
+  // Rejected and detached items never feed an event, so reading their text would only cost LLM calls
+  const settled = item !== undefined && (item.status === 'rejected' || item.detachedAt !== null)
+  // A source switched to lineup_from_text reads its unread items once, however old their text
+  const lineupUnread =
+    config.lineup_from_text && !ev.lineup?.length && !settled && (item?.draft as { lineup_from_text?: boolean })?.lineup_from_text !== true
+
   // A draft stored before categories or lineups existed is read once more, so feed events get theirs
   // (an attached event takes the lineup, and the description without it, through the sync)
-  if (item && item.contentHash === ev.hash && 'categories' in item.draft && 'lineup' in item.draft) {
+  if (item && item.contentHash === ev.hash && 'categories' in item.draft && 'lineup' in item.draft && !lineupUnread) {
     await db
       .update(ingestItems)
       .set({ lastSeenAt: now, ...reappeared(item) })
@@ -174,11 +198,14 @@ async function ingestEvent(
     return
   }
 
-  // Rejected and detached items never feed an event, so reading their times would only cost LLM calls
-  const settled = item !== undefined && (item.status === 'rejected' || item.detachedAt !== null)
-  const { extraction, failed } = settled ? { extraction: null, failed: false } : await extractTimes(ev, config)
+  const times = settled ? { extraction: null, failed: false } : await extractTimes(ev, config)
+  const read = settled ? { lineup: null, failed: false } : await readLineup(ev, config)
+  const failed = times.failed || read.failed
+  const normalized = normalizeFeedEvent(ev, config, times.extraction)
   // Checked before it is stored: an invalid draft fails the source instead of breaking the inbox later
-  const draft = ingestDraftSchema.parse(normalizeFeedEvent(ev, config, extraction))
+  const draft = ingestDraftSchema.parse(
+    read.lineup ? { ...normalized, lineup: read.lineup, lineup_from_text: true } : normalized,
+  )
   const contentHash = failed ? null : ev.hash
 
   if (!item) {
