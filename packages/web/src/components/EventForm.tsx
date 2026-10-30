@@ -8,7 +8,9 @@ import { toLocalInput, type ImportResult } from '@/lib/draft'
 import { dayKey } from '@/lib/format'
 import type { DuplicateDraft } from '@/lib/duplicates'
 import { imageSaveOutcome, savedParam, type ImageSaveOutcome } from '@/lib/image-save'
+import { fromLineupRows, toLineupRows, type LineupGroupRow } from '@/lib/lineup'
 import { EventImageInput, type ImageChange } from './EventImageInput'
+import { LineupEditor } from './LineupEditor'
 import { Markdown } from './Markdown'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { RecurrenceInput } from './RecurrenceInput'
@@ -75,6 +77,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
   const [locationText, setLocationText] = useState(event?.location_text ?? pre?.locationText ?? '')
   const [city, setCity] = useState(event?.city ?? pre?.city ?? 'Berlin')
   const [description, setDescription] = useState(event?.description ?? pre?.description ?? '')
+  const [lineup, setLineup] = useState<LineupGroupRow[]>(() => toLineupRows(event?.lineup ?? pre?.lineup ?? []))
   const [previewing, setPreviewing] = useState(false)
   const [categories, setCategories] = useState<EventCategory[]>(event?.categories ?? pre?.categories ?? [])
   const [tags, setTags] = useState<string[]>(event?.tags ?? pre?.tags ?? [])
@@ -125,6 +128,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
       starts_at: startTime ? fromLocalInput(startsAt) : startDate,
       ends_at: fromLocalInput(endsAt),
       description,
+      lineup: fromLineupRows(lineup),
       venue_id: venue?.id ?? null,
       location_text: venue ? null : locationText || null,
       categories,
@@ -274,12 +278,14 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={imported ? 8 : 5}
-              placeholder="What to expect, line-up, door policy, accessibility…"
+              placeholder="What to expect, door policy, accessibility…"
               className={'kk-input' + missing(!description.trim())}
             />
           )}
           <span className="kk-hint">**bold**, *italic*, [link](https://…), - lists. Pasted URLs become links, line breaks are kept.</span>
         </div>
+
+        <LineupEditor value={lineup} onChange={setLineup} />
 
         <div className="kk-field">
           <span id="event-category">

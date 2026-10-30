@@ -34,6 +34,20 @@ function Value({ row, side, item, event }: { row: MergeRow; side: MergeSide; ite
       const text = markdownToPlainText(feed ? draft.description : event.description)
       return text ? <div className="max-h-48 overflow-y-auto whitespace-pre-wrap">{text}</div> : <Empty />
     }
+    case 'lineup': {
+      const groups = feed ? draft.lineup : event.lineup
+      if (groups.length === 0) return <Empty />
+      return (
+        <div className="max-h-48 overflow-y-auto">
+          {groups.map((g, i) => (
+            <p key={i} className="m-0">
+              {g.name && <span className="font-bold">{g.name}: </span>}
+              {g.acts.map((a) => a.name).join(', ')}
+            </p>
+          ))}
+        </div>
+      )
+    }
     case 'times': {
       if (feed) {
         const when = `${formatDate(draft.starts_at)} ${formatTimeRange(draft.starts_at, draft.ends_at)}`
