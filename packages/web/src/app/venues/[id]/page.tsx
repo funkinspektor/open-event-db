@@ -93,6 +93,13 @@ export default async function VenuePage({ params }: { params: Params }) {
           {v.address} · {v.city}
         </p>
         <LinkButtons links={v.links} />
+        {me?.is_scout && (
+          <p className="kk-hint m-0 text-[14px]">
+            {v.feeds.length
+              ? `Feed: ${v.feeds.map((f) => f.name).join(', ')}`
+              : 'No feed carries this venue yet.'}
+          </p>
+        )}
       </header>
 
       <div className="flex flex-wrap items-start gap-12">

@@ -13,6 +13,7 @@ import {
   magicLinkTokens,
   publishers,
   sessions,
+  venues,
 } from './schema.js'
 import { generateApiKey } from './tokens.js'
 import { imageRemovalNotice } from './images.js'
@@ -21,12 +22,14 @@ const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oed
 const db = createDb(url)
 
 const rawArgv = process.argv.slice(2).filter((a, i) => !(i === 0 && a === "--"))
-// --config and --kind take the next argument as their value, so they are pulled out before the bare flags are sorted
+// --config, --kind and --venue take the next argument as their value, so they are pulled out before the bare flags are sorted
 const configAt = rawArgv.indexOf('--config')
 const configArg = configAt === -1 ? undefined : rawArgv[configAt + 1]
 const kindAt = rawArgv.indexOf('--kind')
 const kindArg = kindAt === -1 ? undefined : rawArgv[kindAt + 1]
-const valueAt = new Set([configAt, kindAt].filter((i) => i !== -1).flatMap((i) => [i, i + 1]))
+const venueAt = rawArgv.indexOf('--venue')
+const venueArg = venueAt === -1 ? undefined : rawArgv[venueAt + 1]
+const valueAt = new Set([configAt, kindAt, venueAt].filter((i) => i !== -1).flatMap((i) => [i, i + 1]))
 const argv = rawArgv.filter((_, i) => !valueAt.has(i))
 const flags = new Set(argv.filter((a) => a.startsWith('--')))
 const [cmd, ...args] = argv.filter((a) => !a.startsWith('--'))
@@ -40,9 +43,11 @@ function usage(): never {
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
-  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse] [--config '<json>'] [--unofficial]
+  pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse] [--config '<json>'] [--venue <venue_id>] [--unofficial]
                                                         Add a feed source (default: iCal) whose events a scout reviews;
+                                                        --venue for the venue whose program it carries,
                                                         --unofficial for an aggregator, not the venue's own site
+  pnpm db:cli ingest-set-venue <slug> <venue_id|none>   Link a feed source to the venue whose program it carries
   pnpm db:cli ingest-set-config <slug> --config '<json>'
                                                         Change a feed source's config: the given keys replace the stored ones
   pnpm db:cli ingest-list                               List feed sources: last run, last error, items per status
@@ -63,6 +68,14 @@ async function confirm(question: string): Promise<boolean> {
 function fail(message: string): never {
   console.error(message)
   process.exit(1)
+}
+
+/** The venue named by an id, or exits. */
+async function findVenue(id: string): Promise<{ id: string; name: string }> {
+  if (!isUuid(id)) fail(`Invalid venue id "${id}"`)
+  const [venue] = await db.select({ id: venues.id, name: venues.name }).from(venues).where(eq(venues.id, id)).limit(1)
+  if (!venue) fail(`No venue with id "${id}"`)
+  return venue
 }
 
 /** --config as JSON, checked against the source config schema (defaults filled) but returned as given. */
@@ -312,6 +325,8 @@ switch (cmd) {
     }
 
     const config = configArg === undefined ? {} : parseConfig(configArg)
+    if (venueAt !== -1 && venueArg === undefined) fail('--venue needs a venue id')
+    const venue = venueArg === undefined ? undefined : await findVenue(venueArg)
 
     const [scout] = await db
       .select({ id: publishers.id, isScout: publishers.isScout })
@@ -327,8 +342,31 @@ switch (cmd) {
     const official = !flags.has('--unofficial')
     await db
       .insert(ingestSources)
-      .values({ slug, name, kind: kind as (typeof kinds)[number], url: feedUrl, publisherId: scout.id, config, official })
+      .values({
+        slug,
+        name,
+        kind: kind as (typeof kinds)[number],
+        url: feedUrl,
+        publisherId: scout.id,
+        config,
+        official,
+        venueId: venue?.id,
+      })
     console.log(`Added ${official ? 'official' : 'unofficial'} source ${slug} (${name}); edits are attributed to ${scoutSlug}`)
+    if (venue) console.log(`  venue: ${venue.name}`)
+    break
+  }
+  case 'ingest-set-venue': {
+    const [slug, venueId] = args
+    if (!slug || !venueId) usage()
+    const venue = venueId === 'none' ? null : await findVenue(venueId)
+    const [s] = await db
+      .update(ingestSources)
+      .set({ venueId: venue?.id ?? null, updatedAt: new Date() })
+      .where(eq(ingestSources.slug, slug))
+      .returning({ slug: ingestSources.slug })
+    if (!s) fail(`No source with slug "${slug}"`)
+    console.log(venue ? `Source ${s.slug} carries the program of ${venue.name}` : `Source ${s.slug} has no venue now`)
     break
   }
   case 'ingest-set-config': {
@@ -342,7 +380,11 @@ switch (cmd) {
     break
   }
   case 'ingest-list': {
-    const sources = await db.select().from(ingestSources).orderBy(ingestSources.slug)
+    const sources = await db
+      .select({ s: ingestSources, venue: venues.name })
+      .from(ingestSources)
+      .leftJoin(venues, eq(venues.id, ingestSources.venueId))
+      .orderBy(ingestSources.slug)
     if (!sources.length) {
       console.log('No feed sources yet. Add one with ingest-add-source.')
       break
@@ -351,10 +393,11 @@ switch (cmd) {
       .select({ sourceId: ingestItems.sourceId, status: ingestItems.status, count: sql<number>`count(*)::int` })
       .from(ingestItems)
       .groupBy(ingestItems.sourceId, ingestItems.status)
-    for (const s of sources) {
+    for (const { s, venue } of sources) {
       const byStatus = new Map(counts.filter((c) => c.sourceId === s.id).map((c) => [c.status, c.count]))
       const items = (['pending', 'accepted', 'rejected'] as const).map((st) => `${st} ${byStatus.get(st) ?? 0}`).join(', ')
       console.log(`${s.slug}  ${s.kind}  ${s.enabled ? 'enabled' : 'disabled'}  ${s.official ? 'official' : 'unofficial'}  "${s.name}"`)
+      console.log(`  venue:      ${venue ?? '-'}`)
       console.log(`  last run:   ${s.lastRunAt ? s.lastRunAt.toISOString() : 'never'}`)
       console.log(`  last error: ${s.lastError ?? '-'}`)
       console.log(`  items:      ${items}`)

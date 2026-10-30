@@ -6,6 +6,8 @@ import { coordinatesSchema } from './events.js'
 export const venueListQuerySchema = cursorQuerySchema.extend({
   city: z.string().min(1).optional(),
   q: z.string().min(1).optional(),
+  /** `none`: only venues no enabled feed source carries; `any`: only venues one does. */
+  feed: z.enum(['none', 'any']).optional(),
 })
 
 export type VenueListQuery = z.infer<typeof venueListQuerySchema>
@@ -17,6 +19,8 @@ export const venueSchema = z.object({
   city: z.string(),
   coordinates: coordinatesSchema.nullable(),
   links: linksSchema,
+  /** Enabled feed sources that carry this venue's program. */
+  feeds: z.array(z.object({ slug: z.string(), name: z.string() })),
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
 })

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import { and, asc, eq, gt, ilike, or, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, ilike, inArray, not, or, sql } from 'drizzle-orm'
 import { venueCreateSchema, venueListQuerySchema, venueUpdateSchema } from '@open-event-db/shared'
-import { events, venues, type Venue as VenueRow } from '@open-event-db/db'
+import { events, ingestSources, venues, type Venue as VenueRow } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { notFound } from '../errors.js'
@@ -17,7 +17,34 @@ interface VenueCursor extends Record<string, string> {
 
 const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
 
-function serializeVenue(v: VenueRow) {
+interface VenueFeed {
+  slug: string
+  name: string
+}
+
+// A source carries a venue when it is linked to it or maps one of its feed locations to it
+const carriesVenue = sql`(
+  ${ingestSources.venueId} = ${venues.id}
+  OR EXISTS (SELECT 1 FROM jsonb_each_text(${ingestSources.config} -> 'venues') m WHERE m.value = ${venues.id}::text)
+)`
+
+const hasFeed = sql`EXISTS (SELECT 1 FROM ${ingestSources} WHERE ${ingestSources.enabled} AND ${carriesVenue})`
+
+/** The enabled feed sources carrying each of the given venues, by venue id. */
+async function feedsOf(venueIds: string[]): Promise<Map<string, VenueFeed[]>> {
+  const byVenue = new Map<string, VenueFeed[]>()
+  if (venueIds.length === 0) return byVenue
+  const rows = await db
+    .select({ venueId: venues.id, slug: ingestSources.slug, name: ingestSources.name })
+    .from(venues)
+    .innerJoin(ingestSources, and(eq(ingestSources.enabled, true), carriesVenue))
+    .where(inArray(venues.id, venueIds))
+    .orderBy(asc(ingestSources.slug))
+  for (const { venueId, ...feed } of rows) byVenue.set(venueId, [...(byVenue.get(venueId) ?? []), feed])
+  return byVenue
+}
+
+function serializeVenue(v: VenueRow, feeds: VenueFeed[] = []) {
   return {
     id: v.id,
     name: v.name,
@@ -25,6 +52,7 @@ function serializeVenue(v: VenueRow) {
     city: v.city,
     coordinates: serializeCoordinates(v.coordinates),
     links: v.links,
+    feeds,
     created_at: v.createdAt.toISOString(),
     updated_at: v.updatedAt.toISOString(),
   }
@@ -42,12 +70,14 @@ function venueSnapshot(v: VenueRow): Record<string, unknown> {
 
 export async function venueRoutes(app: FastifyInstance) {
   app.get('/venues', async (req) => {
-    const { limit, cursor, city, q } = venueListQuerySchema.parse(req.query)
+    const { limit, cursor, city, q, feed } = venueListQuerySchema.parse(req.query)
     const decoded = cursor ? decodeCursor<VenueCursor>(cursor) : null
 
     const conditions = []
     if (city) conditions.push(eq(venues.city, city))
     if (q) conditions.push(ilike(venues.name, `%${q}%`))
+    if (feed === 'any') conditions.push(hasFeed)
+    if (feed === 'none') conditions.push(not(hasFeed))
     if (decoded) {
       conditions.push(
         or(
@@ -70,8 +100,9 @@ export async function venueRoutes(app: FastifyInstance) {
     const nextCursor =
       hasMore && last ? encodeCursor({ name: last.name, id: last.id }) : null
 
+    const feeds = await feedsOf(page.map((v) => v.id))
     return {
-      data: page.map(serializeVenue),
+      data: page.map((v) => serializeVenue(v, feeds.get(v.id))),
       meta: { cursor: nextCursor, has_more: hasMore },
     }
   })
@@ -82,23 +113,26 @@ export async function venueRoutes(app: FastifyInstance) {
     const [venue] = await db.select().from(venues).where(eq(venues.id, id)).limit(1)
     if (!venue) throw notFound('Venue not found')
 
-    const upcoming = await db
-      .select(slimEventColumns)
-      .from(events)
-      .leftJoin(venues, eq(events.venueId, venues.id))
-      .where(
-        and(
-          eq(events.venueId, id),
-          sql`${events.status} IN ('scheduled','postponed')`,
-          sql`${events.startsAt} >= now()`,
-        ),
-      )
-      .orderBy(asc(events.startsAt), asc(events.id))
-      .limit(20)
+    const [upcoming, feeds] = await Promise.all([
+      db
+        .select(slimEventColumns)
+        .from(events)
+        .leftJoin(venues, eq(events.venueId, venues.id))
+        .where(
+          and(
+            eq(events.venueId, id),
+            sql`${events.status} IN ('scheduled','postponed')`,
+            sql`${events.startsAt} >= now()`,
+          ),
+        )
+        .orderBy(asc(events.startsAt), asc(events.id))
+        .limit(20),
+      feedsOf([id]),
+    ])
 
     return {
       data: {
-        ...serializeVenue(venue),
+        ...serializeVenue(venue, feeds.get(id)),
         upcoming_events: upcoming.map(serializeSlimEvent),
       },
     }
@@ -149,7 +183,10 @@ export async function venueRoutes(app: FastifyInstance) {
     if (body.coordinates !== undefined) {
       patch.coordinates = [body.coordinates.lng, body.coordinates.lat]
     }
-    if (Object.keys(patch).length === 0) return { data: serializeVenue(current) }
+    if (Object.keys(patch).length === 0) {
+      const feeds = await feedsOf([current.id])
+      return { data: serializeVenue(current, feeds.get(current.id)) }
+    }
 
     const updated = await db.transaction(async (tx) => {
       const [v] = await tx
@@ -168,6 +205,7 @@ export async function venueRoutes(app: FastifyInstance) {
       return v
     })
 
-    return { data: serializeVenue(updated) }
+    const feeds = await feedsOf([updated.id])
+    return { data: serializeVenue(updated, feeds.get(updated.id)) }
   })
 }

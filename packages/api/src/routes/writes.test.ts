@@ -8,6 +8,7 @@ import {
   eventOwners,
   events,
   generateApiKey,
+  ingestSources,
   publishers,
   venues,
   type Publisher,
@@ -279,6 +280,46 @@ describe('venues write flow', () => {
     })
     expect(edited.statusCode).toBe(200)
     expect(edited.json().data.address).toBe('3 Test St')
+  })
+
+  it('lists the feeds that carry a venue and filters venues by having one', async () => {
+    const made = await db
+      .insert(venues)
+      .values(
+        ['Linked', 'Mapped', 'Disabled', 'Bare'].map((n) => ({ name: `Feed ${n} ${stamp}`, address: '1 Test St', city: 'Testcity' })),
+      )
+      .returning()
+    const [linked, mapped, disabled, bare] = made as [Venue, Venue, Venue, Venue]
+    const source = { kind: 'ical' as const, url: 'https://feed.test/feed.ics', publisherId: scout.id }
+    await db.insert(ingestSources).values([
+      { ...source, slug: `feed-linked-${stamp}`, name: 'Linked feed', venueId: linked.id },
+      { ...source, slug: `feed-mapped-${stamp}`, name: 'Mapped feed', config: { venues: { 'Room 1': mapped.id } } },
+      { ...source, slug: `feed-off-${stamp}`, name: 'Disabled feed', venueId: disabled.id, enabled: false },
+    ])
+    try {
+      const list = async (feed?: string) => {
+        const qs = new URLSearchParams({ q: `${stamp}`, ...(feed ? { feed } : {}) })
+        const res = await app.inject({ method: 'GET', url: `/api/v1/venues?${qs}` })
+        expect(res.statusCode).toBe(200)
+        return res.json().data as { id: string; feeds: { slug: string; name: string }[] }[]
+      }
+      const all = await list()
+      expect(all.find((v) => v.id === linked.id)?.feeds).toEqual([{ slug: `feed-linked-${stamp}`, name: 'Linked feed' }])
+      expect(all.find((v) => v.id === mapped.id)?.feeds).toEqual([{ slug: `feed-mapped-${stamp}`, name: 'Mapped feed' }])
+      expect(all.find((v) => v.id === disabled.id)?.feeds).toEqual([])
+
+      const none = (await list('none')).map((v) => v.id)
+      expect(none).toEqual(expect.arrayContaining([disabled.id, bare.id]))
+      expect(none).not.toContain(linked.id)
+      expect(none).not.toContain(mapped.id)
+      expect((await list('any')).map((v) => v.id).sort()).toEqual([linked.id, mapped.id].sort())
+
+      const detail = await app.inject({ method: 'GET', url: `/api/v1/venues/${linked.id}` })
+      expect(detail.json().data.feeds).toEqual([{ slug: `feed-linked-${stamp}`, name: 'Linked feed' }])
+    } finally {
+      await db.delete(ingestSources).where(eq(ingestSources.publisherId, scout.id))
+      await db.delete(venues).where(inArray(venues.id, made.map((v) => v.id)))
+    }
   })
 })
 

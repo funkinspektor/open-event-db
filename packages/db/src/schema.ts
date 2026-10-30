@@ -179,6 +179,8 @@ export const ingestSources = pgTable('ingest_sources', {
     .notNull()
     .references(() => publishers.id, { onDelete: 'restrict' }),
   config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  /** The venue whose program this feed carries; null for aggregators and organizers that play many venues. */
+  venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
   /** The venue's or organizer's own site: an event it lists counts as confirmed by the venue. False for aggregators. */
   official: boolean('official').notNull().default(true),
   enabled: boolean('enabled').notNull().default(true),
