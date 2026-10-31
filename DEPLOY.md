@@ -177,6 +177,8 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" '
 scripts/prod-db.sh pnpm db:cli ingest-add-source slaughterhouse "Slaughterhouse" 'https://slaughterhouse-berlin.de/konzerte/' kellerkompass-import --kind slaughterhouse --config '{"venues":{"Slaughterhouse":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source 8mm "8MM Bar" 'https://www.8mmbar.de/program?format=json&view=list' kellerkompass-import --kind squarespace --config '{"venues":{"8MM Bar":"<venue id>"}}' --venue <venue id>
 scripts/prod-db.sh pnpm db:cli ingest-add-source schokoladen "Schokoladen" 'https://www.schokoladen-mitte.de/' kellerkompass-import --kind schokoladen --config '{"lineup_from_text":true,"venues":{"Schokoladen":"<venue id>"}}' --venue <venue id>
+scripts/prod-db.sh pnpm db:cli ingest-add-source festsaal "Festsaal Kreuzberg" 'https://admin.festsaal-kreuzberg.de/api/v2/pages/?type=home.EventPage&locale=de&limit=500&fields=sub_title,date,doors,start,changed_date,changed_doors,changed_start,changed_text,status,new_location,location,ticket,age,support,layouts,preview_image(download_url_medium)' kellerkompass-import --kind festsaal --venue <venue id> --config '{"lineup_from_text":true,"venues":{"Festsaal":"<venue id>","Kaminzimmer":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source lido "Lido" 'https://www.lido-berlin.de/' kellerkompass-import --kind lido --venue <venue id> --config '{"lineup_from_text":true,"venues":{"Lido":"<venue id>"}}'
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -203,6 +205,20 @@ from the calendar JSON (`/calendar`), matched by day and title. A series (karaok
 for all its dates, so its id carries the date ("10-2026-11-01"). The start is the show time in the "Time"
 facts ("doors 19:00 - show 20:00", "Einlass 19h Beginn 20h"), else the listed time, the doors. Category,
 promoter, subtitle and the facts open the description. A run is nine requests, about four seconds.
+
+The Festsaal Kreuzberg site reads its programme from a Wagtail API, and so does the source: one request
+returns every event page with the fields named in the URL (the source fails with "raise limit=" when the
+listing is cut off, and names a missing field). The page id is the external id. Statuses are read the way the
+site shows them: a moved show at its new date (the API lists it twice), a transferred one at `new_location`,
+a "custom" note's "findet im … statt" as its venue, cancelled shows and ones without a new date left out.
+Notes on pages without a status are stale copies and ignored. Shows elsewhere (SO36, Bi Nuu, Urania) keep the
+venue's name as location text unless `venues` maps it. Images are the 1450 px renditions the URL asks for.
+
+The Lido home page lists every upcoming event; texts, ticket links and flyers are on the event pages, fetched
+one by one (about 20 seconds for 90 events). The site answers in English or German at random, so the adapter
+reads both and keeps translated labels out of the change hash. The start is "Start", the doors go into the
+description; 23:59 is the placeholder time of club nights and stays "times unverified". A concert moved to a
+bigger venue ("HOCHVERLEGT INS KESSELHAUS") is placed there; cancelled and postponed ones are left out.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one

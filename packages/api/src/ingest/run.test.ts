@@ -1070,6 +1070,97 @@ describe('runIngest (Schokoladen programme)', () => {
   })
 })
 
+describe('runIngest (Festsaal Kreuzberg API)', () => {
+  const listing = readFileSync(fileURLToPath(new URL('./fixtures/festsaal/events.json', import.meta.url)), 'utf8')
+  // Saturday 2026-10-31, the day the fixture was saved
+  const FS_NOW = new Date('2026-10-31T11:00:00Z')
+  const FS_LATER = new Date('2026-10-31T16:00:00Z')
+
+  it('reads the event pages, maps the rooms to venues and keeps shows elsewhere as text', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Festsaal Kreuzberg ${stamp}`, address: 'Am Flutgraben 2', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Festsaal: venue!.id, Kaminzimmer: venue!.id } }, '', 'festsaal')
+    const result = await run(source, listing, FS_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 15, created: 15 })
+    expect(stub.calls).toBe(0)
+    expect((await itemOf(source.id, '734')).draft).toMatchObject({
+      title: 'Gloryhammer',
+      starts_at: '2026-11-03T19:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: {
+        website: 'https://festsaal-kreuzberg.de/de/programm/Gloryhammer/',
+        tickets: 'https://landstreicher-konzerte.de/konzerte/gloryhammer-b-26',
+      },
+      times_unverified: false,
+    })
+    expect((await itemOf(source.id, '906')).draft).toMatchObject({ venue_id: venue!.id })
+    expect((await itemOf(source.id, '693')).draft).toMatchObject({ venue_id: null, location_text: 'Bi Nuu' })
+  })
+
+  it('marks a show gone when it is cancelled', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'festsaal')
+    await run(source, listing, FS_NOW)
+    const pages = JSON.parse(listing) as { items: { id: number; status: string | null }[] }
+    pages.items.find((p) => p.id === 734)!.status = 'cancelled'
+    const cancelled = JSON.stringify(pages)
+    const result = await run(source, cancelled, FS_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 14, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, '734')).goneAt?.getTime()).toBe(FS_LATER.getTime())
+  })
+})
+
+describe('runIngest (Lido programme)', () => {
+  const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`./fixtures/lido/${name}.html`, import.meta.url)), 'utf8')
+  // Saturday 2026-10-31, the day the fixtures were saved
+  const LI_NOW = new Date('2026-10-31T11:00:00Z')
+  const LI_LATER = new Date('2026-10-31T16:00:00Z')
+  const SPENCER = '2026-11-01-hi--spencer'
+
+  /** The programme at the source URL, the event fixtures at the URLs its cards link to. */
+  const site = (source: IngestSource, listing: string) => async (url: string) =>
+    url.startsWith(`https://${source.slug}.test/events/`) ? fixture(url.split('/events/')[1]!) : listing
+
+  it('reads the programme and the event pages and maps the club to its venue', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db.insert(venues).values({ name: `Lido ${stamp}`, address: 'Cuvrystraße 7', city: 'Berlin' }).returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Lido: venue!.id } }, '', 'lido')
+    const result = await runIngest({ only: source.slug, now: LI_NOW, fetchText: site(source, fixture('program')) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 6, created: 6 })
+    expect(stub.calls).toBe(0)
+    const url = `https://${source.slug}.test/events/${SPENCER}`
+    expect((await itemOf(source.id, SPENCER)).draft).toMatchObject({
+      title: 'Hi! Spencer',
+      starts_at: '2026-11-01T20:00:00+01:00',
+      venue_id: venue!.id,
+      location_text: null,
+      links: { website: url, tickets: 'https://www.eventim.de/artist/hi-spencer/' },
+      source_url: url,
+      times_unverified: false,
+    })
+    expect((await itemOf(source.id, '2026-12-09-oathbreaker')).draft).toMatchObject({ venue_id: null, location_text: 'Kesselhaus' })
+  })
+
+  it('marks an event gone when it leaves the programme', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'lido')
+    const listing = fixture('program')
+    await runIngest({ only: source.slug, now: LI_NOW, fetchText: site(source, listing) })
+    const without = listing.replace(/<article class="event-ticket[^>]*data-realdate="2026-11-01[\s\S]*?<\/article>/, '')
+    expect(without).not.toBe(listing)
+    const result = await runIngest({ only: source.slug, now: LI_LATER, fetchText: site(source, without) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 5, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, SPENCER)).goneAt?.getTime()).toBe(LI_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])
