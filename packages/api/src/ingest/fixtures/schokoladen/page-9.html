@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="de">
+    <head>
+        <title>Schokoladen Events</title>
+        <meta charset="utf-8">
+        <meta name="csrf-token" content="6XsQVPfTQcE64RdoA1bJ9sCATWIMAdOGAztY3xTd">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta http-equiv="expires" content="3600" />
+        <meta http-equiv="cache-control" content="max-age=3600">
+        <link rel="icon" href="/favicons/favicon.ico" type="image/x-icon">
+        <link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+        <link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
+        <link rel="icon" type="image/png" href="/favicons/favicon-96x96.png" sizes="96x96">
+        <meta name="robots" content="index, follow" />
+        <meta name="description" content="Schokoladen-Mitte Berlin" />
+        <meta name="keywords" content="Schokoladen,Berlin,Musik,Musik Cafe,Kneipe,Kultur,Szene,Subkultur,Konzerte,Livemusik,live music,Veranstaltungs-Kneipe,Veranstaltungen,Lesung,alternativ" />
+        <meta http-equiv="imagetoolbar" content="no" />
+        <link rel="preconnect" href="https://www.schokoladen-mitte.de">
+        <link rel="preload" as="font">
+        <link type="text/css" rel="stylesheet" href="/css/dark.css?1793446324" />
+        <link type="text/css" rel="stylesheet" href="/fonts/nohemi/nohemi.css" media="screen" />
+        <link type="text/css" rel="stylesheet" href="/fonts/nohemi/nohemi.css" media="screen" />
+        <script src="/js/app.js?1793446324" type="text/javascript" charset="utf-8"></script>
+            <link rel="stylesheet" href="/vendor/calendar@2/zabuto_calendar.min.css">
+    <script src="/vendor/calendar@2/zabuto_calendar.min.js"></script>
+    </head>
+    <body class="page-Events color-theme -month-october">
+
+    
+    <div class="header fixed-top">
+                    <div id="top-navigation" class="container">
+    <nav class="navbar navbar-expand-lg">
+        <a class="navbar-brand blog-header-logo text-decoration-none" href="/">
+            <img src="https://www.schokoladen-mitte.de/img/schokoladen-logo-spitting-cow-01.svg" height="90" alt="Schokoladen">
+        </a>
+        <a class="px-md-4" href="/"><h1 class="m-0 text-uppercase">Schokoladen</h1></a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNavbar" aria-controls="topNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse justify-content-end" id="topNavbar">
+            <ul class="navbar-nav pt-5 pb-4 pt-lg-2 pb-lg-0">
+                <a class="nav-link calendar-link" data-bs-toggle="offcanvas" href="#offcanvasCalendar" role="button" aria-controls="offcanvasCalendar">Calendar</a>
+                                                            <a class="nav-link" href="https://schokoladen.tickettoaster.de/produkte"  target="_blank"  aria-haspopup="false">Tickets<span class="ms-2 sr-only">(current)</span></a>
+                                                                                <a class="nav-link" href="/static/map"  aria-haspopup="false">Contact<span class="ms-2 sr-only">(current)</span></a>
+                                                                                <a class="nav-link" href="/contact/message/create"  aria-haspopup="false">Booking<span class="ms-2 sr-only">(current)</span></a>
+                                                                                <a class="nav-link" href="https://schokoladen-mitte.us1.list-manage.com/subscribe?u=d9c8c7bd984ea0cf66c4016ad&amp;id=dd3662eab9"  target="_blank"  aria-haspopup="false">Newsletter<span class="ms-2 sr-only">(current)</span></a>
+                                                </ul>
+        </div>
+    </nav>
+</div>
+<img class="header-separator" src="/img/line-005.svg" />
+                    </div>
+
+    <div class="main">
+                    <h5 class="w-100 text-center mt-5 mbs">Sorry, keine Daten vorhanden</h5>
+        <div id="eventModal" class="modal fade" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<div class="modal-title" id="eventModalLabel">
+					<div class="row">
+						<div class="col-3 text-nowrap text-info eventDate"></div>
+						<div class="col-auto"><h6 class="promoter d-none"></h6></div>
+					</div>
+				</div>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div><h6 class="title"></h6></div>
+				<div class="body"></div>
+				<div class="dj d-none"></div>
+			</div>
+		</div>
+	</div>
+</div>    </div>
+
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasCalendar" aria-labelledby="offcanvasCalendarLabel">
+        <div class="offcanvas-header">
+            <h4 class="offcanvas-title" id="offcanvasCalendarLabel">Event Kalender</h4>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <div class="footer row">
+                    <div id="bottom-navigation">
+    <nav class="navbar fixed-bottom navbar-expand navbar-dark bg-black py-1 px-2 px-lg-4">
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#bottomNavbar" aria-controls="bottomNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse m-0" id="bottomNavbar">
+            <ul class="navbar-nav align-items-center me-auto p-0">
+                                <li class="nav-item p-0 m-0 ">
+                                            <a class="nav-link" href="https://www.instagram.com/schokoladen.bln/" aria-haspopup="false"  target="_blank" >
+                                                            <i class="icn fa-brands fa-instagram" title="Instagram"></i>
+                                                    </a>
+                                    </li>
+                                <li class="nav-item p-0 m-0 ">
+                                            <a class="nav-link" href="https://www.facebook.com/Schokoladen-189587901135862" aria-haspopup="false"  target="_blank" >
+                                                            <i class="icn fa-brands fa-facebook" title="Facebook"></i>
+                                                    </a>
+                                    </li>
+                                <li class="nav-item p-0 m-0 ">
+                                            <a class="nav-link" href="https://t.me/schokoladen_bln" aria-haspopup="false"  target="_blank" >
+                                                            <i class="icn fa-brands fa-telegram" title="Telegram"></i>
+                                                    </a>
+                                    </li>
+                                <li class="nav-item p-0 m-0 ">
+                                            <a class="nav-link" href="/page/impressum" aria-haspopup="false" >
+                                                            Impressum<span class="ms-2 sr-only">(current)</span>
+                                                    </a>
+                                    </li>
+                                <li class="nav-item p-0 m-0 ">
+                                            <a class="nav-link" href="/page/datenschutz" aria-haspopup="false" >
+                                                            Datenschutz<span class="ms-2 sr-only">(current)</span>
+                                                    </a>
+                                    </li>
+                            </ul>
+            <span class="d-none d-sm-block navbar-text">Ackerstraße 169, 10115 Berlin-Mitte</span>
+        </div>
+    </nav>
+</div>
+                    </div>
+
+    <script>
+    $(function($) {
+        var scrollDelay = 0,
+            history = [],
+            firstLoad = true;
+/*
+		function logDescription(){
+			$(".collapse", ".eventContainer").each((k,el) => {
+				console.info(el.id, $(el).find(".description").is(":visible"));
+            });
+        }
+*/
+		function removeAllDescription() {
+			$(".collapse .description", ".eventContainer").find().each(() => $(this).html(""));
+        }
+		function loadDescription(domId, date) {
+			removeAllDescription();
+			$("#" + domId + " .description", ".eventContent").load("/api/eventDescriptionByDate/" + date);
+        }
+        $([document.documentElement, document.body]).animate({
+            scrollTop: 0
+        }, 0);
+    $(document)
+        .ajaxStart(function() {
+            $(".collapse").unbind('show.bs.collapse');
+        })
+        .ajaxStop(function() {
+            firstLoad = false;
+            if(firstLoad) {
+                const $first = $('.collapse:first', '.eventContainer'),
+                    $btn = $first.prev('.collapseToggle').find('.btn-toggle')
+                        .removeClass('off')
+                        .addClass('on')
+                        .html("close")
+                ;
+
+                history.push($btn);
+
+                $first.collapse('show');
+
+                $first.on('shown.bs.collapse', function() {
+                    loadDescription($first.attr('id'), $first.data("event-date"));
+                    var $carousel = $('.carousel', this);
+                    if($carousel.length) {
+                        $carousel.carousel("cycle");
+                    }
+                });
+                firstLoad = false;
+            }
+
+            $('.btn-toggle', '.eventContainer').click((e) => {
+                const $btn = $(e.target);
+
+                history.push($btn)
+                if($btn.hasClass('on')) {
+                    //$btn.removeClass('on').addClass('off').html('open');
+                    $btn.removeClass('on').addClass('off');
+                } else {
+                    //$btn.removeClass('off').addClass('on').html('close');
+                    $btn.removeClass('off').addClass('on');
+                }
+                if(history.length > 1) {
+                    let $last = $(history.shift()),
+                        $other = $last
+                            .parent('.eventHeader')
+                            .parent('.collapseToggle')
+                            .next('.collapse')
+                            .closest('.event')
+                            .find('.show');
+
+                    $other.collapse('hide');
+                    $last.removeClass('on').addClass('off')
+                }
+            });
+
+            $('.collapse', '.eventContainer')
+                .on('shown.bs.collapse', () => {
+                    const my = this, $my = $(my),
+                        $header = $(my).prev('.collapseToggle'),
+                        //top = parseInt($header.offset().top - 70, 10),
+                        top = parseInt($header.offset().top - 125, 10),
+                        $carousel = $('.carousel', my);
+
+                    //$header.find('.btn-toggle').removeClass('off').addClass('on').html('close');
+                    $header.find('.btn-toggle').removeClass('off').addClass('on');
+                    loadDescription($my.attr('id'), $my.data("event-date"));
+
+                    $([document.documentElement, document.body]).animate({
+                        scrollTop: top
+                    }, scrollDelay);
+
+                    if($carousel.length) {
+                        $carousel.carousel("cycle");
+                    }
+                })
+                .on('show.bs.collapse', () => {
+                    const my = this, $my = $(my),
+                    $other = $(my).closest('.event').siblings().find('.show');
+                    //$(my).prev('.collapseToggle').find('.btn-toggle').removeClass('off').addClass('on').html('close');
+                    $(my).prev('.collapseToggle').find('.btn-toggle').removeClass('off').addClass('on');
+                    loadDescription($my.attr('id'), $my.data("event-date"));
+
+                    $other.collapse('hide');
+                })
+                .on('hide.bs.collapse', () => {
+                    const my = this,
+                        $carousel = $('.carousel', my);
+
+                    //$(my).prev('.collapseToggle').find('.btn-toggle').removeClass('on').addClass('off').html('open');
+                    $(my).prev('.collapseToggle').find('.btn-toggle').removeClass('on').addClass('off');
+                    removeAllDescription();
+                    if($carousel.length) {
+                        $carousel.carousel("dispose");
+                    }
+                    console.clear()
+                })
+            ;
+    });
+});
+    /*document.querySelectorAll('.event').forEach(el => {
+        el.addEventListener('mouseover', e => {
+            el.lastElementChild.classList.add('show');
+        });
+        el.addEventListener('mouseleave', e => {
+            el.lastElementChild.classList.remove('show');
+        });
+    });*/
+
+    $(document).ready(() => {
+        $("#calendar").zabuto_calendar({
+            language: 'de',
+            show_previous: false,
+            show_next: 6,
+            cell_border: false,
+            today: true,
+            show_days: true,
+            weekstartson: 1,
+            nav_icon: {
+                prev: '<ion-icon name="caret-back-circle-outline"></ion-icon>',
+                next: '<ion-icon name="caret-forward-circle-outline"></ion-icon>'
+            },
+            ajax: {
+                url: "/calendar",
+                modal: true,
+            },
+            legend: false, // object array, [{type: string, label: string, classname: string}]
+        });
+
+        let modal = document.getElementById('eventModal'), $modal = $(modal);
+
+        $modal.on('show.bs.modal', e => {
+            let $trigger = $(e.relatedTarget),
+                    id = $trigger.data('eventId');
+
+            $.getJSON('/api/event/' + id, resp => {
+                $modal.find('.eventDate').text(moment(resp.date).format('dddd DD.MM.YYYY') + ' ' + resp.time)
+                $modal.find('.title').text(resp.title)
+                $modal.find('.body').html(resp.description)
+                if(resp.promoter) {
+                    $modal.find('.promoter').removeClass('d-none').text(resp.promoter)
+                }
+                if(resp.dj) {
+                    $modal.find('.dj').removeClass('d-none').text(resp.dj)
+                }
+            })
+        });
+    })
+</script>
+
+            <!-- Matomo -->
+<script type="text/javascript">
+    var _paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {
+        var u="//stats.cryptix.de/";
+        _paq.push(['setTrackerUrl', u+'matomo.php']);
+        _paq.push(['setSiteId', "12"]);
+        var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+        g.type='text/javascript'; g.async=true; g.defer=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    })();
+</script>
+<!-- End Matomo Code -->
+    
+    </body>
+</html>

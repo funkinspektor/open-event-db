@@ -27,6 +27,7 @@ import { eventSnapshot } from '../queries/events.js'
 import { readBerghain } from './adapters/berghain.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
+import { readSchokoladen } from './adapters/schokoladen.js'
 import { parseSlaughterhouse } from './adapters/slaughterhouse.js'
 import { parseSquarespace } from './adapters/squarespace.js'
 import { readUrbanSpree } from './adapters/urbanspree.js'
@@ -281,6 +282,8 @@ async function readFeed(
       return parseSlaughterhouse(text, config, { pageUrl: url, now })
     case 'squarespace':
       return parseSquarespace(text, config, { pageUrl: url, now })
+    case 'schokoladen':
+      return readSchokoladen(text, config, { pageUrl: url, now, fetchText })
   }
 }
 

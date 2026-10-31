@@ -176,6 +176,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source berghain "Berghain" 'https://ww
 scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" 'https://www.berghain.berlin/de/program/kantine-am-berghain/' kellerkompass-import --kind berghain --config '{"venues":{"Kantine am Berghain":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source slaughterhouse "Slaughterhouse" 'https://slaughterhouse-berlin.de/konzerte/' kellerkompass-import --kind slaughterhouse --config '{"venues":{"Slaughterhouse":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source 8mm "8MM Bar" 'https://www.8mmbar.de/program?format=json&view=list' kellerkompass-import --kind squarespace --config '{"venues":{"8MM Bar":"<venue id>"}}' --venue <venue id>
+scripts/prod-db.sh pnpm db:cli ingest-add-source schokoladen "Schokoladen" 'https://www.schokoladen-mitte.de/' kellerkompass-import --kind schokoladen --config '{"venues":{"Schokoladen":"<venue id>"}}' --venue <venue id>
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -195,6 +196,13 @@ one month and is refused). The id is Squarespace's own. A show time in the text 
 start 20:00") replaces the event's time, as the 8MM Bar enters the doors; the one-hour end Squarespace gives
 every event is dropped. The room is the event's location title ("8MM Bar"). Tickets are the link on a
 "Tickets" line, else the first link to a known ticket shop.
+
+The Schokoladen lists its programme on the home page, ten events a page (`?page=2` and on, as far as the
+first page's pager reaches; about eight pages, half a year). The listing has everything but ids: those come
+from the calendar JSON (`/calendar`), matched by day and title. A series (karaoke, "LSD") has one calendar id
+for all its dates, so its id carries the date ("10-2026-11-01"). The start is the show time in the "Time"
+facts ("doors 19:00 - show 20:00", "Einlass 19h Beginn 20h"), else the listed time, the doors. Category,
+promoter, subtitle and the facts open the description. A run is nine requests, about four seconds.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one

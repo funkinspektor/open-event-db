@@ -1019,6 +1019,57 @@ describe('runIngest (Squarespace events)', () => {
   })
 })
 
+describe('runIngest (Schokoladen programme)', () => {
+  const fixture = (name: string) =>
+    readFileSync(fileURLToPath(new URL(`./fixtures/schokoladen/${name}`, import.meta.url)), 'utf8')
+  // Saturday 2026-10-31, the day the fixtures were saved
+  const SK_NOW = new Date('2026-10-31T10:00:00Z')
+  const SK_LATER = new Date('2026-10-31T16:00:00Z')
+  const HALLOWEEN = '8008'
+
+  /** Page 1 at the source URL, page 8 and the calendar as saved; pages 2–7 served empty. */
+  const site = (source: IngestSource, page1 = fixture('page-1.html')) => async (url: string) => {
+    const u = new URL(url)
+    if (u.pathname === '/calendar') return fixture('calendar.json')
+    if (u.searchParams.get('page') === '8') return fixture('page-8.html')
+    if (u.searchParams.has('page')) return fixture('page-9.html')
+    if (url.startsWith(`https://${source.slug}.test/`)) return page1
+    throw new Error(`unexpected fetch ${url}`)
+  }
+
+  it('reads the listing and the calendar, maps the club to its venue and trusts its times', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Schokoladen ${stamp}`, address: 'Ackerstraße 169', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Schokoladen: venue!.id } }, '', 'schokoladen')
+    const result = await runIngest({ only: source.slug, now: SK_NOW, fetchText: site(source) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 12, created: 12 })
+    expect(stub.calls).toBe(0)
+    expect((await itemOf(source.id, HALLOWEEN)).draft).toMatchObject({
+      title: 'halloween special w/ Nothing Works (post-hc, bln) & Sunveil (shoegaze/emo)',
+      starts_at: '2026-10-31T20:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: { tickets: 'https://vvk.link/4nrje4w' },
+      times_unverified: false,
+    })
+  })
+
+  it('marks an event gone when it leaves the listing', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'schokoladen')
+    await runIngest({ only: source.slug, now: SK_NOW, fetchText: site(source) })
+    const without = fixture('page-1.html').replace('data-event-date="2026-11-02"', 'data-event-date="none"')
+    const result = await runIngest({ only: source.slug, now: SK_LATER, fetchText: site(source, without) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 11, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, '7897')).goneAt?.getTime()).toBe(SK_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])
