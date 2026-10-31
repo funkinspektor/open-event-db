@@ -54,6 +54,15 @@ describe('checkAgainstText', () => {
     expect(checkAgainstText(lineup, 'Live: tba\nDJs: Testbild')).toEqual([{ name: 'DJs', acts: [act('Testbild')] }])
   })
 
+  it('drops unnamed slots such as "Support" and "Special Guest"', () => {
+    const lineup = one(act('HAMMER KING'), act('Support'), act('SPECIAL GUEST'), act('tba'), act('Special Guests'))
+    expect(checkAgainstText(lineup, 'Title: HAMMER KING & SPECIAL GUEST\n\n+ Support\n\nmore tba, Special Guests')).toEqual(
+      one(act('HAMMER KING')),
+    )
+    // A name that only starts like a slot stays
+    expect(checkAgainstText(one(act('Support Lesbiens')), 'Support Lesbiens live')).toEqual(one(act('Support Lesbiens')))
+  })
+
   it('returns nothing for an empty lineup', () => {
     expect(checkAgainstText([], 'Anything')).toEqual([])
   })

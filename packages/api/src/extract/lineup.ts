@@ -24,6 +24,7 @@ Rules:
 - time: only a set time written next to the act, as "HH:MM". Otherwise null.
 - Groups: only when the text names them, such as floors or rooms, or sections like "Live" and "DJs". Otherwise put all acts into one group with name null.
 - These are NOT acts: organisers and presenters ("aufnahme + wiedergabe presents"), the event or series name, resident crews named after the event ("Factory DJs"), labels on their own, venues, and names that appear only in prose about history, influences, tours or past releases.
+- A slot without a name is not an act: "+ Support", "& Special Guest", "tba".
 - A party's list of the bands or artists whose music is played ("Bands wie …", "songs by …", "the best of …") names no acts: they do not perform there.
 - The message may start with "Title: …", the event's title as the venue lists it. Acts in the title count like acts in the text: a concert's title is often its headliner, or several acts joined by "+", "&", "/" or "x". A name that is one act stays one act, even with "&" or "and" in it ("Nick Cave & The Bad Seeds", "Frankie and the Witch Fingers"). The title's event, party, festival, series or tour name is not an act ("TWILIGHT - Party", "GWF Wrestling", "SHRED FEST").
 - If the text names no acts, answer {"groups": []}. Never guess or invent a name.
@@ -80,9 +81,13 @@ export function normalizeForMatch(text: string): string {
     .trim()
 }
 
+/** Slots without a name ("+ Support", "& Special Guest", "tba"): the model sometimes returns them as acts. */
+const PLACEHOLDER_ACT = /^(?:\+\s*)?(?:(?:special\s+)?guests?|support(?:\s*acts?)?|special\s+support|supergast|tb[acd]\.?|surprise(?:\s+act)?|more\s+tba)$/i
+
 /**
- * Keeps only what the text actually says: acts whose name is not in it are dropped, notes and group names
- * that are not in it are cleared. Then sanitized like every other lineup (limits, times, empty groups).
+ * Keeps only what the text actually says: acts whose name is not in it, and unnamed slots, are dropped; notes
+ * and group names that are not in it are cleared. Then sanitized like every other lineup (limits, times,
+ * empty groups).
  */
 export function checkAgainstText(lineup: Lineup, text: string): Lineup {
   const haystack = normalizeForMatch(text)
@@ -94,7 +99,7 @@ export function checkAgainstText(lineup: Lineup, text: string): Lineup {
     lineup.map((group) => ({
       name: inText(group.name) ? group.name : null,
       acts: group.acts
-        .filter((act) => inText(act.name))
+        .filter((act) => inText(act.name) && !PLACEHOLDER_ACT.test(act.name.trim()))
         .map((act) => ({ ...act, note: inText(act.note) ? act.note : null })),
     })),
   )
