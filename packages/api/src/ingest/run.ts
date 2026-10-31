@@ -107,7 +107,7 @@ async function extractTimes(ev: FeedEvent, config: IngestSourceConfig): Promise<
 async function readLineup(ev: FeedEvent, config: IngestSourceConfig): Promise<{ lineup: Lineup | null; failed: boolean }> {
   if (!config.lineup_from_text || ev.lineup?.length || !ev.description.trim()) return { lineup: null, failed: false }
   try {
-    return { lineup: await lineupReading.reader.read(ev.description), failed: false }
+    return { lineup: await lineupReading.reader.read(ev.description, { title: ev.summary }), failed: false }
   } catch (err) {
     if (err instanceof ExtractionError && err.kind === 'unavailable') {
       throw new Error(`Source sets lineup_from_text, but lineup reading is unavailable: ${err.message}`)

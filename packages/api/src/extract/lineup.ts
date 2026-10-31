@@ -2,9 +2,14 @@ import { z } from 'zod'
 import { sanitizeLineup, type Lineup } from '@open-event-db/shared'
 import { ExtractionError, callScalewayJson, isTestRun, type ScalewayConfig } from './vision.js'
 
+export interface LineupContext {
+  /** The event's title as the source lists it: a concert's headliner is often named only there. */
+  title?: string | null
+}
+
 export interface LineupReader {
-  /** The lineup the text names, already checked against the text (`checkAgainstText`) and sanitized. */
-  read(text: string): Promise<Lineup>
+  /** The lineup the text (and title) names, already checked against them (`checkAgainstText`) and sanitized. */
+  read(text: string, context?: LineupContext): Promise<Lineup>
 }
 
 export const LINEUP_SYSTEM_PROMPT = `You read the text of an event announcement and extract its lineup as JSON: the performers, bands and DJs who play at this event.
@@ -19,6 +24,8 @@ Rules:
 - time: only a set time written next to the act, as "HH:MM". Otherwise null.
 - Groups: only when the text names them, such as floors or rooms, or sections like "Live" and "DJs". Otherwise put all acts into one group with name null.
 - These are NOT acts: organisers and presenters ("aufnahme + wiedergabe presents"), the event or series name, resident crews named after the event ("Factory DJs"), labels on their own, venues, and names that appear only in prose about history, influences, tours or past releases.
+- A party's list of the bands or artists whose music is played ("Bands wie …", "songs by …", "the best of …") names no acts: they do not perform there.
+- The message may start with "Title: …", the event's title as the venue lists it. Acts in the title count like acts in the text: a concert's title is often its headliner, or several acts joined by "+", "&", "/" or "x". A name that is one act stays one act, even with "&" or "and" in it ("Nick Cave & The Bad Seeds", "Frankie and the Witch Fingers"). The title's event, party, festival, series or tour name is not an act ("TWILIGHT - Party", "GWF Wrestling", "SHRED FEST").
 - If the text names no acts, answer {"groups": []}. Never guess or invent a name.
 
 Example: "on decks: ▷ Uwe Marx ▷ Marko König" → {"groups": [{"name": null, "acts": [{"name": "Uwe Marx", "time": null, "live": false, "note": null}, {"name": "Marko König", "time": null, "live": false, "note": null}]}]}`
@@ -93,19 +100,27 @@ export function checkAgainstText(lineup: Lineup, text: string): Lineup {
   )
 }
 
-/** Scaleway Generative APIs with the announcement text as the user message. */
+/** The user message: the announcement text, after a "Title:" line when the title is known. */
+export function lineupMessage(text: string, context?: LineupContext): string {
+  const title = context?.title?.trim()
+  return title ? `Title: ${title}\n\n${text}` : text
+}
+
+/** Scaleway Generative APIs with the announcement text (and title) as the user message. */
 export function scalewayLineup(config: ScalewayConfig): LineupReader {
   return {
-    async read(text) {
+    async read(text, context) {
+      const message = lineupMessage(text, context)
       const { groups } = await callScalewayJson(
         config,
         [
           { role: 'system', content: LINEUP_SYSTEM_PROMPT },
-          { role: 'user', content: text },
+          { role: 'user', content: message },
         ],
         { label: 'Lineup', schemaName: 'lineup', jsonSchema: LINEUP_JSON_SCHEMA, parse: modelLineupSchema, maxTokens: 4000 },
       )
-      return checkAgainstText(groups, text)
+      // An act named only in the title is in the source too
+      return checkAgainstText(groups, message)
     },
   }
 }

@@ -24,6 +24,8 @@ export interface CaseScore {
 interface EvalCase {
   id: string
   source: string
+  /** The event title, given to the reader as ingest does; older cases have none. */
+  title?: string
   text: string
   expected: Lineup
 }
@@ -68,7 +70,7 @@ async function main() {
       const started = Date.now()
       let got: Lineup
       try {
-        got = await reader.read(c.text)
+        got = await reader.read(c.text, { title: c.title })
       } catch (err) {
         failed++
         misses.push(`  ${c.id}: failed (${(err as Error).message})`)

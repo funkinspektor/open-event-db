@@ -83,6 +83,25 @@ describe('scalewayLineup', () => {
     ])
   })
 
+  it('sends the title before the text and keeps acts named only in the title', async () => {
+    const fetchMock = reply({ groups: [{ name: null, acts: [act('END OF GREEN', { live: true }), act('Made Up')] }] })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const reader = scalewayLineup({ secretKey: 'sk', projectId: 'proj', model: 'm' })
+    await expect(reader.read('Konzert\n\nEinlass 18:30', { title: 'END OF GREEN' })).resolves.toEqual(
+      one(act('END OF GREEN', { live: true })),
+    )
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1].body))
+    expect(body.messages[1]).toEqual({ role: 'user', content: 'Title: END OF GREEN\n\nKonzert\n\nEinlass 18:30' })
+  })
+
+  it('sends the text alone without a title', async () => {
+    const fetchMock = reply({ groups: [] })
+    vi.stubGlobal('fetch', fetchMock)
+    await scalewayLineup({ secretKey: 'sk', projectId: 'proj', model: 'm' }).read('Volcan', { title: '  ' })
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1].body)).messages[1].content).toBe('Volcan')
+  })
+
   it('cleans times through sanitizeLineup', async () => {
     vi.stubGlobal('fetch', reply({ groups: [{ name: null, acts: [act('Testbild', { time: '0:30' })] }] }))
     const reader = scalewayLineup({ secretKey: 'sk', projectId: 'proj', model: 'm' })

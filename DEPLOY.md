@@ -266,8 +266,9 @@ scripts/prod-db.sh pnpm --filter @open-event-db/api lineup:backfill --write
 ```
 
 **Lineups from text.** Sources whose adapter brings no lineup can have the text model read it out of the
-description: `lineup_from_text`. Only acts whose name is literally in the text are kept; the description
-itself stays exactly as the feed has it. It reads each new or changed event's text once, and never reads
+title and description: `lineup_from_text`. The title counts because many venues (Festsaal, Lido) name the
+headliner only there; event, party and tour names in it are not acts. Only acts whose name is literally in
+the title or text are kept; the description itself stays exactly as the feed has it. It reads each new or changed event's text once, and never reads
 rejected or detached items. Switch it on per source:
 
 ```bash

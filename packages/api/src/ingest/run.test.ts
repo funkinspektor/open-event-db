@@ -1252,12 +1252,15 @@ describe('runIngest (lineup from text)', () => {
   const OFF = { external_id_pattern: '-(\\d+)@' }
   const milli = [{ name: null, acts: [{ name: 'MILLI', time: null, live: false, note: null }] }]
 
-  /** Reader stub: MILLI for every text, recording the texts it was given. */
+  /** Reader stub: MILLI for every text, recording the texts (and titles) it was given. */
+  const titles: (string | null | undefined)[] = []
   function stubReader(read: (text: string) => Promise<typeof milli> = async () => milli) {
     const texts: string[] = []
+    titles.length = 0
     lineupReading.setReader({
-      async read(text) {
+      async read(text, context) {
         texts.push(text)
+        titles.push(context?.title)
         return read(text)
       },
     })
@@ -1281,6 +1284,8 @@ describe('runIngest (lineup from text)', () => {
     expect(read).toMatchObject({ lineup: milli, lineup_from_text: true })
     expect(read.description).toBe(plain.description)
     expect(plain).toMatchObject({ lineup: [], lineup_from_text: false })
+    // The reader sees each event's title too: headliners are often named only there
+    expect(titles).toContain((await itemOf(on.id, PERSIAN)).draft.title)
   })
 
   it('reads nothing when the source does not ask for it or the description is empty', async () => {

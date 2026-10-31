@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { lineupSchema, type Lineup } from '@open-event-db/shared'
-import { checkAgainstText } from './lineup.js'
+import { checkAgainstText, lineupMessage } from './lineup.js'
 import { scoreCase } from './lineup-eval.js'
 
 const lineup = (...acts: [name: string, live?: boolean][]): Lineup => [
@@ -12,13 +12,14 @@ const lineup = (...acts: [name: string, live?: boolean][]): Lineup => [
 describe('cases.json', () => {
   const cases = JSON.parse(readFileSync(fileURLToPath(new URL('./lineup-eval/cases.json', import.meta.url)), 'utf8')) as {
     id: string
+    title?: string
     text: string
     expected: Lineup
   }[]
 
   it.each(cases.map((c) => [c.id, c] as const))('%s expects only acts the name check keeps', (_, c) => {
     expect(lineupSchema.parse(c.expected)).toEqual(c.expected)
-    expect(checkAgainstText(c.expected, c.text)).toEqual(c.expected)
+    expect(checkAgainstText(c.expected, lineupMessage(c.text, { title: c.title }))).toEqual(c.expected)
   })
 })
 

@@ -727,5 +727,470 @@
         ]
       }
     ]
+  },
+  {
+    "id": "end-of-green",
+    "source": "lido",
+    "title": "END OF GREEN",
+    "text": "Konzert\n\nEinlass 18:30\n\nTickets: 30,00 € Vorverkauf+ Geb\n\nPräsentiert von Trinity Music",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "END OF GREEN",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "j-bernardt",
+    "source": "lido",
+    "title": "J. BERNARDT",
+    "text": "Konzert\n\nEinlass 19:00\n\nTickets: 34,70 € VVK INKL. GEBÜHR\n\nPräsentiert von Schoneberg Konzerte",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "J. BERNARDT",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ankor-self-deception",
+    "source": "lido",
+    "title": "ANKOR & SELF DECEPTION",
+    "text": "Konzert\n\n+ Support: LAUREN BABIC\n\nEinlass 18:00\n\nTickets: 41,70 € VVK INKL. GEBÜHR\n\nPräsentiert von Landstreicher Konzerte\n\nANKOR is an alterna/ve metal band based in Catalonia (Spain) with female front singer/screamer Jessie Williams (Bristol, UK), female drummer Eleni Nota (Athens, Greece), guitarists/vocals David Romeu and Fito Mar/nez and bassist Julio López (Tarragona, Spain). The band was formed in 2003 in a village near Barcelona when its members were only teenagers.  \nMore than 19 years later, with 5 albums on their backs and spread worldwide.\n\nAnkor is a national reference in Spain, while still connecting with new audience and a fan base that keeps growing every day.\n\nSelf Deception formed in Stockholm after a message sent by mistake connected singer Andreas Clark with drummer Erik Eklund. Both shared a love of alt-rock and metal, and a commitment to honesty that inspired the band’s name. Comprised by additional members Patrik Carlberg Hallgren (Bass) and Ronny Westphal (Guitar)the band have been balancing heavy riffs with mainstream ambition on records like ‘Shapes’ (2020) and ‘You Are Only as Sick as Your Secrets’ (2023), spawning hits like ‘Fight Fire with Gasoline’. Their latest album, ‘Destroy the Art’ (2024), continues the genre-bending journey with the infectious ‘Matthew McConaughey’ and songs like 'The Scandinavian Dream' and 'Beautiful Disaster'.\n\nSelf Deception is a modern rock band from Stockholm, Sweden, known for their dynamic sound that merges classic rock elements with a fresh, anthemic modern metal flavor. With a reputation for delivering unforgettable live performances, Self Deception is one of the leading forces in today's rock scene from Scandinavia.\n\nSelf Deception are:  \nAndreas Clark (Vocals)  \nRonny Westphal (Guitar)  \nPatrik Carlberg Hallgren (Bass)  \nErik Eklund (Drums)",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "ANKOR",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "SELF DECEPTION",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "LAUREN BABIC",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hi-spencer",
+    "source": "lido",
+    "title": "Hi! Spencer",
+    "text": "Konzert\n\n+ Support: KORD\n\nEinlass 19:00\n\nTickets: 39,20 € VVK INKL. GEBÜHR\n\nPräsentiert von All Rooms Concerts\n\nHi! Spencer machen mit „immernie“ ein Album, das nicht nach klaren Antworten sucht. Es ist ein Album über das Aushalten der eigenen Ambivalenz.\n\nGefühle sind selten eindeutig. Hoffnung trifft auf Zweifel, Aufbruchsstimmung auf Heimweh – und manchmal fühlt sich alles gleichzeitig schwer und leicht an. Mit „immernie“ verbinden Hi! Spencer persönliche Momente mit universellen Geschichten. Sie erzählen von Sommern, die immer gehen. Und von Tagen, die niemals kommen. Von Tristesse und Euphorie. Dabei sucht die Band nicht nach dem entweder oder, sondern lässt Gegensätze nebeneinander stehen. „immernie“ ist die Erkenntnis, dass Dinge enden. Und dass genau darin ihre Bedeutung liegt.\n\nMusikalisch übersetzen Hi! Spencer dieses Spannungsfeld in Songs, die gleichzeitig drücken und treiben. „immernie“ ist leise laut, langsam schnell und euphorisch melancholisch. Strophen dehnen sich spannungsvoll auf, um dann im Chorus zu platzen. Dabei zeigt die Band einmal mehr, dass sich Indie, Pop, Rock und Punk nicht widersprechen, sondern gegenseitig anschieben. Treibende Gitarren, warme Synths und große Melodien verbinden sich zu Songs, die hängen bleiben.  \nAuch das Artwork greift diese Idee auf: Das zentrale Motiv ist eine zerplatzte Kaugummiblase – eine Metapher für schwere Leichtigkeit. Für all die Dinge, die schier endlos scheinen und dann plötzlich zerfallen. Verspielt und rotzig, gleichzeitig melancholisch und endgültig.\n\nDas hier ist keine dieser Geschichten vom schnellen Durchbruch. Hi! Spencer sind gewachsen wie eine Kaugummiblase: langsam, stetig, aber mit Druck dahinter. Kein Hype, kein Abkürzen – sondern durchbeißen, weitermachen, langer Atem. Von kleinen Kellerklubs, in denen der Schweiß von der Decke tropft, bis auf die großen Bühnen des Landes. Alles selbst erspielt, alles Zug um Zug. Und genau deshalb hält das hier auch: weil es nicht aufgeblasen ist, sondern gewachsen. „immernie“ ist der Moment, in dem sich nichts mehr kleinreden lässt – laut, schillernd und mit Wucht stellen Hi! Spencer klar: ihre Jahre sind noch lange nicht vorbei.\n\nDie Songs der Band haben mittlerweile millionenfache Aufrufe auf den Streamingportalen. Nach ausverkauften Clubtouren 2025 durch Deutschland und Österreich zählt die Band längst zu den gerngesehenen Gästen auf den großen Festivals, darunter Hurricane, Deichbrand und Highfield.\n\n„immernie“ erscheint am 21.08.2026 auf dem Label Merchcowboy Records. Für alle, die die Platte live hören wollen, schickt zuendstoff Booking Hi! Spencer im Herbst 2026 deutschlandweit auf Clubtour.\n\nAufgenommen wurde das Album mit Tobi Schneider im DocMaKlang Studio Osnabrück. Das visuelle Konzept und Artwork stammen aus der Feder des Osnabrücker Kreativteams kraem.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Hi! Spencer",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "KORD",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "megaloh-umse-lakmann",
+    "source": "lido",
+    "title": "MEGALOH + UMSE + LAKMANN",
+    "text": "Konzert\n\nEinlass 19:00\n\nTickets: 49,75 € VVK INKL. GEBÜHR\n\nPräsentiert von Kingstar Music\n\nWenn BoomBap ein Familientreffen hätte, würde genau diese Tour dabei rauskommen:\n\nUmse, Lakmann und Megaloh gehen im späten Herbst 2026 gemeinsam auf Tour – und bringen kompromisslose Bars, echtes Handwerk und Rap ohne Plastik in die Clubs von Hamburg, München, Berlin und Köln.\n\nDrei Künstler, drei Handschriften, eine gemeinsame Sprache: lyrischer Tiefgang, Beats mit Seele und Live-Energie, die man nicht streamen kann. Zwischen Kopfnicker-Sound, technischen Skills und Haltung am Mic treffen Generationen des Deutschraps aufeinander. Jeder für sich eine Instanz – zusammen ein Ausnahme-Line-up.\n\nOb rougher Ruhrpott-Flavour, jazzige Golden-Era-Vibes oder druckvolle Bühnenpräsenz: Diese Tour richtet sich an alle, die Rap noch fühlen wollen statt nur zu konsumieren. Keine Trends, keine Masken, kein Algorithmus – nur Beats, Bars und Bretter.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "MEGALOH",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "UMSE",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "LAKMANN",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "shred-fest",
+    "source": "lido",
+    "title": "SHRED FEST",
+    "text": "Konzert\n\nfeat. OBSCURA, PESTILENCE, CRYPTIC SHIFT  \n+ Support: THUS & DVRK\n\nEinlass 16:00\n\nTickets: 44,00 € Abendkasse · 36,00 € Vorverkauf+ Geb\n\nPräsentiert von 36 Concerts\n\nQuote OBSCURA:\n\n“2027 marks the 25th anniversary of OBSCURA, and we are kicking off the year with the longest European & UK run we have ever undertaken. 39 shows with no days off — a true statement. Remember: it’s not a tour if there’s a day off.\n\nSHRED FEST 2027 brings together some of the finest representatives of European extreme metal, featuring bands from France, Denmark, the United Kingdom, the Netherlands, and Germany. Joined by the legendary Dutch Pestilence, the UK’s avant-garde force Cryptic Shift, Denmark’s progressive/melodic death metal act Thus, and France’s relentless DVRK, we will perform across the continent for weeks, culminating in a hometown show in Munich, Germany.\n\nSpread the word, bring your friends, and support all bands from start to finish — see you all in 2027.” - Steffen Kummerer\n\nIntroduction SHRED FEST:\n\nSHRED FEST is an annual touring festival concept that sets its sights on a different continent each year — uniting some of the most ferocious and technically accomplished bands in extreme metal. In 2027, following previous editions across North America and Australia, SHRED FEST arrives in Europe and the United Kingdom for its most ambitious chapter to date.\n\nFrom January 20th to February 27th, 2027, SHRED FEST will traverse the continent with 39 shows and no days off — a relentless run that stands as a statement of endurance, precision, and uncompromising musicianship. Leading the charge are Obscura, joined by the legendary Pestilence, the UK’s boundary-pushing Cryptic Shift, Denmark’s progressive force Thus, and France’s relentless DVRK.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "OBSCURA",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "PESTILENCE",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "CRYPTIC SHIFT",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "THUS",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "DVRK",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "new-waves-day",
+    "source": "lido",
+    "title": "NEW WAVES DAY CLUB EDITION",
+    "text": "Konzert\n\nLive: MOUTH ULCERS + THEN COMES SILENCE + THE DEPTHS\n\nEinlass 19:00\n\nTickets: 41,75 € VVK INKL. GEBÜHR\n\nPräsentiert von Headline Music\n\nMouth Ulcers\n\nDie Londoner Newcomer Mouth Ulcers stehen für eine neue Generation des düsteren Post- Punk. Musikalisch in der Tradition von The Cure, Bauhaus und Twin Tribes, verleihen sie dem Genre eine dringliche, junge und geradezu berauschende Energie. Atmosphärische Gitarren, tribalartige Percussion und tiefe, hallende Bariton-Vocals prägen ihren Sound, der treffend als „Musik, zu der Vampire tanzen würden“ beschrieben wurde – düster, körperlich und unwiderstehlich cool. Das Quartett verbindet die klassische Dunkelheit des Post-Punk mit frischer Energie und gehört damit zu einer neuen Welle aufstrebender Acts, die den Underground derzeit neu definieren. Ihre Musik wirkt unmittelbar und lebendig und verbindet Bedrohlichkeit mit Vorwärtsdrang sowie dichte Atmosphäre mit treibender Dynamik.\n\nThen Comes Silence\n\nThen Comes Silence aus Stockholm gehören seit Jahren zu den festen Größen der europäischen Dark-Wave- und Post-Punk-Szene. Mit Hits wie „Strangers“, „We Lose the Night“ und „The Dead Cry for No One“ hat sich die Band auch international einen Namen gemacht und eine treue Fangemeinde erspielt. Mit ihrer neuen Single „Judgement Day“ knüpfen Then Comes Silence an ihren unverkennbar düsteren Sound an und zeigen einmal mehr, warum sie zu den prägenden Bands des modernen Post-Punk gehören.\n\nThe Depths\n\nTHE DEPTHS aus Athen gehören zu den neuen aufstrebenden Acts der europäischen Post-Punk- und Dark-Wave-Szene. Gegründet von Musiker und Produzent Nick Chrysochoos, verbindet die Band atmosphärischen Post-Punk, düstere Melodien und treibende Rhythmen mit emotionalem Songwriting. Im April 2026 veröffentlichten THE DEPTHS ihre selbstbetitelte Debüt-EP, die auch über Griechenland hinaus schnell Aufmerksamkeit fand. Mit Songs wie „Dazed“ präsentiert die Band einen intensiven, melancholischen und zugleich kraftvollen Sound und setzt damit ein starkes erstes Ausrufezeichen in der europäischen Dark-Wave- und Post-Punk-Szene.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "MOUTH ULCERS",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "THEN COMES SILENCE",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "THE DEPTHS",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "twilight-party",
+    "source": "lido",
+    "title": "TWILIGHT - Party",
+    "text": "Party\n\nThe best of the Twilight soundtrack & other songs with the same vibe: Dark Pop, Emo, Indie & 2000s Bangers!\n\nTickets: 15,00 € Abendkasse · 15,00 € VVK INKL. GEBÜHR\n\nPräsentiert von Iconic Pop Nights\n\nTwilight Party! 🖤\n\nAn entire night of the best of the Twilight soundtrack and other songs with the same vibe: Dark Pop, Emo, Indie & 2000s Bangers!\n\n+ video highlights projected onto the walls  \n+ plenty of fog  \n+ Berlin’s biggest disco ball  \n+ 2 bars, chill area, smoking area\n\nLet yourself be enchanted by the dark atmosphere and unique sound of the Twilight universe. Get ready for a night of melancholic indie anthems, iconic 2000s classics, and the mysterious aesthetic of Forks.\n\nWhether you’re Team Edward, Team Jacob, or simply here for great music and a magical night – this is where nostalgia, darkness, and the dance floor come together.\n\nVampire, werewolf, or simply dark fantasy: Costumes are highly encouraged.  \nDoors open and the party starts at the witching hour (11:59 PM) – make sure you arrive on time!",
+    "expected": []
+  },
+  {
+    "id": "turnover",
+    "source": "festsaal",
+    "title": "Turnover",
+    "text": "Support: Nothing\n\nEinlass 19:00\n\nPräsentiert von",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Turnover",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Nothing",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "gloryhammer",
+    "source": "festsaal",
+    "title": "Gloryhammer",
+    "text": "5th Album Release Tour 2026 | Support: Majestica & Arion\n\nEinlass 18:00\n\nAb 16 Jahren\n\nAnd lo, Planet Earth had been destroyed by the Hootsman, with an explosion so powerful it ripped a hole in the very fabric of spacetime. And yet, Zargothrax was still not defeated, for he managed to use his last shreds of power to escape through the dimensional rift. Vowing to defeat the evil sorcerer, Angus McFife XIII followed him into the portal, with no idea where it might lead…\n\nMighty warriors of the galaxy! GLORYHAMMER has returned from an epic quest, and they come bearing their new album, \"LEGENDS FROM BEYOND THE GALACTIC TERRORVORTEX\". In this thrilling third chapter of the Gloryhammer saga, we follow the legendary prince Angus McFife into another dimension, where he will fight with more terrifying foes and embark on more epic adventures than ever before. Join his quest to save the Kingdom of Fife, through 10 tracks of nuclear-fueled high-velocity heroic power metal, the likes of which you've never heard in your life. FOR THE ETERNAL GLORY OF DUNDEE!\n\npräsentiert von",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Gloryhammer",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Majestica",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Arion",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "enslaved-solstafir",
+    "source": "festsaal",
+    "title": "ENSLAVED & SOLSTAFIR",
+    "text": "Support: Gaahls Wyrd\n\nEinlass 18:00\n\nNorway’s progressive metallers Enslaved have announced a co-headline with Iceland's Sólstafir, with support coming from Norway's Gaahls Wyrd. The three bands will hit the road across the UK and Europe in February 2027.\n\nEnslaved will be touring in support of their new album Mið, to be released on October 30th via Nuclear Blast Records. Sólstafir are playing in support of their latest released record Hin helga kvöl.\n\nEnslaved comment on the tour:\n\n“Europe! In February we are heading out on a co-headlining tour with our good friends in Sólstafir and special guests Gaahls Wyrd. There is a kinship here that goes beyond a shared enthusiasm for questionable weather: the belief that music should be allowed to find its own path, even when it refuses to explain where it is going. Bringing ‘Mið’ into that company, and into a room with all of you, feels very right. Making a record is one part of the adventure; discovering what happens to it when we meet you out there is another. That exchange still means everything to us. See you in the flesh!”\n\nEnslaved’s new album, Mið, an Old Norse word for ‘centre’, or ‘middle’, marks another departure, and another new beginning. The band have always dealt in states of transition, nor least on the thematically linked, mythology-steeped rites of passage that were 2020’s Utgard and 2023’s Heimdal.\n\nHin helga kvöl blends SÓLSTAFIR's signature melancholic sound with elements from their past, creating an album that is both reflective and innovative, not only in scope but in songcraft. At the heart of Hin helga kvöl are the heartfelt and electrifying personal performances of the band that highlight SÓLSTAFIR’s ability to merge genres seamlessly into something unheard of.",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Enslaved",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "SOLSTAFIR",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Gaahls Wyrd",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "herrenmagazin",
+    "source": "festsaal",
+    "title": "Herrenmagazin",
+    "text": "Aus gegebenem Anlass\n\nSupport: ClickClickDecker\n\nEinlass 19:00\n\nAb 16 Jahren\n\nIhr habt uns nach 10 Jahren den denkbar wärmsten Empfang beschert. Wir konnten und werden dieses Jahr unsere größten eigenen Konzerte spielen. Nachdem dann die Elphi (Kleiner Saal) in 48 Std. ausverkauft war, haben wir uns aus einer Melange von Glückseligkeit und einer Prise Übermut dazu entschieden noch einen obendrauf zu setzen. Für uns ist es vermutlich genauso schräg wie für euch, aber wir kündigen heute drei Konzerte in Berlin, Köln und Hamburg an, die im Dezember 2026 stattfinden. Somit also bummelige eineinhalb Jahre in der Zukunft liegen. Diese Entscheidung basiert auf zwei Erkenntnissen:\n\n1.) Dass es uns seit über 20 (geschrieben: zwanzig) Jahren gibt, ist ein Wunder. Eines, dass – nebenbei bemerkt – euch zu verdanken ist. Das allein wäre ein Grund zu feiern  \n2.) Jede Ehe hat ein Erfolgsrezept. Unseres ist Freundschaft und Chaos.\n\nDieses, von Ungewissheit durchzogene Erfolgsrezept ist unberechenbar und wurde in der zurückliegenden Vergangenheit auf eine harte Probe gestellt. Wir haben uns vorgenommen die Freude, die wir heute dank eures unendlichen Supports empfinden, mit Altersweisheit zu kombinieren. Kurz gesagt: Wir möchten Fehler nicht wiederholen. Keine Angst, wir lösen uns nicht auf, und hiermit wird auch keine weitere unbefristete Pause angekündigt. Es wird auch keine 10 Jahre mehr bis zur nächsten Platte dauern – das sei hiermit hoch und heilig versprochen. Wir wollen, dass es diese Band noch sehr lange gibt. Das ist aber keine Selbstverständlichkeit und bedarf eines verantwortungsvollen Umgangs mit persönlichen Kapazitäten und Ambitionen. Es hat sich gezeigt, dass wir dann am besten sind, wenn diese zwei Faktoren in einem gesunden Gleichgewicht liegen. Was bedeutet aber dieses kryptische Gesabbel? Wir werden dieses und nächstes Jahr touren und (sofern man uns lässt) ein paar Festivals spielen. Zu sagen, wie sehr wir uns darauf freuen, liegt jenseits des Beschreibbaren. Wir sind von dem Zuspruch, den wir erfahren, überwältigt, bestätigt, vor allem aber ermutigt und motiviert. Anschließend möchten wir gemeinsam mit euch all das feiern, was eben nicht selbstverständlich ist: Dass es uns gab, gibt und dass ihr da wart und noch immer da seid. Insofern bleibt an dieser Stelle nicht mehr viel zu sagen, außer demütigen Dank auszusprechen und euch alle einzuladen bei diesem Größenwahn dabei zu sein.\n\nDanach wird zwischenzeitlich Stille einkehren.\n\npräsentiert von",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "Herrenmagazin",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "ClickClickDecker",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "japanmarkt",
+    "source": "festsaal",
+    "title": "24. Japanmarkt",
+    "text": "SOMMERFEST\n\nJapanese Culture & Crafts & Design & Arts & Workshops & Food & Drinks\n\nDer japanische Kultur- und Designmarkt Berlins sagt Konnichiwa!  \n•Kuratiertes Kulturprogramm  \n•Traditionell japanische Kampfkunst der Samurai  \n•Workshops für Kinder & Erwachsene  \n•Kulinarik und Tastings  \n•Live-Musik  \n•Accessories, Ceramics, Stationary, Jewellery, Kawaii, Kimono...  \n•Delicious Japanese Streetfood und Patisserie!\n\nKIDS unter 10 Jahre haben freien Eintritt.\n\nAchtung! Ein Ticketkauf ist ausschließlich online möglich, vor Ort gibt es keine Tageskasse!\n\nDas Mitbringen sowie der Verzehr eigener Getränke und Speisen ist bei unserer Veranstaltung nicht gestattet.  \nHunde dürfen nicht mit auf das Veranstaltungsgelände.\n\nWir möchten schöne Eindrücke des Events als Erinnerung festhalten und diese für alle sichtbar machen. Mit deinem Ticketkauf willigst du ein, dass wir während des Events Foto- und Video-Aufnahmen erstellen und diese auf unseren Social Media-Kanälen verwenden dürfen.",
+    "expected": []
+  },
+  {
+    "id": "morecore-party",
+    "source": "festsaal",
+    "title": "MoreCore Party",
+    "text": "Ab 18 Jahren\n\n01 MAIN FLOOR\n\nBands wie A Day To Remember, Against the Current, Alexisonfire, All Time Low, Architects, Badflower, Beartooth, Being As An Ocean, Blind Channel, Blink 182, Billy Talent, Boston Manor, Breaking Benjamin, Bring Me The Horizon, Bury Tomorrow, Coheed & Cambria, Deez Nuts, Don Broco, Dragged Under, Enter Shikari, Electric Callboy, Fall Out Boy, Fever 333, Foo Fighters, Grandson, Ghostemane, Heisskalt, Imminence, In this Moment, I Prevail, Kenny Hoopla, Killswitch Engage, Korn, Landmvrks, Limp Bizkit, Linkin Park, Machine Gun Kelly, Memphis May Fire, Mod Sun, Mudvayne, Motionless in White, Neck Deep, Northlane, Nothing But Thieves, Of Mice & Men, Panic! At The Disco, Papa Roach, Parkway Drive, Poppy, Pvris, Refused, Royal Blood, Sullivan King, Sum 41, Silverstein, Skindred, Sleep Token, Spiritbox, Stick To Your Guns, System of a Down, The Amity Affliction, The Devil Wears Prada, The Ghost Inside, The Home Team, The Warning, Thrice, Trash Boat, Yungblud, While She Sleeps, Volbeat, Willow und einigen weiteren Überraschungen\n\n02 HARD FLOOR\n\nAfter The Burial, Agnostic Front, Alpha Wolf, As I Lay Dying, August Burns Red, Attila, Behemoth, Bleed From Within, Body Count, Brand of Sacrifice, Caliban, Carnifex, Chelsea Grin, Code Orange, Comeback Kid, Deez Nuts, Devil Driver, Every Time I Die, Fit For A King, Gideon, Gojira, Get The Shot, Harms Way, Hatebreed, Heaven Shall Burn, Ignite, In Flames, Irate, Justice For The Damned, Knocked Loose, Kublai Khan TX, Lamb Of God, Lionheart, Lorna Shore, Machine Head, Make Them Suffer, Malevolence, Meshuggah, Nasty, Norma Jean, Reduction, Rise Of The Northstar, Spite, Stray From The Path, Suicide Silence, Terror, The Black Dahlia Murder, The Browning, The Butcher Sisters, Veil Of Maya, We Butter The Bread With Butter, Whitechapel und vielen weiteren mehr",
+    "expected": []
+  },
+  {
+    "id": "dark-nights",
+    "source": "festsaal",
+    "title": "DARK NIGHTS",
+    "text": "TAG 1\n\nEinlass 15:30\n\nLine-Up:\n\n[funker Vogt](https://berlin-dark-nights.de/#)\n\n[\\[:SITD:\\]](https://berlin-dark-nights.de/#)\n\n[S.P.O.C.K](https://berlin-dark-nights.de/#)\n\n[Rotersand](https://berlin-dark-nights.de/#)\n\n[Morphose](https://berlin-dark-nights.de/#)\n\n[Angels & Agony](https://berlin-dark-nights.de/#)\n\n[Gulvøss](https://berlin-dark-nights.de/#)\n\n[Zoodrake](https://berlin-dark-nights.de/#)\n\n[Dunkelsucht](https://berlin-dark-nights.de/#)\n\n[Giant Crow](https://berlin-dark-nights.de/#)\n\n[KY](https://berlin-dark-nights.de/#)\n\n[The Second Sight](https://berlin-dark-nights.de/#)\n\n[Binokular](https://berlin-dark-nights.de/#)\n\n[Devil-M](https://berlin-dark-nights.de/#)\n\n[Blitzunion](https://berlin-dark-nights.de/#)\n\n[CS50](https://berlin-dark-nights.de/#)\n\n[Chrom](https://berlin-dark-nights.de/#)\n\n[Battle Scream](https://berlin-dark-nights.de/#)\n\n[Covenant](https://berlin-dark-nights.de/#)\n\n[sono](https://berlin-dark-nights.de/#)\n\npräsentiert von DARK NIGHTS",
+    "expected": [
+      {
+        "name": null,
+        "acts": [
+          {
+            "name": "funker Vogt",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": ":SITD:",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "S.P.O.C.K",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Rotersand",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Morphose",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Angels & Agony",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Gulvøss",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Zoodrake",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Dunkelsucht",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Giant Crow",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "KY",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "The Second Sight",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Binokular",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Devil-M",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Blitzunion",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "CS50",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Chrom",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Battle Scream",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "Covenant",
+            "time": null,
+            "live": true,
+            "note": null
+          },
+          {
+            "name": "sono",
+            "time": null,
+            "live": true,
+            "note": null
+          }
+        ]
+      }
+    ]
   }
 ]
