@@ -1,3 +1,4 @@
+import { effectiveEnd } from '@open-event-db/shared'
 export const TZ = 'Europe/Berlin'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', {
@@ -117,12 +118,12 @@ export function isUpcoming(e: EventTimes, now = new Date()): boolean {
 }
 
 /**
- * Running right now; events without an end count as running for the rest of their day. Without a known
- * start time we can't tell, so it's never "now", only "today".
+ * Running right now, until its end or the assumed one (see `effectiveEnd`). Without a known start time
+ * we can't tell, so it's never "now", only "today".
  */
 export function isHappeningNow(e: EventTimes, now = new Date()): boolean {
   if (!e.start_time_known || new Date(e.starts_at) > now) return false
-  return e.ends_at ? new Date(e.ends_at) > now : dayKey(e.starts_at) === berlinDay(now).key
+  return effectiveEnd(e) > now
 }
 
 export function formatDateTime(e: EventTimes, long = false): string {

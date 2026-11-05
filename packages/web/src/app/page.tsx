@@ -5,6 +5,7 @@ import { ListToolbar } from '@/components/ListToolbar'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
 import { shareMetadata } from '@/lib/site'
+import { dayKey } from '@/lib/format'
 
 export const metadata: Metadata = {
   title: { absolute: 'Kellerkompass — Events in Berlin' },
@@ -17,6 +18,8 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
   const filters = parseFilters(await searchParams)
   const apiQuery = buildApiQuery(filters)
+  // The list's first day: the range's start, or today. Events that started earlier show as Ongoing.
+  const firstDay = dayKey(apiQuery.get('from') ?? new Date().toISOString())
   const [events, tags] = await Promise.all([getEvents(apiQuery), getTags()])
 
   return (
@@ -34,7 +37,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           initialEvents={events.data}
           initialCursor={events.meta.cursor}
           apiQuery={apiQuery.toString()}
-          groupByDay
+          groupByDay={firstDay}
         />
       </section>
     </div>

@@ -10,6 +10,8 @@ import {
   type Venue,
 } from '@open-event-db/db'
 import {
+  ASSUMED_DURATION_HOURS,
+  EVENT_TZ,
   canonicalLineup,
   type EventAddedBy,
   type EventDetail,
@@ -49,6 +51,17 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
     image_key: e.imageKey,
   }
 }
+
+const startsAtBerlin = sql`(${events.startsAt} at time zone ${sql.raw(`'${EVENT_TZ}'`)})`
+
+/**
+ * When the event is over: its end, or the assumed one (`effectiveEnd` in the shared package, same rule):
+ * six hours after the start, but not before the end of the start's Berlin day.
+ */
+export const effectiveEndSql = sql`coalesce(${events.endsAt}, greatest(
+  ${events.startsAt} + interval '${sql.raw(String(ASSUMED_DURATION_HOURS))} hours',
+  (date_trunc('day', ${startsAtBerlin}) + interval '1 day') at time zone ${sql.raw(`'${EVENT_TZ}'`)}
+))`
 
 const hasOwners = sql`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`
 

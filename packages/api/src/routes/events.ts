@@ -6,7 +6,6 @@ import {
   desc,
   eq,
   gt,
-  gte,
   ilike,
   inArray,
   lt,
@@ -44,6 +43,7 @@ import { sniffImageType } from '../images/sniff.js'
 import { imageStore } from '../images/store.js'
 import {
   cancelEvent,
+  effectiveEndSql,
   eventSnapshot,
   getEventDetail,
   getOwners,
@@ -108,8 +108,10 @@ export async function eventRoutes(app: FastifyInstance) {
 
     const conditions = [inArray(events.status, status)]
 
-    if (from) conditions.push(gte(events.startsAt, from))
-    else if (!to && !decoded) conditions.push(sql`${events.startsAt} >= now()`)
+    // An event stays listed until it is over, not just until it starts.
+    // Also on later pages: ongoing events come first, so a cursor can lie before now.
+    if (from) conditions.push(sql`${effectiveEndSql} > ${from.toISOString()}::timestamptz`)
+    else if (!to) conditions.push(sql`${effectiveEndSql} > now()`)
     if (to) conditions.push(lt(events.startsAt, to))
     if (city) conditions.push(eq(events.city, city))
     if (venue_id) conditions.push(eq(events.venueId, venue_id))

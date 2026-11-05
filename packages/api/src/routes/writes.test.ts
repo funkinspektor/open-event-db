@@ -392,6 +392,52 @@ describe('event list order', () => {
   })
 })
 
+describe('events stay listed until they are over', () => {
+  const create = async (title: string, starts_at: string, ends_at?: string) => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyA),
+      payload: { title: `${title} ${stamp}`, starts_at, ends_at, venue_id: venue.id },
+    })
+    expect(res.statusCode).toBe(201)
+    return res.json().data.id as string
+  }
+  const ids = async (params: Record<string, string>) => {
+    const qs = new URLSearchParams({ venue_id: venue.id, limit: '100', ...params })
+    const res = await app.inject({ method: 'GET', url: `/api/v1/events?${qs}` })
+    expect(res.statusCode).toBe(200)
+    return (res.json().data as { id: string }[]).map((e) => e.id)
+  }
+
+  it('lists from a time on what has not ended by then, assuming an end where there is none', async () => {
+    // Berlin (CET): from 02:00 on 6 Nov 2032
+    const from = '2032-11-06T01:00:00Z'
+    const exhibition = await create('Exhibition', '2032-11-01T10:00:00Z', '2032-11-30T17:00:00Z')
+    const party = await create('Party 23:00', '2032-11-05T22:00:00Z') // assumed until 05:00
+    const concert = await create('Concert 20:00', '2032-11-05T19:00:00Z') // assumed until 02:00
+    const afternoon = await create('Talk 16:00', '2032-11-05T15:00:00Z') // assumed until 00:00
+    const ended = await create('Ended', '2032-11-05T21:00:00Z', '2032-11-06T00:30:00Z')
+    const later = await create('Later', '2032-11-07T19:00:00Z')
+
+    const listed = await ids({ from, to: '2032-12-01T00:00:00Z' })
+    expect(listed).toEqual([exhibition, party, later])
+    expect(listed).not.toContain(concert) // ends exactly at `from`
+    expect(listed).not.toContain(afternoon)
+    expect(listed).not.toContain(ended)
+  })
+
+  it('lists running events by default', async () => {
+    const hour = 60 * 60 * 1000
+    const at = (ms: number) => new Date(Date.now() + ms).toISOString()
+    const running = await create('Running', at(-hour))
+    const over = await create('Over', at(-3 * hour), at(-hour))
+    const listed = await ids({})
+    expect(listed).toContain(running)
+    expect(listed).not.toContain(over)
+  })
+})
+
 describe('event categories', () => {
   it('stores categories in a fixed order, filters by any of them and can clear them', async () => {
     const create = async (title: string, categories: string[]) => {
