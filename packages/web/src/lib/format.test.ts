@@ -36,3 +36,13 @@ describe('events without a start time', () => {
     expect(isHappeningNow(timed, now)).toBe(true)
   })
 })
+
+describe('isHappeningNow without an end', () => {
+  // 23:00 Berlin on 5 Nov 2026
+  const party = { starts_at: '2026-11-05T22:00:00.000Z', start_time_known: true, ends_at: null }
+
+  it('runs past midnight for six hours after a late start', () => {
+    expect(isHappeningNow(party, new Date('2026-11-06T02:00:00Z'))).toBe(true) // 03:00
+    expect(isHappeningNow(party, new Date('2026-11-06T04:30:00Z'))).toBe(false) // 05:30
+  })
+})

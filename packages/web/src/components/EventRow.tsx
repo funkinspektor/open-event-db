@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { EventSlim } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
-import { formatRowDate, formatTimeRange, isHappeningNow, knownStart } from '@/lib/format'
+import { dayKey, formatDay, formatRowDate, formatTime, formatTimeRange, isHappeningNow, knownStart } from '@/lib/format'
 import { StatusBadge } from './StatusBadge'
 
 interface Props {
@@ -16,6 +16,16 @@ interface Props {
   action?: React.ReactNode
   titleSize?: number
   now?: Date
+  /** In the home list's Ongoing section: since when and until when, instead of the day's times. */
+  ongoing?: boolean
+}
+
+/** Ongoing rows: "until 05:00" when it ends today, "until Sun 30.11" when later. */
+function ongoingUntil(event: EventSlim, now: Date): string {
+  if (!event.ends_at) return formatTimeRange(knownStart(event), null)
+  return dayKey(event.ends_at) === dayKey(now.toISOString())
+    ? `until ${formatTime(event.ends_at)}`
+    : `until ${formatDay(event.ends_at)}`
 }
 
 // Flyer-style event row: time | title + venue | badges and tags.
@@ -27,6 +37,7 @@ export function EventRow({
   action,
   titleSize,
   now = new Date(),
+  ongoing = false,
 }: Props) {
   const running = event.status !== 'cancelled' && isHappeningNow(event, now)
   const cancelled = event.status === 'cancelled'
@@ -36,8 +47,14 @@ export function EventRow({
   return (
     <article className={cls}>
       <div className="kk-event__when">
-        {showDate && <span className="kk-event__date">{running ? 'Now' : formatRowDate(event.starts_at, now)}</span>}
-        <span className="kk-event__time">{formatTimeRange(knownStart(event), event.ends_at)}</span>
+        {showDate && (
+          <span className="kk-event__date">
+            {running ? 'Now' : ongoing ? `Since ${formatDay(event.starts_at)}` : formatRowDate(event.starts_at, now)}
+          </span>
+        )}
+        <span className="kk-event__time">
+          {ongoing ? ongoingUntil(event, now) : formatTimeRange(knownStart(event), event.ends_at)}
+        </span>
       </div>
       <div className={`kk-event__main${event.image_url ? ' kk-event__main--thumb' : ''}`}>
         <div className="min-w-0">

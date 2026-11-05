@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import type { EventSlim } from '@open-event-db/shared'
-import { dayKey, formatDay, relativeDayLabel } from '@/lib/format'
+import { formatDay, relativeDayLabel } from '@/lib/format'
+import { groupForList } from '@/lib/group'
 import { EventRow } from './EventRow'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
@@ -12,22 +13,14 @@ interface Props {
   initialCursor: string | null
   apiQuery: string
   emptyMessage?: string
-  /** Group under day headings (home) instead of putting the date into each row. */
-  groupByDay?: boolean
+  /**
+   * Group under day headings (home) instead of putting the date into each row: the list's first Berlin
+   * day (YYYY-MM-DD). Events that started before it go to an "Ongoing" section on top.
+   */
+  groupByDay?: string
   meta?: 'venue' | 'tags'
   showTags?: boolean
   titleSize?: number
-}
-
-function groupDays(events: EventSlim[]) {
-  const days: { key: string; first: string; events: EventSlim[] }[] = []
-  for (const e of events) {
-    const key = dayKey(e.starts_at)
-    const last = days[days.length - 1]
-    if (last?.key === key) last.events.push(e)
-    else days.push({ key, first: e.starts_at, events: [e] })
-  }
-  return days
 }
 
 export function EventList({
@@ -35,7 +28,7 @@ export function EventList({
   initialCursor,
   apiQuery,
   emptyMessage = 'No events match these filters.',
-  groupByDay = false,
+  groupByDay,
   meta,
   showTags,
   titleSize,
@@ -65,11 +58,12 @@ export function EventList({
 
   if (events.length === 0) return <p className="kk-empty">{emptyMessage}</p>
 
-  const row = (e: EventSlim) => (
+  const row = (e: EventSlim, ongoing = false) => (
     <EventRow
       key={e.id}
       event={e}
-      showDate={!groupByDay}
+      showDate={!groupByDay || ongoing}
+      ongoing={ongoing}
       meta={meta}
       showTags={showTags}
       titleSize={titleSize}
@@ -77,24 +71,37 @@ export function EventList({
     />
   )
 
+  const grouped = (firstDay: string) => {
+    const { ongoing, days } = groupForList(events, firstDay)
+    return (
+      <>
+        {ongoing.length > 0 && (
+          <div>
+            <h2 className="kk-day">Ongoing</h2>
+            {ongoing.map((e) => row(e, true))}
+          </div>
+        )}
+        {days.map((day) => {
+          const label = relativeDayLabel(day.first, now)
+          return (
+            <div key={day.key}>
+              <h2 className="kk-day">
+                {formatDay(day.first)}
+                {label && (
+                  <span className={`kk-day__label${label === 'Today' ? ' kk-day__label--today' : ''}`}>{label}</span>
+                )}
+              </h2>
+              {day.events.map((e) => row(e))}
+            </div>
+          )
+        })}
+      </>
+    )
+  }
+
   return (
     <div>
-      {groupByDay
-        ? groupDays(events).map((day) => {
-            const label = relativeDayLabel(day.first, now)
-            return (
-              <div key={day.key}>
-                <h2 className="kk-day">
-                  {formatDay(day.first)}
-                  {label && (
-                    <span className={`kk-day__label${label === 'Today' ? ' kk-day__label--today' : ''}`}>{label}</span>
-                  )}
-                </h2>
-                {day.events.map(row)}
-              </div>
-            )
-          })
-        : events.map(row)}
+      {groupByDay ? grouped(groupByDay) : events.map((e) => row(e))}
       {cursor && (
         <div className="flex flex-wrap items-center gap-4 pt-7">
           <button type="button" onClick={loadMore} disabled={loading} className="kk-btn kk-btn--outline">
