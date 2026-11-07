@@ -16,8 +16,8 @@ describe('event page date and time', () => {
 
 // 2031-07-04 20:00 Berlin; a day-only event on that day is stored as 00:00 Berlin
 const now = new Date('2031-07-04T18:00:00Z')
-const dayOnly = { starts_at: '2031-07-03T22:00:00.000Z', start_time_known: false, ends_at: null }
-const timed = { starts_at: '2031-07-04T17:00:00.000Z', start_time_known: true, ends_at: null }
+const dayOnly = { starts_at: '2031-07-03T22:00:00.000Z', start_time_known: false, ends_at: null, categories: [] }
+const timed = { starts_at: '2031-07-04T17:00:00.000Z', start_time_known: true, ends_at: null, categories: [] }
 
 describe('events without a start time', () => {
   it('show no time instead of 00:00', () => {
@@ -39,10 +39,18 @@ describe('events without a start time', () => {
 
 describe('isHappeningNow without an end', () => {
   // 23:00 Berlin on 5 Nov 2026
-  const party = { starts_at: '2026-11-05T22:00:00.000Z', start_time_known: true, ends_at: null }
+  const late = { starts_at: '2026-11-05T22:00:00.000Z', start_time_known: true, ends_at: null, categories: [] }
 
   it('runs past midnight for six hours after a late start', () => {
-    expect(isHappeningNow(party, new Date('2026-11-06T02:00:00Z'))).toBe(true) // 03:00
-    expect(isHappeningNow(party, new Date('2026-11-06T04:30:00Z'))).toBe(false) // 05:30
+    expect(isHappeningNow(late, new Date('2026-11-06T02:00:00Z'))).toBe(true) // 03:00
+    expect(isHappeningNow(late, new Date('2026-11-06T04:30:00Z'))).toBe(false) // 05:30
+  })
+
+  it('keeps a party until 06:00, even after an early start', () => {
+    // 20:00 Berlin on 5 Nov 2026
+    const party = { ...late, starts_at: '2026-11-05T19:00:00.000Z', categories: ['party' as const] }
+    expect(isHappeningNow(party, new Date('2026-11-06T04:30:00Z'))).toBe(true) // 05:30
+    expect(isHappeningNow(party, new Date('2026-11-06T05:00:00Z'))).toBe(false) // 06:00
+    expect(isHappeningNow({ ...party, categories: [] }, new Date('2026-11-06T01:30:00Z'))).toBe(false) // 02:30
   })
 })

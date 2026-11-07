@@ -1,4 +1,4 @@
-import { effectiveEnd } from '@open-event-db/shared'
+import { effectiveEnd, type EventCategory } from '@open-event-db/shared'
 export const TZ = 'Europe/Berlin'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', {
@@ -121,7 +121,7 @@ export function isUpcoming(e: EventTimes, now = new Date()): boolean {
  * Running right now, until its end or the assumed one (see `effectiveEnd`). Without a known start time
  * we can't tell, so it's never "now", only "today".
  */
-export function isHappeningNow(e: EventTimes, now = new Date()): boolean {
+export function isHappeningNow(e: EventTimes & { categories: readonly EventCategory[] }, now = new Date()): boolean {
   if (!e.start_time_known || new Date(e.starts_at) > now) return false
   return effectiveEnd(e) > now
 }
