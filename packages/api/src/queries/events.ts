@@ -72,6 +72,20 @@ export const effectiveEndSql = sql`coalesce(${events.endsAt}, greatest(
   case when 'party' = any(${events.categories}) then ${partyMorningSql} end
 ))`
 
+/** Text search for `q`: title, venue name, lineup acts and tags, case-insensitive substring. */
+export function eventSearchSql(q: string) {
+  const pattern = `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+  return sql`(
+    ${events.title} ilike ${pattern}
+    or ${venues.name} ilike ${pattern}
+    or exists (select 1 from unnest(${events.tags}) as t(tag) where t.tag ilike ${pattern})
+    or exists (
+      select 1 from jsonb_array_elements(${events.lineup}) as g(grp), jsonb_array_elements(g.grp -> 'acts') as a(act)
+      where a.act ->> 'name' ilike ${pattern}
+    )
+  )`
+}
+
 const hasOwners = sql`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`
 
 /** An official source lists the event right now: accepted (synced or not) and not gone from the site. */

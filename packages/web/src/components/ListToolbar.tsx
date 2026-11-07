@@ -1,17 +1,20 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { EVENT_CATEGORIES, type EventCategory } from '@open-event-db/shared'
 import { CATEGORY_LABELS } from '@/lib/categories'
 import { RANGES, filtersToHref, rangeLabel, type Filters } from '@/lib/filters'
-import { FilterIcon, PlusIcon } from './Icons'
+import { FilterIcon, PlusIcon, SearchIcon } from './Icons'
 
 const PHONE = '(max-width: 560px)'
+const SEARCH_DEBOUNCE_MS = 300
 
-// The event list toolbar — one filter button and Create event — sticking under the header.
+// The event list toolbar — search, one filter button and Create event — sticking under the header.
+// Search filters the list as you type (the term goes into the URL as ?q=). On desktop the field is always
+// there; on phones a search button expands it over the whole toolbar, with Cancel to leave.
 // The filter button opens a panel with date range, categories and tags: a dropdown on desktop, a bottom sheet on phones.
 // Nothing changes until "Show events"; closing without applying drops the selection.
 export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: string[] }) {
@@ -24,6 +27,9 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
   const dropdownRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [text, setText] = useState(filters.q ?? '')
+  const [searchOpen, setSearchOpen] = useState(!!filters.q)
   const active = filters.range !== 'upcoming' || filters.categories.length > 0 || filters.tags.length > 0
   const label = rangeLabel(filters)
   const pickCount = filters.categories.length + filters.tags.length
@@ -35,6 +41,47 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
   }, [])
+
+  // The URL is the source of truth: follow it when it changes from outside (Clear search, back button).
+  useEffect(() => {
+    if (document.activeElement !== searchRef.current) setText(filters.q ?? '')
+    if (filters.q) setSearchOpen(true)
+  }, [filters.q])
+
+  // Live search: replace, not push, so typing doesn't fill the history.
+  useEffect(() => {
+    const q = text.trim()
+    if (q === (filters.q ?? '')) return
+    const t = setTimeout(
+      () => router.replace(filtersToHref({ ...filters, q: q || undefined }), { scroll: false }),
+      SEARCH_DEBOUNCE_MS,
+    )
+    return () => clearTimeout(t)
+  }, [text]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "/" jumps to the search field, unless you're typing somewhere else.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || el.closest('input, textarea, select, [contenteditable]')) return
+      e.preventDefault()
+      openSearch()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Render the field and focus it within the tap: iOS only opens the keyboard for a focus inside the gesture.
+  function openSearch() {
+    flushSync(() => setSearchOpen(true))
+    searchRef.current?.focus()
+  }
+
+  function cancelSearch() {
+    setText('')
+    setSearchOpen(false)
+    if (filters.q) router.replace(filtersToHref({ ...filters, q: undefined }), { scroll: false })
+  }
 
   // Hairline under the toolbar only once it sticks under the header.
   useEffect(() => {
@@ -215,34 +262,95 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
     </div>
   )
 
-  return (
-    <div ref={barRef} className={`kk-toolbar${stuck ? ' kk-toolbar--stuck' : ''}`}>
-      <div ref={dropdownRef} className="kk-dropdown min-w-0">
-        <button
-          ref={triggerRef}
-          type="button"
-          className="kk-filterbtn"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-pressed={active || undefined}
-          aria-label={`Filters: ${label}${pickCount ? `, ${pickCount} more filter${pickCount === 1 ? '' : 's'}` : ''}`}
-          onClick={() => {
-            if (open) return close()
-            setDraft(filters)
-            setOpen(true)
-          }}
-        >
-          <FilterIcon />
-          <span className="kk-filterbtn__text">{label}</span>
-          {pickCount > 0 && <span className="kk-pill__count">{pickCount}</span>}
+  const searchField = (
+    <form
+      role="search"
+      className="kk-search"
+      onSubmit={(e) => {
+        e.preventDefault()
+        searchRef.current?.blur()
+      }}
+    >
+      <SearchIcon />
+      <input
+        ref={searchRef}
+        type="search"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') (text ? setText('') : searchRef.current?.blur())
+        }}
+        placeholder={phone ? 'Search events' : 'Search events, venues, artists'}
+        aria-label="Search events"
+        enterKeyHint="search"
+        maxLength={100}
+        className="kk-search__input"
+      />
+      {text && (
+        <button type="button" className="kk-search__clear" aria-label="Clear search" onClick={() => setText('')}>
+          ×
         </button>
-        {open && !phone && panel}
-      </div>
-      {/* Shown logged out too: /events/new sends visitors to log in. */}
-      <Link href="/events/new" className="kk-btn kk-btn--outline">
-        <PlusIcon />
-        Create event
-      </Link>
+      )}
+      {!phone && !text && (
+        <kbd className="kk-search__kbd" aria-hidden>
+          /
+        </kbd>
+      )}
+    </form>
+  )
+
+  const searching = phone && searchOpen
+
+  return (
+    <div
+      ref={barRef}
+      className={`kk-toolbar${stuck ? ' kk-toolbar--stuck' : ''}${searching ? ' kk-toolbar--searching' : ''}`}
+    >
+      {searching ? (
+        <>
+          {searchField}
+          <button type="button" className="kk-btn kk-btn--text kk-search__cancel" onClick={cancelSearch}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="kk-toolbar__start">
+            {!phone && searchField}
+            <div ref={dropdownRef} className="kk-dropdown min-w-0">
+              <button
+                ref={triggerRef}
+                type="button"
+                className="kk-filterbtn"
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                aria-pressed={active || undefined}
+                aria-label={`Filters: ${label}${pickCount ? `, ${pickCount} more filter${pickCount === 1 ? '' : 's'}` : ''}`}
+                onClick={() => {
+                  if (open) return close()
+                  setDraft(filters)
+                  setOpen(true)
+                }}
+              >
+                <FilterIcon />
+                <span className="kk-filterbtn__text">{label}</span>
+                {pickCount > 0 && <span className="kk-pill__count">{pickCount}</span>}
+              </button>
+              {open && !phone && panel}
+            </div>
+            {phone && (
+              <button type="button" className="kk-searchbtn" aria-label="Search events" onClick={openSearch}>
+                <SearchIcon />
+              </button>
+            )}
+          </div>
+          {/* Shown logged out too: /events/new sends visitors to log in. */}
+          <Link href="/events/new" className="kk-btn kk-btn--outline">
+            <PlusIcon />
+            Create event
+          </Link>
+        </>
+      )}
       {/* On phones the sheet goes to <body>, out of the toolbar's backdrop-filter, which would trap position: fixed. */}
       {open &&
         phone &&

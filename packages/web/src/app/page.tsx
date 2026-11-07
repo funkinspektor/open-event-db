@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getEvents, getTags } from '@/lib/api'
-import { buildApiQuery, parseFilters } from '@/lib/filters'
+import Link from 'next/link'
+import { buildApiQuery, filtersToHref, parseFilters } from '@/lib/filters'
 import { ListToolbar } from '@/components/ListToolbar'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
@@ -32,12 +33,28 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       <section aria-label="Event list">
         <hr className="kk-rule" />
         <ListToolbar filters={filters} allTags={tags} />
+        {filters.q && (
+          <p className="kk-searchinfo" role="status">
+            <span>
+              {events.data.length === 0 ? 'No' : events.meta.has_more ? `${events.data.length}+` : events.data.length}{' '}
+              {events.data.length === 1 ? 'event' : 'events'} for <strong>“{filters.q}”</strong>
+            </span>
+            <Link href={filtersToHref({ ...filters, q: undefined })} scroll={false}>
+              Clear search
+            </Link>
+          </p>
+        )}
         <EventList
           key={apiQuery.toString()}
           initialEvents={events.data}
           initialCursor={events.meta.cursor}
           apiQuery={apiQuery.toString()}
           groupByDay={firstDay}
+          emptyMessage={
+            filters.q
+              ? 'Nothing found. Try another spelling, or widen the date range in the filters.'
+              : undefined
+          }
         />
       </section>
     </div>
