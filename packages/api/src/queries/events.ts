@@ -12,6 +12,7 @@ import {
 import {
   ASSUMED_DURATION_HOURS,
   EVENT_TZ,
+  PARTY_MORNING_HOUR,
   canonicalLineup,
   type EventAddedBy,
   type EventDetail,
@@ -52,15 +53,23 @@ export function eventSnapshot(e: Event): Record<string, unknown> {
   }
 }
 
-const startsAtBerlin = sql`(${events.startsAt} at time zone ${sql.raw(`'${EVENT_TZ}'`)})`
+const tz = sql.raw(`'${EVENT_TZ}'`)
+const startsAtBerlin = sql`(${events.startsAt} at time zone ${tz})`
+
+/** The next 06:00 Berlin after the start (`partyMorning` in the shared package); a start without a known time counts as evening. */
+const partyMorningSql = sql`(date_trunc('day', ${startsAtBerlin}) + case
+  when ${events.startTimeKnown} and extract(hour from ${startsAtBerlin}) < ${sql.raw(String(PARTY_MORNING_HOUR))} then interval '0 days'
+  else interval '1 day' end + interval '${sql.raw(String(PARTY_MORNING_HOUR))} hours') at time zone ${tz}`
 
 /**
  * When the event is over: its end, or the assumed one (`effectiveEnd` in the shared package, same rule):
- * six hours after the start, but not before the end of the start's Berlin day.
+ * six hours after the start, but not before the end of the start's Berlin day; a party also not before
+ * the next 06:00 Berlin.
  */
 export const effectiveEndSql = sql`coalesce(${events.endsAt}, greatest(
   ${events.startsAt} + interval '${sql.raw(String(ASSUMED_DURATION_HOURS))} hours',
-  (date_trunc('day', ${startsAtBerlin}) + interval '1 day') at time zone ${sql.raw(`'${EVENT_TZ}'`)}
+  (date_trunc('day', ${startsAtBerlin}) + interval '1 day') at time zone ${tz},
+  case when 'party' = any(${events.categories}) then ${partyMorningSql} end
 ))`
 
 const hasOwners = sql`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`
