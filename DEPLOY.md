@@ -176,7 +176,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source berghain "Berghain" 'https://ww
 scripts/prod-db.sh pnpm db:cli ingest-add-source kantine "Kantine am Berghain" 'https://www.berghain.berlin/de/program/kantine-am-berghain/' kellerkompass-import --kind berghain --config '{"venues":{"Kantine am Berghain":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source slaughterhouse "Slaughterhouse" 'https://slaughterhouse-berlin.de/konzerte/' kellerkompass-import --kind slaughterhouse --config '{"venues":{"Slaughterhouse":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source 8mm "8MM Bar" 'https://www.8mmbar.de/program?format=json&view=list' kellerkompass-import --kind squarespace --config '{"venues":{"8MM Bar":"<venue id>"}}' --venue <venue id>
-scripts/prod-db.sh pnpm db:cli ingest-add-source schokoladen "Schokoladen" 'https://www.schokoladen-mitte.de/' kellerkompass-import --kind schokoladen --config '{"venues":{"Schokoladen":"<venue id>"}}' --venue <venue id>
+scripts/prod-db.sh pnpm db:cli ingest-add-source schokoladen "Schokoladen" 'https://www.schokoladen-mitte.de/' kellerkompass-import --kind schokoladen --config '{"lineup_from_text":true,"venues":{"Schokoladen":"<venue id>"}}' --venue <venue id>
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -259,6 +259,7 @@ scripts/prod-db.sh pnpm db:cli ingest-set-config urbanspree --config '{"lineup_f
 scripts/prod-db.sh pnpm db:cli ingest-set-config slaughterhouse --config '{"lineup_from_text":true}'
 scripts/prod-db.sh pnpm db:cli ingest-set-config badehaus --config '{"lineup_from_text":true}'
 scripts/prod-db.sh pnpm db:cli ingest-set-config acud --config '{"lineup_from_text":true}'
+scripts/prod-db.sh pnpm db:cli ingest-set-config schokoladen --config '{"lineup_from_text":true}'
 ```
 
 The first run after that reads every stored, unsettled item of these sources once (for ACUD also its times
