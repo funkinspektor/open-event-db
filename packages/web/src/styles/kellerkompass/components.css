@@ -333,8 +333,11 @@ textarea.kk-input { height: auto; padding: 14px 16px; line-height: 1.6; resize: 
 .kk-searchbtn .kk-icon { color: var(--ink); }
 .kk-search__cancel { flex: none; font-size: 15px; color: var(--ink); }
 .kk-toolbar--searching .kk-search { flex: 1 1 auto; height: 40px; }
-.kk-searchinfo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 18px 0 0; font-size: 15px; color: var(--muted); }
-.kk-searchinfo strong { color: var(--ink); font-weight: 700; }
+.kk-searchinfo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 18px 0 0; font-size: 15px; color: var(--muted); }
+.kk-searchinfo p { margin: 0; }
+.kk-searchinfo strong, .kk-searchinfo__filters { color: var(--ink); font-weight: 700; }
+.kk-searchinfo__actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.kk-searchinfo__past { flex-basis: 100%; }
 .kk-searchinfo a { color: var(--uv); font-weight: 500; }
 @media (max-width: 560px) {
   .kk-toolbar__start .kk-dropdown { flex: 1 1 auto; }

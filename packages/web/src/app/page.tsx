@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { getEvents, getTags } from '@/lib/api'
-import Link from 'next/link'
-import { buildApiQuery, filtersToHref, parseFilters } from '@/lib/filters'
+import { buildApiQuery, parseFilters } from '@/lib/filters'
 import { ListToolbar } from '@/components/ListToolbar'
+import { SearchInfo } from '@/components/SearchInfo'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
 import { shareMetadata } from '@/lib/site'
@@ -34,15 +34,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <hr className="kk-rule" />
         <ListToolbar filters={filters} allTags={tags} />
         {filters.q && (
-          <p className="kk-searchinfo" role="status">
-            <span>
-              {events.data.length === 0 ? 'No' : events.meta.has_more ? `${events.data.length}+` : events.data.length}{' '}
-              {events.data.length === 1 ? 'event' : 'events'} for <strong>“{filters.q}”</strong>
-            </span>
-            <Link href={filtersToHref({ ...filters, q: undefined })} scroll={false}>
-              Clear search
-            </Link>
-          </p>
+          <SearchInfo filters={{ ...filters, q: filters.q }} count={events.data.length} more={events.meta.has_more} />
         )}
         <EventList
           key={apiQuery.toString()}
@@ -50,11 +42,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           initialCursor={events.meta.cursor}
           apiQuery={apiQuery.toString()}
           groupByDay={firstDay}
-          emptyMessage={
-            filters.q
-              ? 'Nothing found. Try another spelling, or widen the date range in the filters.'
-              : undefined
-          }
+          emptyMessage={filters.q ? 'Nothing coming up. Try another spelling, or a shorter part of the name.' : undefined}
         />
       </section>
     </div>
