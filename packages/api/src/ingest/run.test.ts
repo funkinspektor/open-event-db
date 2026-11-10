@@ -1208,6 +1208,57 @@ describe('runIngest (Supamolly programme)', () => {
   })
 })
 
+describe('runIngest (Beate Uwe programme)', () => {
+  const page = readFileSync(fileURLToPath(new URL('./fixtures/beateuwe/home.html', import.meta.url)), 'utf8')
+  // Tuesday 2026-11-10, the day the fixture was saved
+  const BU_NOW = new Date('2026-11-10T11:00:00Z')
+  const BU_LATER = new Date('2026-11-10T17:00:00Z')
+  const BE_HOME = '2026-11-26'
+
+  it('reads the programme, maps the club to its venue and stores the lineup and the RA link', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Beate Uwe ${stamp}`, address: 'Schillingstraße 31', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { 'Beate Uwe': venue!.id } }, '', 'beateuwe')
+    const result = await run(source, page, BU_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 13, created: 13 })
+    expect(stub.calls).toBe(0)
+    const { draft } = await itemOf(source.id, BE_HOME)
+    expect(draft).toMatchObject({
+      title: 'Be Home /// live, zuhause',
+      starts_at: '2026-11-26T20:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      lineup: [
+        {
+          name: null,
+          acts: [
+            { name: 'NVANCE', time: null, live: true, note: null },
+            { name: 'Audae', time: null, live: true, note: null },
+            { name: 'Farn', time: null, live: false, note: null },
+            { name: 'Yanakuna', time: null, live: false, note: null },
+          ],
+        },
+      ],
+      times_unverified: false,
+    })
+    expect(JSON.stringify(draft)).toContain('https://ra.co/events/2574760')
+  })
+
+  it('marks a night gone when it leaves the programme', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'beateuwe')
+    await run(source, page, BU_NOW)
+    const result = await run(source, page.replace('26.11.26', 'XX'), BU_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 12, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, BE_HOME)).goneAt?.getTime()).toBe(BU_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

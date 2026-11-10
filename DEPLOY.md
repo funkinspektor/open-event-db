@@ -180,6 +180,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source schokoladen "Schokoladen" 'http
 scripts/prod-db.sh pnpm db:cli ingest-add-source festsaal "Festsaal Kreuzberg" 'https://admin.festsaal-kreuzberg.de/api/v2/pages/?type=home.EventPage&locale=de&limit=500&fields=sub_title,date,doors,start,changed_date,changed_doors,changed_start,changed_text,status,new_location,location,ticket,age,support,layouts,preview_image(download_url_medium)' kellerkompass-import --kind festsaal --venue <venue id> --config '{"lineup_from_text":true,"venues":{"Festsaal":"<venue id>","Kaminzimmer":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source lido "Lido" 'https://www.lido-berlin.de/' kellerkompass-import --kind lido --venue <venue id> --config '{"lineup_from_text":true,"venues":{"Lido":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source supamolly "Supamolly" 'https://www.supamolly.de/index.php?p=programm&l=de' kellerkompass-import --kind supamolly --config '{"venues":{"Supamolly":"<venue id>"}}' --venue <venue id>
+scripts/prod-db.sh pnpm db:cli ingest-add-source beateuwe "Beate Uwe" 'https://beate-uwe.de/' kellerkompass-import --kind beateuwe --config '{"venues":{"Beate Uwe":"<venue id>"}}' --venue <venue id>
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -227,6 +228,13 @@ names, as the bar's own RSS feed writes it (`rss.php`, which is not used: its da
 are the lineup, with the genre (and a country such as "(UK)") as their note, so the source needs no
 `lineup_from_text`; the description lists the acts' links. The image is the full flyer
 (`flyer/<id>.jpg`) when the row shows one. One request.
+Beate Uwe has no feed: its programme is on the home page, built by hand in Elementor. A night is an icon
+list with the date ("FR, 04.12.26 DEZ") and the start, followed by a text block: the title, linked to the RA
+event most of the time (that link becomes the event's Resident Advisor link), and a "w/ …" line, which is
+the lineup ("(live)" marks an act live, other brackets are its note), so the source needs no
+`lineup_from_text`. Other text goes to the description; there are no images. The club has one room and one
+night a day, so the day is the event's id. Past nights stay listed for a while, so a page without any date
+fails the source instead of marking every night gone. One request.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one

@@ -24,6 +24,7 @@ import { ExtractionError } from '../extract/vision.js'
 import { berlinInstant, berlinToday, fmtDay, nextDay, type CalendarDay } from '../extract/normalize.js'
 import { diff, logEdit, type DbOrTx } from '../history.js'
 import { eventSnapshot } from '../queries/events.js'
+import { parseBeateUwe } from './adapters/beateuwe.js'
 import { readBerghain } from './adapters/berghain.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseFestsaal } from './adapters/festsaal.js'
@@ -293,6 +294,8 @@ async function readFeed(
       return readLido(text, config, { pageUrl: url, now, fetchText })
     case 'supamolly':
       return parseSupamolly(text, config, { pageUrl: url, now })
+    case 'beateuwe':
+      return parseBeateUwe(text, config, { pageUrl: url, now })
   }
 }
 
