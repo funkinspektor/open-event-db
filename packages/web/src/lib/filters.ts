@@ -16,6 +16,8 @@ export interface Filters {
   categories: EventCategory[]
   tags: string[]
   city: string
+  /** Free-text search: title, venue, lineup and tags. */
+  q?: string
   /** Custom range as Berlin calendar days (YYYY-MM-DD), both inclusive; only used when range is 'custom'. */
   from?: string
   to?: string
@@ -36,6 +38,7 @@ export function parseFilters(sp: SP): Filters {
     .filter(Boolean)
   const categories = parseCategories(first(sp.categories))
   const city = first(sp.city) ?? 'Berlin'
+  const q = first(sp.q)?.trim().slice(0, 100) || undefined
 
   // A custom range (?from=…&to=…) wins over the preset ranges.
   let from = first(sp.from)
@@ -44,11 +47,11 @@ export function parseFilters(sp: SP): Filters {
     from = isDay(from) ? from : undefined
     to = isDay(to) ? to : undefined
     if (from && to && from > to) [from, to] = [to, from]
-    return { range: 'custom', categories, tags, city, from, to }
+    return { range: 'custom', categories, tags, city, q, from, to }
   }
 
   const range = RANGES.some((r) => r.key === rangeRaw) ? (rangeRaw as Range) : 'upcoming'
-  return { range, categories, tags, city }
+  return { range, categories, tags, city, q }
 }
 
 // Same DD.MM style as the day headings in the listing.
@@ -74,6 +77,7 @@ export function filtersToHref(f: Filters): string {
   if (f.categories.length) qs.set('categories', f.categories.join(','))
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   if (f.city !== 'Berlin') qs.set('city', f.city)
+  if (f.q) qs.set('q', f.q)
   const s = qs.toString()
   return s ? `/?${s}` : '/'
 }
@@ -158,6 +162,7 @@ export function buildApiQuery(f: Filters, limit = 20): URLSearchParams {
   if (f.city) qs.set('city', f.city)
   if (f.categories.length) qs.set('categories', f.categories.join(','))
   if (f.tags.length) qs.set('tags', f.tags.join(','))
+  if (f.q) qs.set('q', f.q)
   const { from, to } = f.range === 'custom' ? customRangeToDates(f.from, f.to) : rangeToDates(f.range)
   if (from) qs.set('from', from.toISOString())
   if (to) qs.set('to', to.toISOString())

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getEvents, getTags } from '@/lib/api'
 import { buildApiQuery, parseFilters } from '@/lib/filters'
 import { ListToolbar } from '@/components/ListToolbar'
+import { SearchInfo } from '@/components/SearchInfo'
 import { EventList } from '@/components/EventList'
 import { Headline } from '@/components/Headline'
 import { shareMetadata } from '@/lib/site'
@@ -32,12 +33,16 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       <section aria-label="Event list">
         <hr className="kk-rule" />
         <ListToolbar filters={filters} allTags={tags} />
+        {filters.q && (
+          <SearchInfo filters={{ ...filters, q: filters.q }} count={events.data.length} more={events.meta.has_more} />
+        )}
         <EventList
           key={apiQuery.toString()}
           initialEvents={events.data}
           initialCursor={events.meta.cursor}
           apiQuery={apiQuery.toString()}
           groupByDay={firstDay}
+          emptyMessage={filters.q ? 'Nothing coming up. Try another spelling, or a shorter part of the name.' : undefined}
         />
       </section>
     </div>

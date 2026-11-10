@@ -6,7 +6,6 @@ import {
   desc,
   eq,
   gt,
-  ilike,
   inArray,
   lt,
   or,
@@ -44,6 +43,7 @@ import { imageStore } from '../images/store.js'
 import {
   cancelEvent,
   effectiveEndSql,
+  eventSearchSql,
   eventSnapshot,
   getEventDetail,
   getOwners,
@@ -115,7 +115,7 @@ export async function eventRoutes(app: FastifyInstance) {
     if (to) conditions.push(lt(events.startsAt, to))
     if (city) conditions.push(eq(events.city, city))
     if (venue_id) conditions.push(eq(events.venueId, venue_id))
-    if (q) conditions.push(ilike(events.title, `%${q}%`))
+    if (q?.trim()) conditions.push(eventSearchSql(q))
     if (tags?.length) conditions.push(arrayOverlaps(events.tags, tags))
     if (categories?.length) conditions.push(arrayOverlaps(events.categories, categories))
     if (publisher_id) {
