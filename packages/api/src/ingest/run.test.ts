@@ -1308,6 +1308,49 @@ describe('runIngest (SO36 ticket shop)', () => {
   })
 })
 
+describe('runIngest (Frannz programme)', () => {
+  const page = readFileSync(fileURLToPath(new URL('./fixtures/frannz/index.html', import.meta.url)), 'utf8')
+  // Tuesday 2026-11-10, the day the fixture was saved
+  const FZ_NOW = new Date('2026-11-10T11:00:00Z')
+  const FZ_LATER = new Date('2026-11-10T17:00:00Z')
+  const POHLMANN = '9453'
+
+  it('reads the programme, maps the club to its venue and keeps a moved concert where it moved', async () => {
+    stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Frannz Club ${stamp}`, address: 'Schönhauser Allee 36', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { 'Frannz Club': venue!.id }, capped: true }, '', 'frannz')
+    const result = await run(source, page, FZ_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 13, created: 13 })
+    expect((await itemOf(source.id, POHLMANN)).draft).toMatchObject({
+      title: 'Pohlmann',
+      starts_at: '2026-11-11T19:25:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      source_url: `${new URL(source.url).origin}/?p=9453`,
+      links: {
+        website: `${new URL(source.url).origin}/?p=9453`,
+        tickets: 'https://www.eventim.de/noapp/event/pohlmann-beweggruende-tour-202526-frannz-club-20527262/?affiliate=SZ3',
+      },
+      times_unverified: false,
+    })
+    expect((await itemOf(source.id, '9975')).draft).toMatchObject({ title: 'Georgia Cavallo', venue_id: null, location_text: 'Lido' })
+  })
+
+  it('marks an event gone when it leaves the programme', async () => {
+    stubExtractor()
+    const source = await newSource({ capped: true }, '', 'frannz')
+    await run(source, page, FZ_NOW)
+    const result = await run(source, page.replace(`id="post-${POHLMANN}"`, 'id="post-x"'), FZ_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 12, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, POHLMANN)).goneAt?.getTime()).toBe(FZ_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

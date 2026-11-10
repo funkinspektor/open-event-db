@@ -28,6 +28,7 @@ import { parseBeateUwe } from './adapters/beateuwe.js'
 import { readBerghain } from './adapters/berghain.js'
 import { parseDunckerclub } from './adapters/dunckerclub.js'
 import { parseFestsaal } from './adapters/festsaal.js'
+import { parseFrannz } from './adapters/frannz.js'
 import { parseIcal, type FeedEvent } from './adapters/ical.js'
 import { readSchokoladen } from './adapters/schokoladen.js'
 import { readLido } from './adapters/lido.js'
@@ -299,6 +300,9 @@ async function readFeed(
       return parseBeateUwe(text, config, { pageUrl: url, now })
     case 'so36':
       return readSo36(text, config, { pageUrl: url, now, fetchText })
+
+    case 'frannz':
+      return parseFrannz(text, config, { pageUrl: url, now })
   }
 }
 

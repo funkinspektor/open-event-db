@@ -148,6 +148,13 @@
       "when": 1794345861135,
       "tag": "0020_simple_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794346205820,
+      "tag": "0021_living_alice",
+      "breakpoints": true
     }
   ]
 }

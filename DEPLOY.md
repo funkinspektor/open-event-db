@@ -182,6 +182,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source lido "Lido" 'https://www.lido-b
 scripts/prod-db.sh pnpm db:cli ingest-add-source supamolly "Supamolly" 'https://www.supamolly.de/index.php?p=programm&l=de' kellerkompass-import --kind supamolly --config '{"venues":{"Supamolly":"<venue id>"}}' --venue <venue id>
 scripts/prod-db.sh pnpm db:cli ingest-add-source beateuwe "Beate Uwe" 'https://beate-uwe.de/' kellerkompass-import --kind beateuwe --config '{"venues":{"Beate Uwe":"<venue id>"}}' --venue <venue id>
 scripts/prod-db.sh pnpm db:cli ingest-add-source so36 "SO36" 'https://www.so36.com/orte/so36?page=1&pagesize=500&arguments=articles%3Aimage%2Carticles%3Atitle%2Clocation%3Atitle%2Carticles%3Avalid_start_on&table_id=product_table_shop-locations_controller_show_1' kellerkompass-import --kind so36 --venue <venue id> --config '{"lineup_from_text":true,"venues":{"SO36":"<venue id>"}}'
+scripts/prod-db.sh pnpm db:cli ingest-add-source frannz "Frannz Club" 'https://frannz.eu/' kellerkompass-import --kind frannz --venue <venue id> --config '{"lineup_from_text":true,"capped":true,"venues":{"Frannz Club":"<venue id>"}}'
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -246,6 +247,16 @@ another, about 30 seconds for 90 events. 23:59 is the placeholder time of club n
 unverified". The listing writes titles in capitals; where the event text spells the title ("Walls Of
 Jericho"), that spelling is used. Cancelled and postponed events (eventStatus, or "abgesagt" in the title)
 are left out.
+
+The Frannz Club (frannz.eu, WordPress) lists its next hundred events on the home page; the "mehr" button
+only shows more of them, hence `capped`. Each is an `<article id="post-…">`: the post id is the event's id
+and its link (`/?p=<id>` leads to the event page). The slider at the top repeats some without a date; those
+copies are skipped. The list gives no year and runs about eleven months ahead, so the year is the one whose
+date falls on the listed weekday. The start is "Beginn"; doors, box office price, presenter and tour line go
+into the description, rooms only when it is not just the Club. Notes in the title ("-ausverkauft-",
+"Nachholtermin vom …") move to the description; cancelled events are left out, a concert moved elsewhere
+("-ins Lido verlegt-") keeps that venue's name as location text. The ticket link is the first link on a
+line about tickets (or the line below it). One request, about 1.2 MB.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one
