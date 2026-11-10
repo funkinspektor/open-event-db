@@ -181,6 +181,7 @@ scripts/prod-db.sh pnpm db:cli ingest-add-source festsaal "Festsaal Kreuzberg" '
 scripts/prod-db.sh pnpm db:cli ingest-add-source lido "Lido" 'https://www.lido-berlin.de/' kellerkompass-import --kind lido --venue <venue id> --config '{"lineup_from_text":true,"venues":{"Lido":"<venue id>"}}'
 scripts/prod-db.sh pnpm db:cli ingest-add-source supamolly "Supamolly" 'https://www.supamolly.de/index.php?p=programm&l=de' kellerkompass-import --kind supamolly --config '{"venues":{"Supamolly":"<venue id>"}}' --venue <venue id>
 scripts/prod-db.sh pnpm db:cli ingest-add-source beateuwe "Beate Uwe" 'https://beate-uwe.de/' kellerkompass-import --kind beateuwe --config '{"venues":{"Beate Uwe":"<venue id>"}}' --venue <venue id>
+scripts/prod-db.sh pnpm db:cli ingest-add-source so36 "SO36" 'https://www.so36.com/orte/so36?page=1&pagesize=500&arguments=articles%3Aimage%2Carticles%3Atitle%2Clocation%3Atitle%2Carticles%3Avalid_start_on&table_id=product_table_shop-locations_controller_show_1' kellerkompass-import --kind so36 --venue <venue id> --config '{"lineup_from_text":true,"venues":{"SO36":"<venue id>"}}'
 ```
 
 The Berghain sources must point at the German listings (`/de/program/…`): the adapter reads "tür"/"beginn"
@@ -235,6 +236,16 @@ the lineup ("(live)" marks an act live, other brackets are its note), so the sou
 `lineup_from_text`. Other text goes to the description; there are no images. The club has one room and one
 night a day, so the day is the event's id. Past nights stay listed for a while, so a page without any date
 fails the source instead of marking every night gone. One request.
+
+The SO36 sells its tickets in its own tickettoaster shop (so36.com), and the shop is its programme. The
+location page fills its table from JSON (`/orte/so36?…&table_id=…`): that JSON is the source URL, every
+upcoming event in one request with `pagesize=500` (the source fails with "raise pagesize=" when the shop
+lists more). The product id is the event's id. Text, doors ("Einlass"), category, prices and the full image
+are only on the product pages (schema.org Event as JSON-LD): a run fetches one per upcoming event, one after
+another, about 30 seconds for 90 events. 23:59 is the placeholder time of club nights and stays "times
+unverified". The listing writes titles in capitals; where the event text spells the title ("Walls Of
+Jericho"), that spelling is used. Cancelled and postponed events (eventStatus, or "abgesagt" in the title)
+are left out.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one

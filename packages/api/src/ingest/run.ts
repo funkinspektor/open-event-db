@@ -33,6 +33,7 @@ import { readSchokoladen } from './adapters/schokoladen.js'
 import { readLido } from './adapters/lido.js'
 import { parseSlaughterhouse } from './adapters/slaughterhouse.js'
 import { parseSquarespace } from './adapters/squarespace.js'
+import { readSo36 } from './adapters/so36.js'
 import { parseSupamolly } from './adapters/supamolly.js'
 import { readUrbanSpree } from './adapters/urbanspree.js'
 import { calendarDay, normalizeFeedEvent } from './normalize.js'
@@ -296,6 +297,8 @@ async function readFeed(
       return parseSupamolly(text, config, { pageUrl: url, now })
     case 'beateuwe':
       return parseBeateUwe(text, config, { pageUrl: url, now })
+    case 'so36':
+      return readSo36(text, config, { pageUrl: url, now, fetchText })
   }
 }
 

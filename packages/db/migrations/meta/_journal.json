@@ -141,6 +141,13 @@
       "when": 1794345436312,
       "tag": "0019_mighty_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794345861135,
+      "tag": "0020_simple_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

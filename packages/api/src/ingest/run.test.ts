@@ -1259,6 +1259,55 @@ describe('runIngest (Beate Uwe programme)', () => {
   })
 })
 
+describe('runIngest (SO36 ticket shop)', () => {
+  const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`./fixtures/so36/${name}`, import.meta.url)), 'utf8')
+  // Tuesday 2026-11-10, the day the fixtures were saved
+  const SO_NOW = new Date('2026-11-10T11:00:00Z')
+  const SO_LATER = new Date('2026-11-10T17:00:00Z')
+  const WALLS = '99538'
+  const WALLS_PATH = '/produkte/99538-tickets-walls-of-jericho-so36-berlin-am-10-11-2026'
+
+  /** The listing JSON at the source URL, the event fixtures at the shop's product pages. */
+  const site = (listing: string) => async (url: string) =>
+    url.includes('/produkte/') ? fixture(`${url.split('/produkte/')[1]!.split('-')[0]}.html`) : listing
+
+  it('reads the listing and the event pages and maps the club to its venue', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db.insert(venues).values({ name: `SO36 ${stamp}`, address: 'Oranienstraße 190', city: 'Berlin' }).returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { SO36: venue!.id } }, '', 'so36')
+    const result = await runIngest({ only: source.slug, now: SO_NOW, fetchText: site(fixture('listing.json')) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 6, created: 6 })
+    expect(stub.calls).toBe(0)
+    // The product links resolve against the source URL
+    const url = `https://${source.slug}.test${WALLS_PATH}`
+    expect((await itemOf(source.id, WALLS)).draft).toMatchObject({
+      title: 'Walls Of Jericho',
+      starts_at: '2026-11-10T20:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      links: { website: url },
+      source_url: url,
+      times_unverified: false,
+    })
+    expect((await itemOf(source.id, '102902')).draft).toMatchObject({ title: 'La Casa del Perreo', times_unverified: true })
+  })
+
+  it('marks an event gone when it leaves the listing', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'so36')
+    const listing = fixture('listing.json')
+    await runIngest({ only: source.slug, now: SO_NOW, fetchText: site(listing) })
+    const json = JSON.parse(listing) as { data: { id: number }[]; meta: { total: number } }
+    json.data = json.data.filter((row) => String(row.id) !== WALLS)
+    json.meta.total = json.data.length
+    const result = await runIngest({ only: source.slug, now: SO_LATER, fetchText: site(JSON.stringify(json)) })
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 5, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, WALLS)).goneAt?.getTime()).toBe(SO_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])
