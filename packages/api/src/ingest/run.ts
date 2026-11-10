@@ -32,6 +32,7 @@ import { readSchokoladen } from './adapters/schokoladen.js'
 import { readLido } from './adapters/lido.js'
 import { parseSlaughterhouse } from './adapters/slaughterhouse.js'
 import { parseSquarespace } from './adapters/squarespace.js'
+import { parseSupamolly } from './adapters/supamolly.js'
 import { readUrbanSpree } from './adapters/urbanspree.js'
 import { calendarDay, normalizeFeedEvent } from './normalize.js'
 import { syncItemImage } from './image.js'
@@ -290,6 +291,8 @@ async function readFeed(
       return parseFestsaal(text, config, { pageUrl: url, now })
     case 'lido':
       return readLido(text, config, { pageUrl: url, now, fetchText })
+    case 'supamolly':
+      return parseSupamolly(text, config, { pageUrl: url, now })
   }
 }
 

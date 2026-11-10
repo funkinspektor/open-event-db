@@ -1161,6 +1161,53 @@ describe('runIngest (Lido programme)', () => {
   })
 })
 
+describe('runIngest (Supamolly programme)', () => {
+  const page = readFileSync(fileURLToPath(new URL('./fixtures/supamolly/programm.html', import.meta.url)), 'utf8')
+  // Tuesday 2026-11-10, the day the fixture was saved
+  const SM_NOW = new Date('2026-11-10T11:00:00Z')
+  const SM_LATER = new Date('2026-11-10T17:00:00Z')
+  const LA_SANGRE = '202611132100'
+
+  it('reads the programme, maps the bar to its venue and stores the lineup', async () => {
+    const stub = stubExtractor()
+    const [venue] = await db
+      .insert(venues)
+      .values({ name: `Supamolly ${stamp}`, address: 'Jessnerstraße 41', city: 'Berlin' })
+      .returning()
+    venueIds.push(venue!.id)
+    const source = await newSource({ venues: { Supamolly: venue!.id } }, '', 'supamolly')
+    const result = await run(source, page, SM_NOW)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 6, created: 6 })
+    expect(stub.calls).toBe(0)
+    expect((await itemOf(source.id, LA_SANGRE)).draft).toMatchObject({
+      title: 'La Sangre, Karatschai',
+      starts_at: '2026-11-13T21:00:00+01:00',
+      ends_at: null,
+      venue_id: venue!.id,
+      location_text: null,
+      lineup: [
+        {
+          name: null,
+          acts: [
+            { name: 'La Sangre', time: null, live: false, note: 'ChilenischerAkustik FolkPunk' },
+            { name: 'Karatschai', time: null, live: false, note: 'StonerdoomPsychSludge, Berlin' },
+          ],
+        },
+      ],
+      times_unverified: false,
+    })
+  })
+
+  it('marks an event gone when it leaves the programme', async () => {
+    stubExtractor()
+    const source = await newSource({}, '', 'supamolly')
+    await run(source, page, SM_NOW)
+    const result = await run(source, page.replace(`id="${LA_SANGRE}"`, 'id="none"'), SM_LATER)
+    expect(result.sources[0]).toMatchObject({ ok: true, seen: 5, created: 0, updated: 0, gone: 1 })
+    expect((await itemOf(source.id, LA_SANGRE)).goneAt?.getTime()).toBe(SM_LATER.getTime())
+  })
+})
+
 describe('runIngest (event images)', () => {
   const PERSIAN_IMAGE = 'https://acudmachtneu.de/resources/uploads/2026/10/blurred-frame-4.jpg'
   const JPEG = (n: number) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, n])

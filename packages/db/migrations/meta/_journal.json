@@ -127,6 +127,13 @@
       "when": 1793448034161,
       "tag": "0017_dazzling_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794338358776,
+      "tag": "0018_low_rocket_racer",
+      "breakpoints": true
     }
   ]
 }
