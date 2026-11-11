@@ -21,11 +21,14 @@ export function ListToolbar({
   filters,
   allTags,
   loggedIn = false,
+  canCreate = true,
 }: {
   filters: Filters
   allTags: string[]
   /** Shows the "Only mine" toggle. */
   loggedIn?: boolean
+  /** Hides Create event for accounts that can't create events. */
+  canCreate?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -364,10 +367,12 @@ export function ListToolbar({
             )}
           </div>
           {/* Shown logged out too: /events/new sends visitors to log in. */}
-          <Link href="/events/new" className="kk-btn kk-btn--outline">
-            <PlusIcon />
-            Create event
-          </Link>
+          {canCreate && (
+            <Link href="/events/new" className="kk-btn kk-btn--outline">
+              <PlusIcon />
+              Create event
+            </Link>
+          )}
         </>
       )}
       {/* On phones the sheet goes to <body>, out of the toolbar's backdrop-filter, which would trap position: fixed. */}

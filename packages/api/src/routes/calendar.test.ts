@@ -5,6 +5,7 @@ import { eventInterests, events, generateToken, sessions, venues } from '@open-e
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { cleanup, createAccount } from '../test/fixtures.js'
+import { location } from './calendar.js'
 
 let app: FastifyInstance
 const venueIds: string[] = []
@@ -85,5 +86,16 @@ describe('GET /cal/:token.ics', () => {
     const path = await rotate()
     for (let i = 0; i < 60; i++) expect((await app.inject({ method: 'GET', url: path })).statusCode).toBe(200)
     expect((await app.inject({ method: 'GET', url: path })).statusCode).toBe(429)
+  })
+})
+
+describe('calendar location', () => {
+  const base = { venueName: 'RSO', venueAddress: 'Schnellerstraße 137, 12439 Berlin', venueCity: 'Berlin', locationText: null, city: 'Berlin' }
+  it('does not repeat a city the address already ends with', () => {
+    expect(location(base)).toBe('RSO, Schnellerstraße 137, 12439 Berlin')
+    expect(location({ ...base, venueAddress: 'Schnellerstraße 137, 12439 BERLIN' })).toBe('RSO, Schnellerstraße 137, 12439 BERLIN')
+  })
+  it('still appends the city otherwise', () => {
+    expect(location({ ...base, venueAddress: 'Gang 1' })).toBe('RSO, Gang 1, Berlin')
   })
 })

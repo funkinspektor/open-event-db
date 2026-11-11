@@ -11,14 +11,18 @@ const SUFFIX = '.ics'
 
 const tokenOf = (file: string) => (file.endsWith(SUFFIX) ? file.slice(0, -SUFFIX.length) : '')
 
-function location(e: {
+export function location(e: {
   venueName: string | null
   venueAddress: string | null
   venueCity: string | null
   locationText: string | null
   city: string
 }) {
-  if (e.venueName) return [e.venueName, e.venueAddress, e.venueCity].filter(Boolean).join(', ')
+  if (e.venueName) {
+    // Addresses often end with the city already ("12439 Berlin"): don't repeat it.
+    const city = e.venueCity && e.venueAddress?.trim().toLowerCase().endsWith(e.venueCity.trim().toLowerCase()) ? null : e.venueCity
+    return [e.venueName, e.venueAddress, city].filter(Boolean).join(', ')
+  }
   if (e.locationText) return [e.locationText, e.city].filter(Boolean).join(', ')
   return null
 }

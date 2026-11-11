@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { InlineLogin } from './InlineLogin'
 import { StarIcon } from './Icons'
@@ -16,6 +17,7 @@ const FAILED = 'Couldn’t update. Please try again.'
 export function InterestToggle({ eventId, interested }: { eventId: string; interested: boolean | null }) {
   const router = useRouter()
   const [on, setOn] = useState(interested)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
   const [login, setLogin] = useState(false)
   const [toast, setToast] = useState<{ key: number; message: string; link?: boolean } | null>(null)
@@ -55,6 +57,7 @@ export function InterestToggle({ eventId, interested }: { eventId: string; inter
   return (
     <>
       <button
+        ref={buttonRef}
         type="button"
         className="kk-star"
         aria-pressed={on === true}
@@ -63,14 +66,20 @@ export function InterestToggle({ eventId, interested }: { eventId: string; inter
       >
         <StarIcon filled={on === true} />
       </button>
-      {login && <InlineLogin returnTo={`/events/${eventId}?interest=1`} onClose={() => setLogin(false)} />}
-      {toast && (
-        <Toast
-          key={toast.key}
-          message={toast.message}
-          action={toast.link ? { href: '/?mine=1', label: 'My events' } : undefined}
-        />
-      )}
+      {login && <InlineLogin returnTo={`/events/${eventId}?interest=1`} onClose={() => {
+            setLogin(false)
+            buttonRef.current?.focus()
+          }} />}
+      {/* In <body>, so a cancelled row's dimming doesn't reach it. */}
+      {toast &&
+        createPortal(
+          <Toast
+            key={toast.key}
+            message={toast.message}
+            action={toast.link ? { href: '/?mine=1', label: 'My events' } : undefined}
+          />,
+          document.body,
+        )}
     </>
   )
 }

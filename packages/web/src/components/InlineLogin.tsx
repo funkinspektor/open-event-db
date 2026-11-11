@@ -10,21 +10,25 @@ import { LoginForm } from './LoginForm'
  */
 export function InlineLogin({ returnTo, onClose }: { returnTo: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
+  // Once per opening: re-renders must not pull focus away from the email field.
   useEffect(() => {
-    ref.current?.focus()
+    // The email field autofocuses; only fall back to the dialog itself when nothing inside has focus.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus()
     const root = document.documentElement
     const overflow = root.style.overflow
     root.style.overflow = 'hidden'
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') closeRef.current()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
       root.style.overflow = overflow
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [onClose])
+  }, [])
 
   return createPortal(
     <>

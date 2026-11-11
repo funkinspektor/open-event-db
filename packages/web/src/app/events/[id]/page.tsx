@@ -125,7 +125,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
     <article className="kk-container">
       <JsonLd data={jsonLd} />
       {savedMessage && canEdit && <Toast message={savedMessage} param="saved" />}
-      {interest === '1' && me?.onboarded && <InterestFromLogin eventId={e.id} />}
+      {me?.onboarded && <InterestFromLogin eventId={e.id} pending={interest === '1'} />}
 
       <EventDetailBody
         title={e.title}

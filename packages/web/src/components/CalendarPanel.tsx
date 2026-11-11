@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -9,6 +10,7 @@ const toWebcal = (url: string) => url.replace(/^https?:\/\//, 'webcal://')
 
 async function call(path: string, method: 'GET' | 'POST'): Promise<string | null> {
   const res = await fetch(`${API_URL}/api/v1/accounts/me/${path}`, { method, credentials: 'include' })
+  if (res.status === 403) throw new Error('onboarding_required')
   if (!res.ok) throw new Error(`API ${res.status}`)
   return ((await res.json()) as { data: { url: string | null } }).data.url
 }
@@ -18,13 +20,24 @@ async function call(path: string, method: 'GET' | 'POST'): Promise<string | null
  * (created on first use) to open in a calendar app, copy, or replace with a new one.
  */
 export function CalendarPanel() {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  const fail = (e: unknown, message: string) =>
+    e instanceof Error && e.message === 'onboarding_required' ? router.push('/welcome') : setError(message)
+
   async function toggle() {
+    if (busy) return
     if (open) return setOpen(false)
     setOpen(true)
     if (url) return
@@ -32,22 +45,23 @@ export function CalendarPanel() {
     setError(null)
     try {
       setUrl((await call('calendar', 'GET')) ?? (await call('calendar-token', 'POST')))
-    } catch {
-      setError('Couldn’t load your calendar link. Please try again.')
+    } catch (e) {
+      fail(e, 'Couldn’t load your calendar link. Please try again.')
     } finally {
       setBusy(false)
     }
   }
 
   async function rotate() {
+    if (busy) return
     if (!window.confirm('The old link stops working in your calendar apps. Continue?')) return
     setBusy(true)
     setError(null)
     setCopied(false)
     try {
       setUrl(await call('calendar-token', 'POST'))
-    } catch {
-      setError('Couldn’t create a new link. Please try again.')
+    } catch (e) {
+      fail(e, 'Couldn’t create a new link. Please try again.')
     } finally {
       setBusy(false)
     }

@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { getEvents, getInterestIds, getTags } from '@/lib/api'
 import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
+import { canCreateEvents } from '@/lib/permissions'
 import { CalendarPanel } from '@/components/CalendarPanel'
-import { buildApiQuery, parseFilters } from '@/lib/filters'
+import { buildApiQuery, filtersToHref, parseFilters } from '@/lib/filters'
 import { ListToolbar } from '@/components/ListToolbar'
 import { SearchInfo } from '@/components/SearchInfo'
 import { EventList } from '@/components/EventList'
@@ -37,7 +38,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const now = new Date()
   const pastQuery = new URLSearchParams(apiQuery)
   pastQuery.set('from', new Date(now.getTime() - PAST_DAYS * 24 * 60 * 60 * 1000).toISOString())
-  pastQuery.set('to', now.toISOString())
+  // Never reaches into the main list: it ends where the main list starts (or now, if that is later).
+  const mainFrom = apiQuery.get('from')
+  pastQuery.set('to', mainFrom && mainFrom < now.toISOString() ? mainFrom : now.toISOString())
   pastQuery.set('order', 'desc')
 
   const [events, tags, past, interestedIds] = await Promise.all([
@@ -48,7 +51,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     loggedIn && cookie && !filters.mine
       ? getInterestIds(
           cookie,
-          apiQuery.get('from') ? new Date(apiQuery.get('from')!) : undefined,
+          // No lower bound: ongoing events started before the list's `from` and still need their star.
+          undefined,
           apiQuery.get('to') ? new Date(apiQuery.get('to')!) : undefined,
         )
       : null,
@@ -63,7 +67,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
       <section aria-label="Event list">
         <hr className="kk-rule" />
-        <ListToolbar filters={filters} allTags={tags} loggedIn={loggedIn} />
+        <ListToolbar filters={filters} allTags={tags} loggedIn={loggedIn} canCreate={!me || canCreateEvents(me)} />
         {filters.mine && <CalendarPanel />}
         {filters.q && (
           <SearchInfo filters={{ ...filters, q: filters.q }} count={events.data.length} more={events.meta.has_more} />
@@ -88,7 +92,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <details className="kk-past">
             <summary>Past</summary>
             <EventList
-              key={pastQuery.toString()}
+              key={`past${filtersToHref(filters)}`}
               initialEvents={past.data}
               initialCursor={past.meta.cursor}
               apiQuery={pastQuery.toString()}
