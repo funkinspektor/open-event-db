@@ -225,8 +225,10 @@ describe('sign-up through the magic link', () => {
     expect(unknown.statusCode).toBe(200)
     expect(unknown.json()).toEqual(known.json())
     await vi.waitFor(() => expect(outbox.length).toBe(before + 2))
-    expect(outbox[before]).toMatchObject({ to: fresh, kind: 'signup' })
-    expect(outbox[before + 1]).toMatchObject({ to: address, kind: 'login' })
+    // both are sent in the background, so the order is not fixed
+    const sent = outbox.slice(before)
+    expect(sent.find((m) => m.to === fresh)).toMatchObject({ kind: 'signup' })
+    expect(sent.find((m) => m.to === address)).toMatchObject({ kind: 'login' })
     expect(await byAddress(fresh)).toHaveLength(0)
   })
 
@@ -321,6 +323,35 @@ describe('sign-up through the magic link', () => {
       .where(and(eq(magicLinkTokens.kind, 'signup'), eq(magicLinkTokens.requestIp, ip)))
     expect(rows).toHaveLength(10)
     await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
+  })
+
+  it('15 parallel sign-up requests from one IP create exactly 10 tokens and mails', async () => {
+    const ip = '203.0.113.99'
+    await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
+    const before = outbox.length
+    const results = await Promise.all(
+      Array.from({ length: 15 }, (_, i) => requestLink(`par-${stamp}-${i}@test.local`, {}, ip)),
+    )
+    expect(results.every((r) => r.statusCode === 200)).toBe(true)
+    await vi.waitFor(() => expect(outbox.length).toBeGreaterThanOrEqual(before + 10))
+    await new Promise((r) => setTimeout(r, 300))
+    expect(outbox.length).toBe(before + 10)
+    const rows = await db
+      .select()
+      .from(magicLinkTokens)
+      .where(and(eq(magicLinkTokens.kind, 'signup'), eq(magicLinkTokens.requestIp, ip)))
+    expect(rows).toHaveLength(10)
+    await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
+  })
+
+  it.each([[123], ['/x'.repeat(1500)], [{ a: 1 }]])('a junk return_to never causes a 400 and is dropped', async (junk) => {
+    const fresh = `signup-${stamp}-junk${typeof junk}${String(junk).length}@test.local`
+    const before = outbox.length
+    const res = await requestLink(fresh, { return_to: junk })
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(outbox.length).toBe(before + 1))
+    const [tok] = await db.select().from(magicLinkTokens).where(eq(magicLinkTokens.email, fresh))
+    expect(tok!.returnTo).toBeNull()
   })
 
   it('cleanup keeps sign-up tokens for 24h (for the per-IP cap), other kinds as before', async () => {

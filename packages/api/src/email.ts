@@ -17,6 +17,9 @@ export interface EmailTransport {
   sendEmailChangedNotice(msg: EmailChangedNoticeEmail): Promise<void>
 }
 
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
 const isProduction = process.env.NODE_ENV === 'production'
 const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
 
@@ -119,7 +122,7 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
         [copy.intro(brand), '', url, '', copy.validity, copy.ignore].join('\n'),
         [
           `<p>${copy.intro(brand)}</p>`,
-          `<p><a href="${url}">${copy.cta(brand)}</a></p>`,
+          `<p><a href="${escapeHtml(url)}">${copy.cta(brand)}</a></p>`,
           `<p>${copy.validity}<br>`,
           `${copy.ignore}</p>`,
         ].join('\n'),
@@ -141,7 +144,7 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
           `Logins now go to the new address. If this wasn't you, please contact us right away.`,
         ].join('\n'),
         [
-          `<p>The email address of your ${brand} account was changed to ${newEmail}.</p>`,
+          `<p>The email address of your ${brand} account was changed to ${escapeHtml(newEmail)}.</p>`,
           `<p>Logins now go to the new address. If this wasn't you, please contact us right away.</p>`,
         ].join('\n'),
       )

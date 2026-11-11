@@ -54,7 +54,7 @@ export const apiKeyResponseSchema = z.object({
 export const magicLinkRequestSchema = z.object({
   email: z.string().trim().email(),
   /** Same-site path to land on after login; validated with `safeReturnTo`, silently dropped if unsafe. */
-  return_to: z.string().max(2000).optional(),
+  return_to: z.unknown().optional(),
 })
 
 export const onboardingSchema = z.object({

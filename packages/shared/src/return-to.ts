@@ -5,7 +5,8 @@ export function safeReturnTo(value: unknown): string | null {
   if (typeof value !== 'string') return null
   if (value.length === 0 || value.length > MAX_RETURN_TO) return null
   if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return null
-  // Control characters (CR/LF, tabs) could split headers, or be stripped by browsers into `//host`.
-  if (/[\u0000-\u001f\u007f]/.test(value)) return null
+  // Printable ASCII only (callers send percent-encoded paths): anything else can break the Location header
+  // (characters above U+00FF throw, Latin-1 bytes go out raw) or be stripped by browsers into `//host`.
+  if (!/^[\x21-\x7e]+$/.test(value)) return null
   return value
 }

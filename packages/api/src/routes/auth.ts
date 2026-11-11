@@ -45,11 +45,11 @@ export interface SendMagicLinkInput {
   requestIp?: string
 }
 
-/** Stores the token and returns a function that mails the link; callers may defer the sending. */
-export async function issueMagicLink(input: SendMagicLinkInput): Promise<() => Promise<void>> {
+/** Stores a token and returns the link URL. Pass `tx` to run inside a transaction. */
+async function insertToken(input: SendMagicLinkInput, tx: Pick<typeof db, 'insert'> = db): Promise<string> {
   const { token, hash } = generateToken()
   const ttl = input.kind === 'email_change' ? EMAIL_CHANGE_TTL_MS : MAGIC_LINK_TTL_MS
-  await db.insert(magicLinkTokens).values({
+  await tx.insert(magicLinkTokens).values({
     accountId: input.accountId,
     email: input.to,
     kind: input.kind,
@@ -59,26 +59,36 @@ export async function issueMagicLink(input: SendMagicLinkInput): Promise<() => P
     tokenHash: hash,
     expiresAt: new Date(Date.now() + ttl),
   })
-  const url = `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
-  return () => email.transport.sendMagicLink({ to: input.to, url, kind: input.kind })
+  return `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
 }
 
 export async function sendMagicLink(input: SendMagicLinkInput): Promise<void> {
-  await (await issueMagicLink(input))()
+  const url = await insertToken(input)
+  await email.transport.sendMagicLink({ to: input.to, url, kind: input.kind })
 }
 
-async function signupCapReached(ip: string): Promise<boolean> {
-  const [row] = await db
-    .select({ n: count() })
-    .from(magicLinkTokens)
-    .where(
-      and(
-        eq(magicLinkTokens.kind, 'signup'),
-        eq(magicLinkTokens.requestIp, ip),
-        gt(magicLinkTokens.createdAt, new Date(Date.now() - SIGNUP_CAP_WINDOW_MS)),
-      ),
-    )
-  return (row?.n ?? 0) >= SIGNUP_MAILS_PER_IP_PER_DAY
+/**
+ * Sign-up link for an unknown address, subject to the per-IP daily cap. Count and insert run in one
+ * transaction under an advisory lock per IP, so parallel requests cannot all slip under the cap.
+ * Sends nothing when the cap is reached.
+ */
+async function sendSignupLink(address: string, returnTo: string | null, ip: string): Promise<void> {
+  const url = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'signup-cap:' + ip}))`)
+    const [row] = await tx
+      .select({ n: count() })
+      .from(magicLinkTokens)
+      .where(
+        and(
+          eq(magicLinkTokens.kind, 'signup'),
+          eq(magicLinkTokens.requestIp, ip),
+          gt(magicLinkTokens.createdAt, new Date(Date.now() - SIGNUP_CAP_WINDOW_MS)),
+        ),
+      )
+    if ((row?.n ?? 0) >= SIGNUP_MAILS_PER_IP_PER_DAY) return null
+    return insertToken({ kind: 'signup', to: address, accountId: null, returnTo, requestIp: ip }, tx)
+  })
+  if (url) await email.transport.sendMagicLink({ to: address, url, kind: 'signup' })
 }
 
 const HANDLE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -137,21 +147,13 @@ export async function authRoutes(app: FastifyInstance) {
       .where(sql`lower(${accounts.email}) = ${normalized}`)
       .limit(1)
 
-    // Both branches do the same work in the foreground (one count, one insert); only the mail itself is
-    // sent in the background. If the response waited for the send, its timing would reveal whether the
-    // email is registered. The token is stored before responding so the per-IP cap sees every request.
-    let deliver: (() => Promise<void>) | null = null
-    try {
-      const capReached = await signupCapReached(ip)
-      if (account) {
-        deliver = await issueMagicLink({ kind: 'login', to: account.email, accountId: account.id, returnTo })
-      } else if (!capReached) {
-        deliver = await issueMagicLink({ kind: 'signup', to: normalized, accountId: null, returnTo, requestIp: ip })
-      }
-    } catch (err) {
-      req.log.error({ err }, 'issuing magic link failed')
-    }
-    if (deliver) void deliver().catch((err) => req.log.error({ err }, 'sending magic link failed'))
+    // The request path only does the account lookup. Everything else (cap check, token insert, mail) runs in
+    // the background for both branches, so neither the response nor its timing reveals whether the email is
+    // registered, and a capped IP is indistinguishable from an uncapped one.
+    void (account
+      ? sendMagicLink({ kind: 'login', to: account.email, accountId: account.id, returnTo })
+      : sendSignupLink(normalized, returnTo, ip)
+    ).catch((err) => req.log.error({ err }, 'sending magic link failed'))
 
     return { data: { message: "If this email is registered, you'll receive a login link." } }
   })
