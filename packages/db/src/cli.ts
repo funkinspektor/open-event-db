@@ -43,7 +43,8 @@ function usage(): never {
                                                         Create an account (a login); --scout makes it a scout
   pnpm db:cli create-organizer <name> <slug> <member_handle>
                                                         Create a verified organizer with an account as its owner
-  pnpm db:cli add-member <organizer_slug> <handle>      Add an account as member of an organizer
+  pnpm db:cli add-member <organizer_slug> <handle> [--owner]
+                                                        Add an account as member of an organizer (--owner: as owner, upgrades a member)
   pnpm db:cli remove-member <organizer_slug> <handle>   Remove an account from an organizer
   pnpm db:cli set-scout <handle> on|off                 Turn the scout role of an account on or off
   pnpm db:cli set-email <handle> <email>                Change an account's login email
@@ -207,9 +208,20 @@ switch (cmd) {
       .from(organizerMembers)
       .where(and(eq(organizerMembers.organizerId, organizer.id), eq(organizerMembers.accountId, account.id)))
       .limit(1)
-    if (existing) fail(`${account.handle} is already ${existing.role === 'owner' ? 'an owner' : 'a member'} of ${organizer.slug}`)
-    await db.insert(organizerMembers).values({ organizerId: organizer.id, accountId: account.id, role: 'member' })
-    console.log(`${account.handle} is now a member of ${organizer.slug}`)
+    const role = flags.has('--owner') ? 'owner' : 'member'
+    if (existing && (existing.role === 'owner' || role === 'member')) {
+      fail(`${account.handle} is already ${existing.role === 'owner' ? 'an owner' : 'a member'} of ${organizer.slug}`)
+    }
+    if (existing) {
+      await db
+        .update(organizerMembers)
+        .set({ role })
+        .where(and(eq(organizerMembers.organizerId, organizer.id), eq(organizerMembers.accountId, account.id)))
+      console.log(`${account.handle} is now an owner of ${organizer.slug} (was a member)`)
+    } else {
+      await db.insert(organizerMembers).values({ organizerId: organizer.id, accountId: account.id, role })
+      console.log(`${account.handle} is now ${role === 'owner' ? 'an owner' : 'a member'} of ${organizer.slug}`)
+    }
     break
   }
   case 'remove-member': {
@@ -443,29 +455,30 @@ switch (cmd) {
       .where(eq(events.createdBy, a.id))
     const count = row?.count ?? 0
     const memberships = await db
-      .select({ organizerId: organizers.id, slug: organizers.slug })
+      .select({
+        name: organizers.name,
+        slug: organizers.slug,
+        members: sql<number>`(select count(*)::int from organizer_members om where om.organizer_id = ${organizers.id})`,
+      })
       .from(organizerMembers)
       .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
       .where(eq(organizerMembers.accountId, a.id))
-    if (!flags.has('--yes')) {
-      const ok = await confirm(`Delete the account of ${a.displayName}? Their ${count} event(s) stay, without their name.`)
+    // Organizers where this account is the only member stay public, without members
+    const orphaned = memberships.filter((m) => m.members === 1).map((m) => `${m.name} (${m.slug})`)
+    const orphanNote = orphaned.length ? ` Organizer(s) left without members: ${orphaned.join(', ')}.` : ''
+    if (flags.has('--yes')) {
+      if (orphaned.length) console.warn(`Organizer(s) left without members: ${orphaned.join(', ')}`)
+    } else {
+      const ok = await confirm(`Delete the account of ${a.displayName}? Their ${count} event(s) stay, without their name.${orphanNote}`)
       if (!ok) fail('Aborted')
     }
 
     // Events, feed sources and edit history reference the account row (onDelete: restrict), so the row stays as
     // an anonymous placeholder: "Added by" then reads "Deleted account". Everything personal is removed.
-    const orphaned: string[] = []
     await db.transaction(async (tx) => {
       await tx.delete(sessions).where(eq(sessions.accountId, a.id))
       await tx.delete(magicLinkTokens).where(eq(magicLinkTokens.accountId, a.id))
       await tx.delete(organizerMembers).where(eq(organizerMembers.accountId, a.id))
-      for (const m of memberships) {
-        const [left] = await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(organizerMembers)
-          .where(eq(organizerMembers.organizerId, m.organizerId))
-        if (!left?.count) orphaned.push(m.slug)
-      }
       // Profile history holds their old names
       await tx
         .delete(editHistory)
@@ -491,9 +504,6 @@ switch (cmd) {
       })
     })
     console.log(`Deleted the account of ${a.displayName} (${handle}); ${count} event(s) kept as "Deleted account"`)
-    for (const slug of orphaned) {
-      console.warn(`Warning: ${slug} has no members left; it stays public, without members`)
-    }
     break
   }
   case 'ingest-add-source': {
@@ -608,4 +618,3 @@ switch (cmd) {
 }
 
 process.exit(0)
-
