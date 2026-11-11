@@ -5,7 +5,7 @@ import { magicLinkRequestSchema, safeReturnTo, type AccountMe } from '@open-even
 import { generateToken, accounts, magicLinkTokens, organizerMembers, organizers, sessions, sha256 } from '@open-event-db/db'
 import { db } from '../db.js'
 import { email, type MagicLinkKind } from '../email.js'
-import { unauthorized } from '../errors.js'
+import { ApiError, unauthorized } from '../errors.js'
 import { SESSION_COOKIE, SESSION_TTL_MS, authenticate } from '../auth.js'
 
 const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
@@ -13,6 +13,8 @@ const API_PUBLIC_URL = process.env.API_PUBLIC_URL ?? 'http://localhost:3001'
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000
 const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000
 const SIGNUP_CAP_WINDOW_MS = 24 * 60 * 60 * 1000
+const MAGIC_LINK_IP_LIMIT = Number(process.env.MAGIC_LINK_IP_LIMIT) || 20
+const MAGIC_LINK_IP_WINDOW_MS = 60 * 60 * 1000
 const SIGNUP_MAILS_PER_IP_PER_DAY = Number(process.env.SIGNUP_MAILS_PER_IP_PER_DAY) || 10
 
 // In production web and API run on sibling subdomains (kellerkompass.de / api.kellerkompass.de), so the
@@ -72,6 +74,31 @@ export async function sendMagicLink(input: SendMagicLinkInput): Promise<void> {
  * transaction under an advisory lock per IP, so parallel requests cannot all slip under the cap.
  * Sends nothing when the cap is reached.
  */
+// Sliding-window request limit per client IP for the magic-link route, identical for known and unknown
+// addresses. It bounds the background work (each unknown-address request holds a DB connection while it waits
+// on its IP's advisory lock). In memory is enough because the API runs as a single instance; with several
+// instances the limit would be per instance. Timestamps older than the window are pruned on access and
+// empty keys dropped, so memory stays bounded by the requests of the last hour.
+const magicLinkHits = new Map<string, number[]>()
+
+/** Records a request from `ip`; returns false when it is over the limit. */
+export function allowMagicLinkRequest(ip: string, now = Date.now()): boolean {
+  const recent = (magicLinkHits.get(ip) ?? []).filter((t) => now - t < MAGIC_LINK_IP_WINDOW_MS)
+  if (recent.length >= MAGIC_LINK_IP_LIMIT) {
+    magicLinkHits.set(ip, recent)
+    return false
+  }
+  recent.push(now)
+  magicLinkHits.set(ip, recent)
+  // Occasionally sweep other IPs so keys that are never seen again don't accumulate.
+  if (magicLinkHits.size > 1000) {
+    for (const [key, times] of magicLinkHits) {
+      if (times.every((t) => now - t >= MAGIC_LINK_IP_WINDOW_MS)) magicLinkHits.delete(key)
+    }
+  }
+  return true
+}
+
 async function sendSignupLink(address: string, returnTo: string | null, ip: string): Promise<void> {
   const url = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'signup-cap:' + ip}))`)
@@ -135,7 +162,12 @@ async function accountForSignup(tx: Tx, address: string): Promise<string> {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/auth/magic-link', { config: { rateLimit: magicLinkRateLimit } }, async (req) => {
+  app.post('/auth/magic-link', { config: { rateLimit: magicLinkRateLimit } }, async (req, reply) => {
+    // Before any DB work, and the same for every address.
+    if (!allowMagicLinkRequest(req.ip)) {
+      void reply.header('retry-after', String(MAGIC_LINK_IP_WINDOW_MS / 1000))
+      throw new ApiError(429, 'rate_limited', 'Rate limit exceeded, retry later')
+    }
     const { email: address, return_to } = magicLinkRequestSchema.parse(req.body)
     const normalized = address.toLowerCase()
     const returnTo = safeReturnTo(return_to)

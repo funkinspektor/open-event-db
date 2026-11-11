@@ -325,6 +325,26 @@ describe('sign-up through the magic link', () => {
     await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
   })
 
+  it('limits magic-link requests per IP identically for known and unknown addresses', async () => {
+    const ip = '198.51.100.21'
+    const other = '198.51.100.22'
+    const { account: known } = await createAccount({ label: 'iplimit' })
+    const codes: number[] = []
+    for (let i = 0; i < 21; i++) {
+      // the 21st is a known address; a second run below uses an unknown one as the 21st
+      const addr = i === 20 ? known.email : `iplimit-${stamp}-${i}@test.local`
+      codes.push((await requestLink(addr, {}, ip)).statusCode)
+    }
+    expect(codes.slice(0, 20).every((c) => c === 200)).toBe(true)
+    expect(codes[20]).toBe(429)
+    const unknownOver = await requestLink(`iplimit-${stamp}-extra@test.local`, {}, ip)
+    expect(unknownOver.statusCode).toBe(429)
+    expect(unknownOver.json().error.code).toBe('rate_limited')
+    expect((await requestLink(`iplimit-${stamp}-other@test.local`, {}, other)).statusCode).toBe(200)
+    await new Promise((r) => setTimeout(r, 200))
+    await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
+  })
+
   it('15 parallel sign-up requests from one IP create exactly 10 tokens and mails', async () => {
     const ip = '203.0.113.99'
     await db.delete(magicLinkTokens).where(eq(magicLinkTokens.requestIp, ip))
