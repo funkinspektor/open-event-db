@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { canEdit } from '@open-event-db/shared'
 import { getEvent, getIngestItem, isUuid } from '@/lib/api'
-import { getCurrentPublisher, getSessionCookieHeader } from '@/lib/session'
+import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
+import { permissionActor, permissionEvent } from '@/lib/permissions'
 import { EventDetailBody } from '@/components/EventDetailBody'
 import { IngestDecisionBar } from '@/components/IngestDecisionBar'
 import { IngestMergePanel } from '@/components/IngestMergePanel'
@@ -20,7 +21,7 @@ type SearchParams = Promise<{ merge?: string }>
 export default async function IngestItemPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { id } = await params
   const { merge } = await searchParams
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   const cookie = await getSessionCookieHeader()
   if (!me?.is_scout || !cookie || !isUuid(id)) notFound()
   const item = await getIngestItem(id, cookie)
@@ -35,7 +36,7 @@ export default async function IngestItemPage({ params, searchParams }: { params:
           ← Inbox
         </Link>
         {target ? (
-          <IngestMergePanel item={item} event={target} editable={canEdit(target, { id: me.id, is_scout: me.is_scout })} />
+          <IngestMergePanel item={item} event={target} editable={canEdit(permissionEvent(target), permissionActor(me))} />
         ) : (
           <IngestDecisionBar item={item} />
         )}

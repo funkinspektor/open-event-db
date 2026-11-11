@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import { getVenue, isUuid } from '@/lib/api'
-import { getCurrentPublisher } from '@/lib/session'
+import { getCurrentAccount } from '@/lib/session'
 import { VenueEditForm } from '@/components/VenueEditForm'
 import { Headline } from '@/components/Headline'
 
@@ -13,7 +13,7 @@ export default async function EditVenuePage({ params }: { params: Params }) {
   const { id } = await params
   if (!isUuid(id)) notFound()
 
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   if (!me) redirect('/login')
 
   const venue = await getVenue(id)
@@ -25,7 +25,7 @@ export default async function EditVenuePage({ params }: { params: Params }) {
         <p className="kk-eyebrow">Edit venue</p>
         <Headline text={venue.name} narrow />
         <p className="kk-lede max-w-none">
-          Venues are maintained by all publishers together. Changes are logged with your name.
+          Venues are maintained by all organizers and scouts together. Changes are logged with your name.
         </p>
       </section>
       <VenueEditForm venue={venue} />

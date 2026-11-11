@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getIngestCount } from '@/lib/api'
-import { getCurrentPublisher, getSessionCookieHeader } from '@/lib/session'
+import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
 import { Logo } from './Logo'
 import { LogoutButton } from './LogoutButton'
 import { NavLink } from './NavLink'
@@ -21,7 +21,7 @@ async function loadInboxCount(): Promise<number | null> {
 // One sticky bar: logo, Events/Venues centred as a segmented control, account.
 // Create event lives in the event list toolbar. On phones the wordmark and the account name drop out.
 export async function Header() {
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   const inboxCount = me?.is_scout ? await loadInboxCount() : null
 
   return (
@@ -40,7 +40,7 @@ export async function Header() {
         </nav>
         <div className="kk-header__end">
           {me ? (
-            <UserMenu name={me.name}>
+            <UserMenu name={me.display_name}>
               <Link href="/events/new" className="kk-menu__item">
                 Create event
               </Link>

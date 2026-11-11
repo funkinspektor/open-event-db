@@ -19,12 +19,20 @@ import { VenuePicker, type VenueOption } from './VenuePicker'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
+/** One entry of the "Publish as" select; an empty value means as a scout, without organizer. */
+export interface PublishAsOption {
+  value: string
+  label: string
+}
+
 interface Props {
   mode: 'create' | 'edit'
   event?: EventDetail
   /** Edit mode: whether the current account may set `cancelled` (creator, or a scout on an unclaimed event). */
   canCancel?: boolean
   knownTags: string[]
+  /** Create mode: who the event is published as. The select shows only when there is a choice; the first entry is the default. */
+  publishAs?: PublishAsOption[]
   /** Create mode after an image import: pre-fills the form and marks what couldn't be read. */
   imported?: ImportResult
   /** Create mode: called with the fields the duplicate lookup needs, on mount and whenever one of them changes. Pass a stable callback. */
@@ -63,9 +71,10 @@ function startFields(e: EventDetail): { date: string; time: string } {
   return { date, time }
 }
 
-export function EventForm({ mode, event, canCancel = false, knownTags, imported, onDraftChange }: Props) {
+export function EventForm({ mode, event, canCancel = false, knownTags, publishAs = [], imported, onDraftChange }: Props) {
   const router = useRouter()
   const pre = imported?.prefill
+  const [publishAsValue, setPublishAsValue] = useState(publishAs[0]?.value ?? '')
   const [title, setTitle] = useState(event?.title ?? pre?.title ?? '')
   // Date and time are separate fields: flyers nearly always have the date, often not the time
   const start = event ? startFields(event) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
@@ -108,7 +117,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
 
   const statusOptions: EventStatus[] =
     canCancel ? ['scheduled', 'postponed', 'cancelled'] : ['scheduled', 'postponed']
-  // Co-owners can't cancel, but an event that's already cancelled must still show its real status.
+  // Co-hosts can't cancel, but an event that's already cancelled must still show its real status.
   if (event?.status === 'cancelled' && !statusOptions.includes('cancelled')) statusOptions.push('cancelled')
 
   async function submit(e: React.FormEvent) {
@@ -137,8 +146,10 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
       recurrence: recurrence || null,
     }
     if (!venue) payload.city = city
-    // Only send the status when it changed: the API rejects `cancelled` from co-owners,
-    // so re-sending an unchanged `cancelled` would block co-owners from editing anything else.
+    // With one option the API picks the organizer itself; the scout option sends none
+    if (mode === 'create' && publishAs.length > 1 && publishAsValue) payload.organizer_id = publishAsValue
+    // Only send the status when it changed: the API rejects `cancelled` from co-hosts,
+    // so re-sending an unchanged `cancelled` would block co-hosts from editing anything else.
     if (mode === 'edit' && status !== event?.status) payload.status = status
 
     setBusy(true)
@@ -170,6 +181,18 @@ export function EventForm({ mode, event, canCancel = false, knownTags, imported,
   return (
     <form onSubmit={submit} className="flex flex-col gap-[18px]">
       <div className="kk-panel">
+        {mode === 'create' && publishAs.length > 1 && (
+          <label className="kk-field">
+            Publish as
+            <select value={publishAsValue} onChange={(e) => setPublishAsValue(e.target.value)} className="kk-input">
+              {publishAs.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="kk-field">
           Title
           <input

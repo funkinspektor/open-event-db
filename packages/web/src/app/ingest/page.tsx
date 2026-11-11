@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { IngestView } from '@open-event-db/shared'
 import { getIngestAccuracy, getIngestItems } from '@/lib/api'
-import { getCurrentPublisher, getSessionCookieHeader } from '@/lib/session'
+import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
 import { Headline } from '@/components/Headline'
 import { IngestAccuracy } from '@/components/IngestAccuracy'
 import { IngestInbox } from '@/components/IngestInbox'
@@ -29,7 +29,7 @@ function inboxHref(view: IngestView, source?: string, cursor?: string): string {
 }
 
 export default async function IngestPage({ searchParams }: { searchParams: SearchParams }) {
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   const cookie = await getSessionCookieHeader()
   if (!me?.is_scout || !cookie) notFound()
 

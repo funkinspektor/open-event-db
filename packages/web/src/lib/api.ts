@@ -1,4 +1,5 @@
 import type {
+  AccountMe,
   EventDetail,
   EventSlim,
   IngestAccuracyRow,
@@ -7,8 +8,7 @@ import type {
   IngestSourceCount,
   IngestView,
   Meta,
-  PublisherMe,
-  PublisherPublic,
+  OrganizerDetail,
   Venue,
 } from '@open-event-db/shared'
 
@@ -57,8 +57,8 @@ export async function getVenues(params: URLSearchParams): Promise<{ data: Venue[
   return res ?? { data: [], meta: { cursor: null, has_more: false } }
 }
 
-export async function getPublisher(slug: string): Promise<PublisherPublic | null> {
-  const res = await get<{ data: PublisherPublic }>(`/api/v1/publishers/${slug}`)
+export async function getOrganizer(slug: string): Promise<OrganizerDetail | null> {
+  const res = await get<{ data: OrganizerDetail }>(`/api/v1/organizers/${slug}`)
   return res?.data ?? null
 }
 
@@ -67,13 +67,13 @@ export async function getTags(): Promise<string[]> {
   return res?.data ?? []
 }
 
-export async function getMe(cookieHeader: string): Promise<PublisherMe | null> {
+export async function getMe(cookieHeader: string): Promise<AccountMe | null> {
   const res = await fetch(`${API_URL}/api/v1/auth/me`, {
     headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
     cache: 'no-store',
   })
   if (!res.ok) return null
-  return ((await res.json()) as { data: PublisherMe }).data
+  return ((await res.json()) as { data: AccountMe }).data
 }
 
 async function getScout<T>(path: string, cookieHeader: string): Promise<T> {

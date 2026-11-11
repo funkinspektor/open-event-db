@@ -7,6 +7,9 @@ const nextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   reactStrictMode: true,
   transpilePackages: ['@open-event-db/shared'],
+  async redirects() {
+    return [{ source: '/publishers/:slug', destination: '/organizers/:slug', permanent: true }]
+  },
   webpack(config) {
     // shared is consumed as TS source with NodeNext-style `./x.js` imports
     config.resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }

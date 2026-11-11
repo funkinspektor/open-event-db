@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { slugSchema, type PublisherMe } from '@open-event-db/shared'
+import { slugSchema, type AccountMembership } from '@open-event-db/shared'
 import { LinksEditor, fromLinkRows, toLinkRows, type LinkRow } from './LinksEditor'
 import { TickIcon } from './Icons'
 
@@ -14,7 +14,7 @@ type SlugState = 'current' | 'invalid' | 'checking' | 'available' | 'taken' | 'u
 
 // Positive validation is UV (kk-hint--ok); problems are plain sentences in ink.
 const SLUG_HINT: Record<SlugState, { text: string; className: string }> = {
-  current: { text: 'Your current slug.', className: 'kk-hint' },
+  current: { text: 'The current slug.', className: 'kk-hint' },
   invalid: {
     text: 'Lowercase letters, numbers and dashes only; no dash at the start or end.',
     className: 'kk-hint !text-ink',
@@ -25,25 +25,29 @@ const SLUG_HINT: Record<SlugState, { text: string; className: string }> = {
   unknown: { text: 'Could not check availability — it will be checked on save.', className: 'kk-hint' },
 }
 
-export function ProfileForm({ me }: { me: PublisherMe }) {
+/**
+ * Edits one organizer the account is a member of. Members may edit, also while it awaits verification.
+ * `links` is null when they can't be loaded (an unverified organizer has no public page); the form then leaves them alone.
+ */
+export function OrganizerForm({ organizer, links: initialLinks }: { organizer: AccountMembership; links: Record<string, string> | null }) {
   const router = useRouter()
-  const [name, setName] = useState(me.name)
-  const [slug, setSlug] = useState(me.slug)
-  const [links, setLinks] = useState<LinkRow[]>(toLinkRows(me.links))
+  const [name, setName] = useState(organizer.name)
+  const [slug, setSlug] = useState(organizer.slug)
+  const [links, setLinks] = useState<LinkRow[]>(toLinkRows(initialLinks ?? {}))
   const [slugState, setSlugState] = useState<SlugState>('current')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (slug === me.slug) return setSlugState('current')
+    if (slug === organizer.slug) return setSlugState('current')
     if (!slugSchema.safeParse(slug).success) return setSlugState('invalid')
 
     setSlugState('checking')
     const ctrl = new AbortController()
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_URL}/api/v1/publishers/check-slug?slug=${encodeURIComponent(slug)}`, {
+        const res = await fetch(`${API_URL}/api/v1/organizers/check-slug?slug=${encodeURIComponent(slug)}`, {
           signal: ctrl.signal,
         })
         if (!res.ok) return setSlugState('unknown')
@@ -57,27 +61,27 @@ export function ProfileForm({ me }: { me: PublisherMe }) {
       clearTimeout(timer)
       ctrl.abort()
     }
-  }, [slug, me.slug])
+  }, [slug, organizer.slug])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setSaved(false)
 
-    if (slug !== me.slug) {
+    if (slug !== organizer.slug) {
       const ok = window.confirm(
-        `Your public profile will move to /publishers/${slug}. Links to /publishers/${me.slug} will stop working.`,
+        `The public page will move to /organizers/${slug}. Links to /organizers/${organizer.slug} will stop working.`,
       )
       if (!ok) return
     }
 
     setBusy(true)
     try {
-      const res = await fetch(`${API_URL}/api/v1/publishers/me`, {
+      const res = await fetch(`${API_URL}/api/v1/organizers/${organizer.slug}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, slug, links: fromLinkRows(links) }),
+        body: JSON.stringify({ name, slug, ...(initialLinks ? { links: fromLinkRows(links) } : {}) }),
       })
       const json = (await res.json()) as { data?: unknown; error?: { message: string } }
       if (!res.ok || !json.data) {
@@ -99,14 +103,14 @@ export function ProfileForm({ me }: { me: PublisherMe }) {
     <form onSubmit={submit} className="flex flex-col gap-4">
       <div className="kk-panel">
         <label className="kk-field">
-          Name
+          Organizer name
           <input required maxLength={200} value={name} onChange={(e) => setName(e.target.value)} className="kk-input" />
         </label>
 
         <label className="kk-field">
           Slug
           <span className="kk-affix">
-            <span className="kk-affix__pre">/publishers/</span>
+            <span className="kk-affix__pre">/organizers/</span>
             <input
               required
               value={slug}
@@ -126,16 +130,12 @@ export function ProfileForm({ me }: { me: PublisherMe }) {
           </span>
         </label>
 
-        <label className="kk-field">
-          Email
-          <input value={me.email} disabled className="kk-input" />
-          <span className="kk-hint">Used for login links. Can’t be changed yet.</span>
-        </label>
-
-        <div className="kk-field">
-          Links
-          <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
-        </div>
+        {initialLinks && (
+          <div className="kk-field">
+            Links
+            <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
+          </div>
+        )}
       </div>
 
       {error && (

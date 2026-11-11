@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getVenues } from '@/lib/api'
-import { getCurrentPublisher } from '@/lib/session'
+import { getCurrentAccount } from '@/lib/session'
 import { shareMetadata } from '@/lib/site'
 import { Headline } from '@/components/Headline'
 import { NextIcon, SearchIcon } from '@/components/Icons'
@@ -29,7 +29,7 @@ function venuesHref(q: string, feed: FeedFilter): string {
 export default async function VenuesPage({ searchParams }: { searchParams: SearchParams }) {
   const raw = await searchParams
   const q = first(raw.q)?.trim() ?? ''
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   // Feed coverage is a scout's concern: the filter and the feed names are shown to scouts only
   const scout = !!me?.is_scout
   const requested = first(raw.feed)

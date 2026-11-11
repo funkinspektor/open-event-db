@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ALL_STATUSES, getEvents, getVenue, isUuid } from '@/lib/api'
-import { getCurrentPublisher } from '@/lib/session'
+import { getCurrentAccount } from '@/lib/session'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { EventRow } from '@/components/EventRow'
 import { EventList } from '@/components/EventList'
@@ -47,7 +47,7 @@ export default async function VenuePage({ params }: { params: Params }) {
   const [events, pastEvents, me] = await Promise.all([
     getEvents(apiQuery),
     getEvents(pastQuery),
-    getCurrentPublisher(),
+    getCurrentAccount(),
   ])
   const past = pastEvents.data
 

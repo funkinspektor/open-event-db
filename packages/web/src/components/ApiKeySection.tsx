@@ -23,7 +23,7 @@ export function ApiKeySection({ hasApiKey }: { hasApiKey: boolean }) {
     setCopied(false)
     setBusy(true)
     try {
-      const res = await fetch(`${API_URL}/api/v1/publishers/me/api-key`, {
+      const res = await fetch(`${API_URL}/api/v1/accounts/me/api-key`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -59,7 +59,7 @@ export function ApiKeySection({ hasApiKey }: { hasApiKey: boolean }) {
           API key
         </h2>
         <p className="m-0 text-[15px] leading-normal text-muted">
-          Need to create events via the API or Claude? Generate an API key. Most publishers never need one.
+          Need to create events via the API or Claude? Generate an API key. Most people never need one.
         </p>
       </div>
 

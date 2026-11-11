@@ -2,35 +2,35 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { EventDetail, PublisherPublic } from '@open-event-db/shared'
+import type { EventDetail, OrganizerPublic } from '@open-event-db/shared'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
-type Owner = EventDetail['owners'][number]
+type Organizer = EventDetail['organizers'][number]
 
 interface Props {
   eventId: string
-  owners: Owner[]
+  organizers: Organizer[]
 }
 
 /**
- * Creator-only co-host management. Unlike the event form, every change here goes to the API
- * immediately (POST/DELETE /events/:id/owners) — there is no separate "save" step.
+ * Co-host management for members of the creator organizer. Unlike the event form, every change here goes to the API
+ * immediately (POST/DELETE /events/:id/organizers) — there is no separate "save" step.
  */
-export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
+export function CoHostsEditor({ eventId, organizers: initialOrganizers }: Props) {
   const router = useRouter()
-  const [owners, setOwners] = useState(initialOwners)
+  const [organizers, setOrganizers] = useState(initialOrganizers)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<PublisherPublic[]>([])
+  const [results, setResults] = useState<OrganizerPublic[]>([])
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const listId = useId()
 
-  const coOwners = owners.filter((o) => o.role === 'co_owner')
-  const ownerIds = new Set(owners.map((o) => o.publisher_id))
-  const candidates = results.filter((p) => !ownerIds.has(p.id))
+  const coHosts = organizers.filter((o) => o.role === 'co_host')
+  const organizerIds = new Set(organizers.map((o) => o.id))
+  const candidates = results.filter((p) => !organizerIds.has(p.id))
 
   useEffect(() => {
     const q = query.trim()
@@ -42,9 +42,9 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
     const timer = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ q, limit: '8' })
-        const res = await fetch(`${API_URL}/api/v1/publishers?${params}`, { signal: ctrl.signal })
+        const res = await fetch(`${API_URL}/api/v1/organizers?${params}`, { signal: ctrl.signal })
         if (!res.ok) return
-        setResults(((await res.json()) as { data: PublisherPublic[] }).data)
+        setResults(((await res.json()) as { data: OrganizerPublic[] }).data)
       } catch {
         // aborted or offline — keep previous results
       }
@@ -67,7 +67,7 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
     setError(null)
     setBusy(true)
     try {
-      const res = await fetch(`${API_URL}/api/v1/events/${eventId}/owners${path}`, {
+      const res = await fetch(`${API_URL}/api/v1/events/${eventId}/organizers${path}`, {
         method,
         credentials: 'include',
         headers: body ? { 'content-type': 'application/json' } : undefined,
@@ -78,7 +78,7 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
         setError(json.error?.message ?? `Request failed (${res.status})`)
         return
       }
-      setOwners(json.data.owners)
+      setOrganizers(json.data.organizers)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
@@ -87,15 +87,15 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
     }
   }
 
-  async function add(p: PublisherPublic) {
+  async function add(p: OrganizerPublic) {
     setOpen(false)
     setQuery('')
-    await call('POST', '', { publisher_id: p.id })
+    await call('POST', '', { organizer_id: p.id })
   }
 
-  async function remove(o: Owner) {
+  async function remove(o: Organizer) {
     if (!window.confirm(`Remove ${o.name} as co-host? They will no longer be able to edit this event.`)) return
-    await call('DELETE', `/${o.publisher_id}`)
+    await call('DELETE', `/${o.id}`)
   }
 
   return (
@@ -109,10 +109,10 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
         </p>
       </div>
 
-      {coOwners.length > 0 ? (
+      {coHosts.length > 0 ? (
         <ul className="kk-options">
-          {coOwners.map((o) => (
-            <li key={o.publisher_id} className="kk-linkrow items-center">
+          {coHosts.map((o) => (
+            <li key={o.id} className="kk-linkrow items-center">
               <span className="min-w-0 flex-1 truncate text-[15px]">
                 {o.name} <span className="text-muted">· {o.slug}</span>
               </span>
@@ -150,7 +150,7 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
               if (e.key === 'Enter') e.preventDefault()
             }}
             disabled={busy}
-            placeholder="Search publishers by name…"
+            placeholder="Search organizers by name…"
             autoComplete="off"
             className="kk-input"
           />
@@ -166,7 +166,7 @@ export function CoOwnersEditor({ eventId, owners: initialOwners }: Props) {
             ))}
             {candidates.length === 0 && (
               <li className="px-3 py-2.5 text-[15px] font-normal text-muted">
-                No other publisher matches “{query.trim()}”.
+                No other organizer matches “{query.trim()}”.
               </li>
             )}
           </ul>

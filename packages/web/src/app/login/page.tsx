@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getCurrentPublisher } from '@/lib/session'
+import { getCurrentAccount } from '@/lib/session'
 import { LoginForm } from '@/components/LoginForm'
 import { Headline } from '@/components/Headline'
 
@@ -14,7 +14,7 @@ const ERRORS: Record<string, string> = {
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
-  const me = await getCurrentPublisher()
+  const me = await getCurrentAccount()
   if (me) redirect('/dashboard')
 
   const sp = await searchParams
@@ -25,7 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
     <div className="kk-container w-full" style={{ maxWidth: 480, paddingTop: 80, gap: 28 }}>
       <section className="kk-intro" style={{ gap: 14 }}>
         <Headline text="Log in" narrow />
-        <p className="kk-lede">For publishers. Enter the email you registered with.</p>
+        <p className="kk-lede">For organizers and scouts. Enter the email you registered with.</p>
       </section>
       {error && (
         <div role="alert" className="kk-alert font-medium">

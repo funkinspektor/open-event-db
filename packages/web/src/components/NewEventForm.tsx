@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { DuplicateCandidate, EventDraft, Venue } from '@open-event-db/shared'
 import { draftToPrefill, pickVenue, venueQueries, type ImportResult, type VenueMatchable } from '@/lib/draft'
 import { duplicateQuery, type DuplicateDraft } from '@/lib/duplicates'
-import { EventForm } from './EventForm'
+import { EventForm, type PublishAsOption } from './EventForm'
 import { EventImport } from './EventImport'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
@@ -37,7 +37,7 @@ const sameDraft = (a: DuplicateDraft, b: DuplicateDraft) =>
   a.title === b.title
 
 /** The create page: optional image import on top, then the regular form — pre-filled after an import. */
-export function NewEventForm({ knownTags }: { knownTags: string[] }) {
+export function NewEventForm({ knownTags, publishAs }: { knownTags: string[]; publishAs: PublishAsOption[] }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [imports, setImports] = useState(0)
@@ -116,7 +116,7 @@ export function NewEventForm({ knownTags }: { knownTags: string[] }) {
       {busy && <FormSkeleton />}
       {/* Kept mounted while an import runs, so a failed import doesn't lose what was typed */}
       <div hidden={busy}>
-        <EventForm key={imports} mode="create" knownTags={knownTags} imported={result ?? undefined} onDraftChange={onDraftChange} />
+        <EventForm key={imports} mode="create" knownTags={knownTags} publishAs={publishAs} imported={result ?? undefined} onDraftChange={onDraftChange} />
       </div>
     </div>
   )

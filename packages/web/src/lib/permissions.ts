@@ -1,0 +1,12 @@
+import type { AccountMe, EventDetail } from '@open-event-db/shared'
+import type { PermissionActor, PermissionEvent } from '@open-event-db/shared'
+
+/** The shared permission rules take organizer ids under `organizer_id`; the API's event detail calls them `id`. */
+export function permissionEvent(event: Pick<EventDetail, 'organizers'>): PermissionEvent {
+  return { organizers: event.organizers.map((o) => ({ organizer_id: o.id, role: o.role })) }
+}
+
+/** Only verified organizers carry rights. */
+export function permissionActor(me: Pick<AccountMe, 'id' | 'is_scout' | 'organizers'>): PermissionActor {
+  return { id: me.id, is_scout: me.is_scout, organizer_ids: me.organizers.filter((o) => o.verified).map((o) => o.id) }
+}

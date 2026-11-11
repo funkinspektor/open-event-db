@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
-import { getCurrentPublisher } from '@/lib/session'
+import { getCurrentAccount } from '@/lib/session'
+import { permissionActor, permissionEvent } from '@/lib/permissions'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { dayKey, formatDate, formatDateTime } from '@/lib/format'
 import { markdownToPlainText } from '@/lib/plaintext'
@@ -69,11 +70,11 @@ const SCHEMA_STATUS = {
 } as const
 
 export default async function EventPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
-  const [e, me, { saved }] = await Promise.all([load(params), getCurrentPublisher(), searchParams])
+  const [e, me, { saved }] = await Promise.all([load(params), getCurrentAccount(), searchParams])
   const savedMessage = saved ? SAVED_MESSAGES[saved] : undefined
-  const canEdit = !!me && canEditEvent(e, me)
-  // Show who added a claimed event only when it wasn't one of its owners (i.e. a scout)
-  const addedByOther = e.claimed && !e.owners.some((o) => o.publisher_id === e.added_by.id)
+  const canEdit = !!me && canEditEvent(permissionEvent(e), permissionActor(me))
+  // Show who added a claimed event only when it was a scout rather than one of the organizer's members
+  const addedByOther = e.claimed && e.added_by.is_scout
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -106,10 +107,10 @@ export default async function EventPage({ params, searchParams }: { params: Para
     // Unclaimed events have no confirmed organizer — the scout who added them isn't one
     ...(e.claimed
       ? {
-          organizer: e.owners.map((o) => ({
+          organizer: e.organizers.map((o) => ({
             '@type': 'Organization',
             name: o.name,
-            url: absoluteUrl(`/publishers/${o.slug}`),
+            url: absoluteUrl(`/organizers/${o.slug}`),
           })),
         }
       : {}),
@@ -150,19 +151,19 @@ export default async function EventPage({ params, searchParams }: { params: Para
           <section className="flex flex-col gap-3.5">
             <h2 className="kk-eyebrow">Organised by</h2>
             <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[17px]">
-              {e.owners.map((o) => (
-                <li key={o.publisher_id}>
-                  <Link href={`/publishers/${o.slug}`} className="font-bold">
+              {e.organizers.map((o) => (
+                <li key={o.id}>
+                  <Link href={`/organizers/${o.slug}`} className="font-bold">
                     {o.name}
                   </Link>
-                  {o.role === 'co_owner' && <span className="text-muted"> (co-host)</span>}
+                  {o.role === 'co_host' && <span className="text-muted"> (co-host)</span>}
                 </li>
               ))}
             </ul>
             {addedByOther && (
               <p className="m-0 text-[14px] text-muted">
-                Added by {e.added_by.name}
-                {e.added_by.is_scout && ' · Scout'}
+                Added by {e.added_by.display_name}
+                {' · Scout'}
               </p>
             )}
           </section>
@@ -184,7 +185,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
               </p>
             )}
             <p className={e.venue_listing ? 'm-0 text-[14px] text-muted' : 'm-0 text-[17px]'}>
-              Added by <span className={e.venue_listing ? undefined : 'font-bold'}>{e.added_by.name}</span>
+              Added by <span className={e.venue_listing ? undefined : 'font-bold'}>{e.added_by.display_name}</span>
               {e.added_by.is_scout && <span className="text-muted"> · Scout</span>}
               {e.venue_listing && ` · last checked ${formatDate(e.venue_listing.last_seen_at)}`}
             </p>
