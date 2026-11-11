@@ -3,10 +3,10 @@ import { and, eq, gte, lt } from 'drizzle-orm'
 import { z } from 'zod'
 import { eventInterests, events } from '@open-event-db/db'
 import { db } from '../db.js'
-import { currentAccount, requireAuth, writeRateLimit } from '../auth.js'
+import { currentAccount, requireAuth, requireOnboarded, writeRateLimit } from '../auth.js'
 import { notFound } from '../errors.js'
 
-const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
+const write = { onRequest: [requireAuth, requireOnboarded], config: { rateLimit: writeRateLimit } }
 
 const rangeSchema = z.object({
   from: z.coerce.date().optional(),

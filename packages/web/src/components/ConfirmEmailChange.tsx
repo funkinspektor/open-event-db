@@ -84,7 +84,14 @@ export function ConfirmEmailChange() {
     return (
       <div className="kk-panel" style={{ gap: 10 }}>
         <p className="m-0 text-body">
-          Your email is now <span className="font-medium text-ink">{me?.email}</span>. Use it to log in from now on.
+          {me ? (
+            <>
+              Your email is now <span className="font-medium text-ink">{me.email}</span>. Use it to log in from now
+              on.
+            </>
+          ) : (
+            'Your email was changed. Use the new address to log in from now on.'
+          )}
         </p>
         <div>
           <Link href="/profile" className="kk-btn kk-btn--secondary">

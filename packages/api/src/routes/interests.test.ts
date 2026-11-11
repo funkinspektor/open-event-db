@@ -155,3 +155,16 @@ describe('interests', () => {
     expect(after.json().data.event_ids).toEqual([later.id])
   })
 })
+
+describe('interests before onboarding', () => {
+  it('rejects PUT and DELETE with 403 onboarding_required', async () => {
+    const { account, key } = await createAccount({ label: 'fresh', organizer: false, onboarded: false })
+    const [e] = await db.insert(events).values({ title: 'x', startsAt: new Date(Date.now() + 86_400_000), city: 'Berlin', createdBy: account.id }).returning()
+    const auth = { authorization: `Bearer ${key}` }
+    for (const m of ['PUT', 'DELETE'] as const) {
+      const res = await call(m, `/events/${e!.id}/interest`, auth)
+      expect(res.statusCode, m).toBe(403)
+      expect(res.json().error.code).toBe('onboarding_required')
+    }
+  })
+})

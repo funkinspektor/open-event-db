@@ -14,7 +14,10 @@ export default async function WelcomePage({ searchParams }: { searchParams: Sear
   const returnTo = safeReturnTo(typeof sp.return_to === 'string' ? sp.return_to : undefined)
 
   const me = await getCurrentAccount()
-  if (!me) redirect('/login')
+  if (!me) {
+    const back = '/welcome' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')
+    redirect('/login?return_to=' + encodeURIComponent(back))
+  }
   if (me.onboarded) redirect(returnTo ?? '/')
 
   return (

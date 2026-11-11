@@ -43,7 +43,7 @@ export async function createOrganizer(
  * none, or `{ verified: false }` for an unverified one.
  */
 export async function createAccount(
-  opts: { scout?: boolean; organizer?: { verified?: boolean } | false; label?: string } = {},
+  opts: { scout?: boolean; organizer?: { verified?: boolean } | false; label?: string; onboarded?: boolean } = {},
 ): Promise<{ account: Account; key: string; organizer: Organizer | null }> {
   const u = unique()
   const { key, hash } = generateApiKey()
@@ -56,6 +56,7 @@ export async function createAccount(
       displayName: `Test ${label} ${u}`,
       isScout: opts.scout ?? false,
       apiKeyHash: hash,
+      onboardedAt: opts.onboarded === false ? null : new Date(),
     })
     .returning()
   if (!account) throw new Error('insert returned no row')

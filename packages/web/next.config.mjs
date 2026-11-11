@@ -10,6 +10,10 @@ const nextConfig = {
   async redirects() {
     return [{ source: '/publishers/:slug', destination: '/organizers/:slug', permanent: true }]
   },
+  async headers() {
+    // The email-change link carries a one-time token in its query string.
+    return [{ source: '/confirm-email', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] }]
+  },
   webpack(config) {
     // shared is consumed as TS source with NodeNext-style `./x.js` imports
     config.resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }

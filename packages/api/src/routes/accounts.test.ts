@@ -32,8 +32,7 @@ afterAll(async () => {
 
 /** A browser session for a fresh account, optionally not yet onboarded. */
 async function sessionAccount(opts: { onboarded?: boolean; label?: string } = {}) {
-  const { account } = await createAccount({ label: opts.label ?? 'self', organizer: false })
-  if (opts.onboarded !== false) await db.update(accounts).set({ onboardedAt: new Date() }).where(eq(accounts.id, account.id))
+  const { account } = await createAccount({ label: opts.label ?? 'self', organizer: false, onboarded: opts.onboarded })
   const s = generateToken()
   await db.insert(sessions).values({ accountId: account.id, tokenHash: s.hash, expiresAt: new Date(Date.now() + 3_600_000) })
   return { account, cookie: `oedb_session=${s.token}` }
@@ -57,6 +56,28 @@ const pathOf = (url: string) => {
   const x = new URL(url)
   return `${x.pathname}${x.search}`
 }
+
+describe('before onboarding', () => {
+  it('rejects calendar token and email change with 403 onboarding_required', async () => {
+    const { cookie } = await sessionAccount({ onboarded: false })
+    for (const [m, url, body] of [
+      ['POST', '/accounts/me/calendar-token'],
+      ['POST', '/accounts/me/email', { email: `new-${u()}@test.local` }],
+    ] as const) {
+      const res = await call(m, url, cookie, body)
+      expect(res.statusCode, `${m} ${url}`).toBe(403)
+      expect(res.json().error.code).toBe('onboarding_required')
+    }
+  })
+
+  it('still allows /auth/me and deleting the account', async () => {
+    const { account, cookie } = await sessionAccount({ onboarded: false })
+    expect((await call('GET', '/auth/me', cookie)).statusCode).toBe(200)
+    expect((await call('GET', '/accounts/me/delete-preview', cookie)).statusCode).toBe(200)
+    const res = await call('DELETE', '/accounts/me', cookie, { confirm_handle: account.handle })
+    expect(res.statusCode).toBe(200)
+  })
+})
 
 describe('session-only', () => {
   it('rejects API keys and anonymous calls on every route', async () => {

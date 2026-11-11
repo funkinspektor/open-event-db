@@ -6,7 +6,9 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Germania_One, JetBrains_Mono, Schibsted_Grotesk } from 'next/font/google'
+import { Suspense } from 'react'
 import { Header } from '@/components/Header'
+import { OnboardingGate } from '@/components/OnboardingGate'
 import { SITE_URL } from '@/lib/site'
 import { getCurrentAccount } from '@/lib/session'
 import { needsWelcome } from '@/lib/onboarding'
@@ -55,6 +57,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${germaniaOne.variable} ${schibstedGrotesk.variable} ${jetbrainsMono.variable} h-full`}
     >
       <body className="kk-root flex min-h-full flex-col">
+        {me && !me.onboarded && (
+          <Suspense>
+            <OnboardingGate me={me} />
+          </Suspense>
+        )}
         <Header />
         <main className="flex-1">{children}</main>
         <footer className="kk-footer w-full">

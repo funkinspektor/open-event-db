@@ -116,3 +116,13 @@ export async function requireRights(req: FastifyRequest, reply: FastifyReply): P
     throw forbidden('This account has no rights to write events or venues', 'no_rights')
   }
 }
+
+/**
+ * Runs after requireAuth/requireSession: an account that hasn't finished /welcome (no recorded consent)
+ * may only onboard, look at itself, log out or delete itself.
+ */
+export async function requireOnboarded(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
+  if (!currentAccount(req).onboardedAt) {
+    throw forbidden('Finish onboarding first', 'onboarding_required')
+  }
+}

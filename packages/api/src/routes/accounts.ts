@@ -22,7 +22,7 @@ import { db } from '../db.js'
 import { ApiError, badRequest, forbidden } from '../errors.js'
 import { email as mail } from '../email.js'
 import { accountMe, API_PUBLIC_URL, cookieOptions, sendMagicLink } from './auth.js'
-import { SESSION_COOKIE, currentAccount, requireAuth, requireSession, writeRateLimit } from '../auth.js'
+import { SESSION_COOKIE, currentAccount, requireAuth, requireOnboarded, requireSession, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 
 function isUniqueViolation(err: unknown): boolean {
@@ -183,7 +183,7 @@ export async function accountRoutes(app: FastifyInstance) {
 
   app.post(
     '/accounts/me/email',
-    { onRequest: requireSession, config: { rateLimit: emailChangeRateLimit } },
+    { onRequest: [requireSession, requireOnboarded], config: { rateLimit: emailChangeRateLimit } },
     async (req) => {
       const me = currentAccount(req)
       const { email: raw } = emailChangeSchema.parse(req.body)
@@ -312,7 +312,7 @@ export async function accountRoutes(app: FastifyInstance) {
     return { data: { ok: true } }
   })
 
-  app.post('/accounts/me/calendar-token', sessionWrite, async (req) => {
+  app.post('/accounts/me/calendar-token', { ...sessionWrite, onRequest: [requireSession, requireOnboarded] }, async (req) => {
     const me = currentAccount(req)
     const { token } = generateToken()
     await db.update(accounts).set({ calendarToken: token, updatedAt: new Date() }).where(eq(accounts.id, me.id))
