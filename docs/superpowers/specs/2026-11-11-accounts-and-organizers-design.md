@@ -22,7 +22,7 @@ Success: one person has one account no matter how many roles they have; every ev
 3. **Every account may suggest events.** Suggestions from plain accounts land in the existing review inbox; **all scouts** review them. Nothing is public before acceptance (pre-moderation, not post-moderation).
 4. **Scouts are made by hand.** Their events go live right away, as today. Trust comes from having suggested good events.
 5. **Organizers are verified only by the project owner**, by email and CLI. No admin role, no admin UI.
-6. **No scope on organizer verification.** A verified organizer may create any event. Taking over an existing event is a **claim request** in the inbox, which a scout accepts or declines. Exception: an organizer's member may claim an event they suggested themselves without review.
+6. **No scope on organizer verification.** A verified organizer may create any event. Taking over an existing event is always a **claim request** in the inbox, which a scout accepts or declines — no exceptions. Having suggested or added an event proves nothing about organizing it (fans and scouts add other people's events), so it is shown to the reviewer as a hint, never accepted automatically.
 7. **Claims get their own inbox tab** with a count, and claim cards look visibly different from feed items. Suggestions stay in "New" with a clear "Suggested by …" label and a "Suggestions" entry in the source filter.
 8. **Rejected suggestions:** the scout may give a short optional reason; the submitter sees status and reason under their own suggestions. No rejection email. Accepted (or merged into an existing event) → a short "your event is live" email.
 9. **"Interested" only**, no "going" for now. Counts are stored from day one but **shown nowhere** — not on the site and not in the public API — until the project owner switches them on.
@@ -223,7 +223,7 @@ API and web change together (the web app calls the renamed endpoints), so step 1
 
 - A button in account settings: "I organize events". A form for name, links and free text creates an **unverified organizer** with the account as owner and emails the project owner (address from an env var). Verification is the CLI: `verify-organizer <slug>`. Unverified organizers are not public and grant no rights.
 - Verified organizer members see **"This is our event"** on unclaimed events. It creates a **claim request** shown in the inbox tab **"Claims"** (count on the tab; card shows the requesting organizer — name, links, members, verified since — next to the event incl. "Added by" and feed origin). Accept = the organizer becomes the event's creator (as `claim-event` does today, incl. stopping feed sync); decline with an optional reason.
-- Claims of events the claiming account itself added (`created_by`) are accepted immediately.
+- Every claim is reviewed, including claims of events the requesting account added or suggested itself. The claim card shows "Suggested by this person" / "Added by this person" as a hint for the reviewer.
 - Events that already have organizers show no claim button; the co-host route via the creator organizer remains.
 - **Venue operators:** `venues.operated_by` → organizers (nullable, set by CLI `set-operator <venue_id> <organizer_slug|none>`). Venue page shows "Operated by …", organizer page lists operated venues. Auto-accepting the operator's claims for its venues is deferred (open gap: with many scouts, reviewers can't know who really organizes an event).
 
