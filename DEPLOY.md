@@ -105,7 +105,8 @@ endpoint must allow your IP). `scripts/prod-db.sh` reads host, port, user and da
 in the local `.env`, asks for the password and runs the given command with `DATABASE_URL` set:
 
 ```bash
-scripts/prod-db.sh pnpm db:cli create-account letzte-welle someone@example.org --name "Letzte Welle"
+scripts/prod-db.sh pnpm db:cli create-account <handle> <email> --name "<Person>"
+scripts/prod-db.sh pnpm db:cli create-organizer "<Collective>" <slug> <handle>
 scripts/prod-db.sh pnpm db:migrate
 ```
 
@@ -120,18 +121,31 @@ members) and drops the old table. The API changed shape too, so take these steps
 
 1. **Before the push:** take a manual snapshot of the Managed PostgreSQL database `kellerkompass-db`
    (Scaleway console → Databases → `kellerkompass-db` → Backups → Create backup).
-2. **Check API keys:** no production account other than the owner's may have an API key, because the API
-   changed shape. The query lists every publisher with a flag:
+2. **Check API keys, before the push** (afterwards `publishers` no longer exists): no production account
+   other than the owner's may have an API key, because the API changed shape. There is no local `psql`, so
+   the query runs in a container (the managed database is a public endpoint with `sslmode=require` in the
+   URL, so the container needs no special network setup):
 
    ```bash
-   scripts/prod-db.sh sh -c 'psql "$DATABASE_URL" -c "select slug, api_key_hash is not null as has_key from publishers"'
+   scripts/prod-db.sh docker run --rm -e DATABASE_URL postgres:16 sh -c 'psql "$DATABASE_URL" -c "select slug, api_key_hash is not null as has_key from publishers"'
    ```
 
-3. **During the deploy:** the API container runs the migration on start. Between the migration commit and the
-   new API serving, the old API errors on the dropped `publishers` table (a short window). If a migration
-   guard fails, the new container crash-loops but the data stays untouched, because the whole migration is one
-   transaction. Restore nothing: read the guard message in the container log, fix the data, redeploy.
-4. **Rollback:** restore the snapshot and redeploy the previous images.
+   Expected: `has_key = t` only for `letzte-welle` and `sebastian`. Any other slug with a key: stop and decide
+   with the owner before deploying.
+
+3. **During the deploy:** deploy in a quiet hour. There are two short windows:
+   - The API container runs the migration on start. Between the migration commit and the new API serving,
+     the old API errors on the dropped `publishers` table.
+   - The workflow deploys the API first, then builds and rolls out the web image (several minutes). During
+     that time the old web runs against the new API: event detail and edit pages throw (the old code reads
+     `e.owners`) and the logged-in header shows no name.
+
+   If a migration guard fails, the new container crash-loops but the data stays untouched, because the whole
+   migration is one transaction. No restore is needed: read the guard message in the container log, fix the
+   data, redeploy.
+4. **Rollback:** restore the snapshot and redeploy the previous images. Restoring the snapshot discards
+   every write made after it was taken (new events, edits, sign-ups), so only do it if fixing forward is not
+   possible.
 5. **After the deploy,** merge the owner's two accounts. The delete prompt lists organizers that would be
    left without members; there must be none:
 
