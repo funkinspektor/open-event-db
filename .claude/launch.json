@@ -12,12 +12,6 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@open-event-db/api", "dev"],
       "port": 3001
-    },
-    {
-      "name": "api-identity",
-      "runtimeExecutable": "env",
-      "runtimeArgs": ["DATABASE_URL=postgres://oedb:oedb@localhost:5432/oedb_identity", "pnpm", "--filter", "@open-event-db/api", "dev"],
-      "port": 3001
     }
   ]
 }

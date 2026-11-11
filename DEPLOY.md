@@ -105,13 +105,40 @@ endpoint must allow your IP). `scripts/prod-db.sh` reads host, port, user and da
 in the local `.env`, asks for the password and runs the given command with `DATABASE_URL` set:
 
 ```bash
-scripts/prod-db.sh pnpm db:cli create-publisher "Letzte Welle" letzte-welle someone@example.org
+scripts/prod-db.sh pnpm db:cli create-account letzte-welle someone@example.org --name "Letzte Welle"
 scripts/prod-db.sh pnpm db:migrate
 ```
 
 The feed-ingest migrations run `CREATE EXTENSION pg_trgm` (duplicate detection). On the managed database
 the migrating user needs `CREATE` on the database for that; otherwise create the extension once as the
 admin user before deploying.
+
+### Release: accounts and organizers
+
+Migration 0022 splits `publishers` into `accounts` (people who log in) and `organizers` (group profiles with
+members) and drops the old table. The API changed shape too, so take these steps around the deploy:
+
+1. **Before the push:** take a manual snapshot of the Managed PostgreSQL database `kellerkompass-db`
+   (Scaleway console → Databases → `kellerkompass-db` → Backups → Create backup).
+2. **Check API keys:** no production account other than the owner's may have an API key, because the API
+   changed shape. The query lists every publisher with a flag:
+
+   ```bash
+   scripts/prod-db.sh sh -c 'psql "$DATABASE_URL" -c "select slug, api_key_hash is not null as has_key from publishers"'
+   ```
+
+3. **During the deploy:** the API container runs the migration on start. Between the migration commit and the
+   new API serving, the old API errors on the dropped `publishers` table (a short window). If a migration
+   guard fails, the new container crash-loops but the data stays untouched, because the whole migration is one
+   transaction. Restore nothing: read the guard message in the container log, fix the data, redeploy.
+4. **Rollback:** restore the snapshot and redeploy the previous images.
+5. **After the deploy,** merge the owner's two accounts. The delete prompt lists organizers that would be
+   left without members; there must be none:
+
+   ```bash
+   scripts/prod-db.sh pnpm db:cli add-member letzte-welle sebastian --owner
+   scripts/prod-db.sh pnpm db:cli delete-account letzte-welle
+   ```
 
 ## 4. Feed ingest cron
 
