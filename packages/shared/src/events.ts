@@ -43,8 +43,8 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   /** Events with any of these categories; an event with both matches either. */
   categories: csvOrArray(eventCategorySchema),
   venue_id: z.string().uuid().optional(),
-  /** Events owned by this publisher (creator or co-owner). */
-  publisher_id: z.string().uuid().optional(),
+  /** Events of this organizer (creator or co-host). */
+  organizer_id: z.string().uuid().optional(),
   /** Events added by this account (`created_by`), whether claimed or not. */
   added_by: z.string().uuid().optional(),
   status: csvOrArray(eventStatusSchema),
@@ -78,7 +78,7 @@ export const eventSlimSchema = z.object({
   recurrence: z.string().nullable(),
   venue: venueSummarySchema.nullable(),
   image_url: z.string().url().nullable(),
-  /** False while the event has no owner (added by a scout, not yet claimed by the organizer). */
+  /** False while the event has no organizer (added by a scout, not yet claimed). */
   claimed: z.boolean(),
   provenance: eventProvenanceSchema,
 })
@@ -100,21 +100,21 @@ export const venueDetailEmbedSchema = z.object({
   coordinates: coordinatesSchema.nullable(),
 })
 
-export const eventOwnerRoleSchema = z.enum(['creator', 'co_owner'])
-export type EventOwnerRole = z.infer<typeof eventOwnerRoleSchema>
+export const eventOrganizerRoleSchema = z.enum(['creator', 'co_host'])
+export type EventOrganizerRole = z.infer<typeof eventOrganizerRoleSchema>
 
-export const eventOwnerSchema = z.object({
-  publisher_id: z.string().uuid(),
-  slug: z.string(),
+export const eventOrganizerSchema = z.object({
+  id: z.string().uuid(),
   name: z.string(),
-  role: eventOwnerRoleSchema,
+  slug: z.string(),
+  role: eventOrganizerRoleSchema,
 })
 
-/** Who added the event. Immutable, survives a claim. */
+/** The account that added the event. Immutable, survives a claim. */
 export const eventAddedBySchema = z.object({
   id: z.string().uuid(),
-  slug: z.string(),
-  name: z.string(),
+  handle: z.string(),
+  display_name: z.string(),
   is_scout: z.boolean(),
 })
 
@@ -129,7 +129,7 @@ export const eventDetailSchema = eventSlimSchema
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
     venue: venueDetailEmbedSchema.nullable(),
-    owners: z.array(eventOwnerSchema),
+    organizers: z.array(eventOrganizerSchema),
     /** Set while a feed keeps this event in sync; editing detaches it. */
     synced_from: z.object({ source_name: z.string(), source_url: z.string().url().nullable() }).nullable(),
     /** The official source that lists this event, while it still does; set whether or not it syncs. */
@@ -152,7 +152,7 @@ export const eventDetailResponseSchema = z.object({
 /** A day without a time (YYYY-MM-DD), for `starts_at` when the start time isn't known. */
 export const eventDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
-export const eventCreateSchema = z.object({
+const eventFieldsSchema = z.object({
   title: z.string().trim().min(1).max(200),
   /** A timestamp, or just the day when the start time isn't known (stored with `start_time_known: false`). */
   starts_at: z.union([z.string().datetime({ offset: true }), eventDaySchema]),
@@ -168,14 +168,19 @@ export const eventCreateSchema = z.object({
   recurrence: z.string().trim().max(200).nullable().optional(),
 })
 
+/** `organizer_id` is accepted on create only; see the permission rules for who may use it. */
+export const eventCreateSchema = eventFieldsSchema.extend({
+  organizer_id: z.string().uuid().optional(),
+})
+
 export type EventCreateInput = z.infer<typeof eventCreateSchema>
 
-export const eventUpdateSchema = eventCreateSchema.partial().extend({
+export const eventUpdateSchema = eventFieldsSchema.partial().extend({
   status: eventStatusSchema.optional(),
 })
 
 export type EventUpdateInput = z.infer<typeof eventUpdateSchema>
 
-export const addOwnerSchema = z.object({
-  publisher_id: z.string().uuid(),
+export const addOrganizerSchema = z.object({
+  organizer_id: z.string().uuid(),
 })

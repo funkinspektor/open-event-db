@@ -1,38 +1,45 @@
-import type { EventOwnerRole } from './events.js'
+import type { EventOrganizerRole } from './events.js'
 
 /**
  * Event permissions, shared by the API and the web app so the rules can't drift.
  *
- * An event without owners is unclaimed (added by a scout): any scout may edit and cancel it.
- * Once claimed, only its owners may edit, and only the creator may cancel or manage co-owners.
+ * An event without organizers is unclaimed (added by a scout): any scout may edit and cancel it.
+ * Once claimed, only members of its organizers may edit, and only members of the creator organizer
+ * may cancel or manage co-hosts.
  */
 
 export interface PermissionEvent {
-  owners: readonly { publisher_id: string; role: EventOwnerRole }[]
+  organizers: readonly { organizer_id: string; role: EventOrganizerRole }[]
 }
 
 export interface PermissionActor {
   id: string
   is_scout: boolean
+  /** Ids of the verified organizers the account belongs to. */
+  organizer_ids: readonly string[]
 }
 
-export const isClaimed = (event: PermissionEvent) => event.owners.length > 0
+export const isClaimed = (event: PermissionEvent) => event.organizers.length > 0
 
-export function ownerRole(event: PermissionEvent, actor: PermissionActor): EventOwnerRole | null {
-  return event.owners.find((o) => o.publisher_id === actor.id)?.role ?? null
+/** The actor's strongest role on the event through any of their organizers; creator wins. */
+export function actorRole(event: PermissionEvent, actor: PermissionActor): EventOrganizerRole | null {
+  const mine = event.organizers.filter((o) => actor.organizer_ids.includes(o.organizer_id))
+  if (mine.some((o) => o.role === 'creator')) return 'creator'
+  if (mine.some((o) => o.role === 'co_host')) return 'co_host'
+  return null
 }
 
 export function canEdit(event: PermissionEvent, actor: PermissionActor): boolean {
   if (!isClaimed(event)) return actor.is_scout
-  return ownerRole(event, actor) !== null
+  return actorRole(event, actor) !== null
 }
 
 export function canCancel(event: PermissionEvent, actor: PermissionActor): boolean {
   if (!isClaimed(event)) return actor.is_scout
-  return ownerRole(event, actor) === 'creator'
+  return actorRole(event, actor) === 'creator'
 }
 
-/** Unclaimed events have no owners to manage — they gain owners only through a claim. */
-export function canManageOwners(event: PermissionEvent, actor: PermissionActor): boolean {
-  return ownerRole(event, actor) === 'creator'
+/** Unclaimed events have no organizers to manage; they gain them only through a claim. */
+export function canManageOrganizers(event: PermissionEvent, actor: PermissionActor): boolean {
+  return actorRole(event, actor) === 'creator'
 }
