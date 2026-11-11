@@ -383,6 +383,29 @@ The CLI picks up `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID` and `TEXT_MODEL`/`
 Add both custom domains to their containers in the Scaleway console (it issues the TLS certificates)
 and create the CNAME records it shows at the DNS provider.
 
+## Release: registration and interests
+
+Migration `0023` is additive (new columns and tables, nothing dropped), so no snapshot ceremony beyond the
+usual; the API container applies it on start. Before deploying, the owner approves the new texts in
+`packages/web/src/content/legal/` (privacy policy and terms).
+
+New optional API environment variables (the defaults are fine, set them only to change the limits):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SIGNUP_MAILS_PER_IP_PER_DAY` | `10` | sign-up mails per IP address per day (further requests get the same answer but no mail) |
+| `MAGIC_LINK_IP_LIMIT` | `20` | magic-link requests per IP address per window |
+
+`WEB_URL` and `API_PUBLIC_URL` (see section 2) must be set: the sign-up, email-change and calendar links are built from them.
+
+After the deploy, on production:
+
+1. Sign up with a fresh address and finish `/welcome`.
+2. Mark an event as interested and check "Only mine".
+3. Subscribe to the calendar link in a calendar app.
+4. Change the email address and confirm it while logged in.
+5. Delete the test account.
+
 ## Going public
 
 Remove `BASIC_AUTH` and `SITE_NOINDEX` from the web container once imprint and privacy policy are online.

@@ -25,20 +25,20 @@ await db.delete(accounts)
 
 const [alice] = await db
   .insert(accounts)
-  .values({ handle: 'letzte-welle', displayName: 'Letzte Welle', email: 'letzte.welle@example.com' })
+  .values({ handle: 'letzte-welle', displayName: 'Letzte Welle', email: 'letzte.welle@example.com', onboardedAt: new Date() })
   .returning()
 if (!alice) throw new Error('failed to insert seed account')
 
 const [bob] = await db
   .insert(accounts)
-  .values({ handle: 'nachtagentur', displayName: 'Nachtagentur', email: 'crew@nachtagentur.example' })
+  .values({ handle: 'nachtagentur', displayName: 'Nachtagentur', email: 'crew@nachtagentur.example', onboardedAt: new Date() })
   .returning()
 if (!bob) throw new Error('failed to insert seed account')
 
 // Scouts add events for organizers who aren't on the platform yet; those events stay unclaimed
 const [scout] = await db
   .insert(accounts)
-  .values({ handle: 'sebastian', displayName: 'Sebastian', email: 'scout@example.com', isScout: true })
+  .values({ handle: 'sebastian', displayName: 'Sebastian', email: 'scout@example.com', isScout: true, onboardedAt: new Date() })
   .returning()
 if (!scout) throw new Error('failed to insert seed scout')
 

@@ -215,6 +215,15 @@ describe('sign-up through the magic link', () => {
   afterAll(async () => {
     if (created.length) await db.delete(accounts).where(inArray(accounts.email, created))
     await db.delete(magicLinkTokens).where(like(magicLinkTokens.email, `%-${stamp}%@test.local`))
+    // Sign-up tokens count against the per-IP daily cap: leave none behind for the pinned test IPs or the default one.
+    await db
+      .delete(magicLinkTokens)
+      .where(
+        and(
+          eq(magicLinkTokens.kind, 'signup'),
+          inArray(magicLinkTokens.requestIp, ['127.0.0.1', '203.0.113.77', '198.51.100.21', '198.51.100.22', '203.0.113.99', '203.0.113.88']),
+        ),
+      )
   })
 
   it('answers unknown and known addresses identically and mails a sign-up link', async () => {
