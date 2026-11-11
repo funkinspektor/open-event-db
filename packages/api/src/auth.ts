@@ -1,23 +1,44 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { and, eq, gt } from 'drizzle-orm'
-import { API_KEY_PREFIX, publishers, sessions, sha256, type Publisher } from '@open-event-db/db'
+import type { PermissionActor } from '@open-event-db/shared'
+import {
+  API_KEY_PREFIX,
+  accounts,
+  organizerMembers,
+  organizers,
+  sessions,
+  sha256,
+  type Account,
+} from '@open-event-db/db'
 import { db } from './db.js'
 import { forbidden, unauthorized } from './errors.js'
 
 export const SESSION_COOKIE = 'oedb_session'
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
+/** The account plus the ids of the verified organizers it belongs to. */
+export type AuthAccount = Account & { organizerIds: string[] }
+
 export type AuthMethod = 'api_key' | 'session'
 
 declare module 'fastify' {
   interface FastifyRequest {
-    publisher: Publisher | null
+    account: AuthAccount | null
     authMethod: AuthMethod | null
   }
 }
 
+async function withOrganizers(account: Account): Promise<AuthAccount> {
+  const rows = await db
+    .select({ id: organizerMembers.organizerId })
+    .from(organizerMembers)
+    .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
+    .where(and(eq(organizerMembers.accountId, account.id), eq(organizers.verified, true)))
+  return { ...account, organizerIds: rows.map((r) => r.id) }
+}
+
 export async function authenticate(req: FastifyRequest): Promise<void> {
-  req.publisher = null
+  req.account = null
   req.authMethod = null
 
   const header = req.headers.authorization
@@ -26,13 +47,13 @@ export async function authenticate(req: FastifyRequest): Promise<void> {
     if (scheme !== 'Bearer' || !key?.startsWith(API_KEY_PREFIX)) {
       throw unauthorized('Invalid API key')
     }
-    const [p] = await db
+    const [a] = await db
       .select()
-      .from(publishers)
-      .where(eq(publishers.apiKeyHash, sha256(key)))
+      .from(accounts)
+      .where(eq(accounts.apiKeyHash, sha256(key)))
       .limit(1)
-    if (!p) throw unauthorized('Invalid API key')
-    req.publisher = p
+    if (!a) throw unauthorized('Invalid API key')
+    req.account = await withOrganizers(a)
     req.authMethod = 'api_key'
     return
   }
@@ -42,9 +63,9 @@ export async function authenticate(req: FastifyRequest): Promise<void> {
 
   const now = new Date()
   const [row] = await db
-    .select({ session: sessions, publisher: publishers })
+    .select({ session: sessions, account: accounts })
     .from(sessions)
-    .innerJoin(publishers, eq(publishers.id, sessions.publisherId))
+    .innerJoin(accounts, eq(accounts.id, sessions.accountId))
     .where(and(eq(sessions.tokenHash, sha256(token)), gt(sessions.expiresAt, now)))
     .limit(1)
   if (!row) throw unauthorized('Session expired or invalid')
@@ -56,14 +77,13 @@ export async function authenticate(req: FastifyRequest): Promise<void> {
       .where(eq(sessions.id, row.session.id))
   }
 
-  req.publisher = row.publisher
+  req.account = await withOrganizers(row.account)
   req.authMethod = 'session'
 }
 
 export async function requireAuth(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
   await authenticate(req)
-  if (!req.publisher) throw unauthorized()
-  if (!req.publisher.verified) throw forbidden('Publisher is not verified')
+  if (!req.account) throw unauthorized()
 }
 
 export async function requireSession(req: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -73,13 +93,17 @@ export async function requireSession(req: FastifyRequest, reply: FastifyReply): 
   }
 }
 
-export function currentPublisher(req: FastifyRequest): Publisher {
-  if (!req.publisher) throw unauthorized()
-  return req.publisher
+export function currentAccount(req: FastifyRequest): AuthAccount {
+  if (!req.account) throw unauthorized()
+  return req.account
+}
+
+export function actorOf(a: AuthAccount): PermissionActor {
+  return { id: a.id, is_scout: a.isScout, organizer_ids: a.organizerIds }
 }
 
 export const writeRateLimit = {
   max: 30,
   timeWindow: '1 minute',
-  keyGenerator: (req: FastifyRequest) => req.publisher?.id ?? req.ip,
+  keyGenerator: (req: FastifyRequest) => req.account?.id ?? req.ip,
 }

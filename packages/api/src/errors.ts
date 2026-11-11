@@ -13,5 +13,5 @@ export const notFound = (message = 'Not found') => new ApiError(404, 'not_found'
 export const badRequest = (message: string, code = 'bad_request') => new ApiError(400, code, message)
 export const unauthorized = (message = 'Authentication required') =>
   new ApiError(401, 'unauthorized', message)
-export const forbidden = (message = 'Not allowed') => new ApiError(403, 'forbidden', message)
+export const forbidden = (message = 'Not allowed', code = 'forbidden') => new ApiError(403, code, message)
 export const conflict = (message = 'Conflict') => new ApiError(409, 'conflict', message)

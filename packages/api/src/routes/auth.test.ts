@@ -1,16 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { eq, inArray } from 'drizzle-orm'
-import { editHistory, events, generateToken, magicLinkTokens, publishers, sessions } from '@open-event-db/db'
+import { inArray } from 'drizzle-orm'
+import { generateToken, magicLinkTokens, sessions } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { email } from '../email.js'
 import { cleanupExpiredAuth } from '../cleanup.js'
+import { cleanup, createAccount, createOrganizer } from '../test/fixtures.js'
 
 let app: FastifyInstance
-let publisherId: string
+let accountId: string
+let address: string
 const stamp = Date.now()
-const address = `login-${stamp}@test.local`
+const auth = (key: string) => ({ authorization: `Bearer ${key}` })
 const outbox: { to: string; url: string }[] = []
 
 beforeAll(async () => {
@@ -20,19 +22,13 @@ beforeAll(async () => {
     },
   })
   app = await buildApp({ logger: false })
-  const [p] = await db
-    .insert(publishers)
-    .values({ name: 'Login Tester', slug: `login-tester-${stamp}`, email: address, verified: true })
-    .returning()
-  publisherId = p!.id
+  const { account } = await createAccount({ label: 'login' })
+  accountId = account.id
+  address = account.email
 })
 
 afterAll(async () => {
-  await db.delete(editHistory).where(eq(editHistory.publisherId, publisherId))
-  await db.delete(events).where(eq(events.createdBy, publisherId))
-  await db.delete(sessions).where(eq(sessions.publisherId, publisherId))
-  await db.delete(magicLinkTokens).where(eq(magicLinkTokens.publisherId, publisherId))
-  await db.delete(publishers).where(eq(publishers.id, publisherId))
+  await cleanup()
   email.reset()
   await app.close()
 })
@@ -85,7 +81,7 @@ describe('magic link login', () => {
   it('concurrent clicks on one magic link create only one session', async () => {
     const { token, hash } = generateToken()
     await db.insert(magicLinkTokens).values({
-      publisherId,
+      accountId,
       tokenHash: hash,
       expiresAt: new Date(Date.now() + 60_000),
     })
@@ -99,19 +95,19 @@ describe('magic link login', () => {
   it('/auth/me resolves the session', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { cookie } })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toMatchObject({ id: publisherId, email: address, auth_method: 'session', has_api_key: false })
+    expect(res.json().data).toMatchObject({ id: accountId, email: address, auth_method: 'session', has_api_key: true })
   })
 
   it('a session can write and generate an API key', async () => {
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/v1/events',
+    const updated = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/accounts/me',
       headers: { cookie },
-      payload: { title: 'Session event', starts_at: '2031-01-01T20:00:00Z', city: 'Testcity' },
+      payload: { display_name: 'Session Writer' },
     })
-    expect(created.statusCode).toBe(201)
+    expect(updated.statusCode).toBe(200)
 
-    const key = await app.inject({ method: 'POST', url: '/api/v1/publishers/me/api-key', headers: { cookie } })
+    const key = await app.inject({ method: 'POST', url: '/api/v1/accounts/me/api-key', headers: { cookie } })
     expect(key.statusCode).toBe(201)
     expect(key.json().data.api_key).toMatch(/^oevt_/)
 
@@ -122,6 +118,28 @@ describe('magic link login', () => {
     })
     expect(viaKey.statusCode).toBe(200)
     expect(viaKey.json().data.auth_method).toBe('api_key')
+  })
+
+  it('/auth/me lists verified and unverified memberships', async () => {
+    const { account, key } = await createAccount()
+    const extra = await createOrganizer([account.id], { verified: false })
+    const res = await app.inject({ url: '/api/v1/auth/me', headers: auth(key) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({
+      handle: account.handle,
+      is_scout: false,
+      organizers: expect.arrayContaining([
+        expect.objectContaining({ id: extra.id, verified: false, role: 'owner' }),
+      ]),
+    })
+    expect(res.json().data.organizers).toHaveLength(2)
+  })
+
+  it('an account without rights may log in and read /auth/me', async () => {
+    const { key } = await createAccount({ organizer: false })
+    const res = await app.inject({ url: '/api/v1/auth/me', headers: auth(key) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.organizers).toEqual([])
   })
 
   it('logout destroys the session', async () => {
@@ -148,16 +166,16 @@ describe('auth cleanup', () => {
     const tokenRows = await db
       .insert(magicLinkTokens)
       .values([
-        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
-        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000), usedAt: new Date() },
-        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
+        { accountId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
+        { accountId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000), usedAt: new Date() },
+        { accountId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
       ])
       .returning({ id: magicLinkTokens.id })
     const sessionRows = await db
       .insert(sessions)
       .values([
-        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
-        { publisherId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
+        { accountId, tokenHash: generateToken().hash, expiresAt: new Date(now - 1000) },
+        { accountId, tokenHash: generateToken().hash, expiresAt: new Date(now + 60_000) },
       ])
       .returning({ id: sessions.id })
 

@@ -11,7 +11,7 @@ const isProduction = process.env.NODE_ENV === 'production'
 const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
 
 // Reserved TLDs (RFC 2606/6761) can never receive mail. Sending to them would only produce
-// bounces that hurt the sender domain's reputation — the seed publishers use these.
+// bounces that hurt the sender domain's reputation — the seed accounts use these.
 const UNDELIVERABLE = /\.(example|test|invalid|local|localhost)$/i
 export const isDeliverable = (address: string) => !UNDELIVERABLE.test(address.trim())
 

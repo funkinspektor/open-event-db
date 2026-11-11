@@ -3,7 +3,7 @@ import { editHistory, type Db } from '@open-event-db/db'
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
 export type DbOrTx = Db | Tx
 
-export type EntityType = 'event' | 'venue' | 'publisher' | 'invite'
+export type EntityType = 'event' | 'venue' | 'account' | 'organizer'
 export type HistoryAction = 'created' | 'updated' | 'cancelled' | 'ownership_changed' | 'deleted'
 export type Diff = Record<string, { before: unknown; after: unknown }>
 
@@ -23,7 +23,7 @@ export async function logEdit(
   entry: {
     entityType: EntityType
     entityId: string
-    publisherId: string
+    accountId: string
     action: HistoryAction
     /** Field changes; a non-HTTP writer adds a top-level `via` ('cli', 'ingest'). */
     diff: Diff | (Record<string, unknown> & { via: string })

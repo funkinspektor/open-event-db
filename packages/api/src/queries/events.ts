@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
+  eventOrganizers,
   eventOwners,
   events,
   ingestItems,
@@ -86,7 +87,7 @@ export function eventSearchSql(q: string) {
   )`
 }
 
-const hasOwners = sql`exists (select 1 from ${eventOwners} where ${eventOwners.eventId} = ${events.id})`
+const hasOwners = sql`exists (select 1 from ${eventOrganizers} where ${eventOrganizers.eventId} = ${events.id})`
 
 /** An official source lists the event right now: accepted (synced or not) and not gone from the site. */
 const listedByVenue = and(

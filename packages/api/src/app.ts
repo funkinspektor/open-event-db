@@ -6,7 +6,8 @@ import { errorHandler } from './error-handler.js'
 import { notFound } from './errors.js'
 import { healthRoutes } from './routes/health.js'
 import { tagsRoutes } from './routes/tags.js'
-import { publisherRoutes } from './routes/publishers.js'
+import { organizerRoutes } from './routes/organizers.js'
+import { accountRoutes } from './routes/accounts.js'
 import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
 import { authRoutes } from './routes/auth.js'
@@ -15,7 +16,7 @@ import { ingestRoutes } from './routes/ingest.js'
 import { hasIngestSecret, internalRoutes } from './routes/internal.js'
 import { IMAGE_CACHE_CONTROL, imageStore, isLocalStore } from './images/store.js'
 
-const UUID_PARAMS = ['id', 'publisher_id'] as const
+const UUID_PARAMS = ['id', 'organizer_id'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export interface AppOptions {
@@ -42,7 +43,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
   app.setNotFoundHandler((req, reply) => {
     reply.status(404).send({ error: { code: 'not_found', message: `Route ${req.method} ${req.url} not found` } })
   })
-  app.decorateRequest('publisher', null)
+  app.decorateRequest('account', null)
   app.decorateRequest('authMethod', null)
 
   await app.register(cookie)
@@ -52,7 +53,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     credentials: true,
   })
 
-  // preHandler phase so per-route write limits can key on the authenticated publisher
+  // preHandler phase so per-route write limits can key on the authenticated account
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
@@ -86,7 +87,8 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
       await api.register(extractRoutes)
       await api.register(ingestRoutes)
       await api.register(venueRoutes)
-      await api.register(publisherRoutes)
+      await api.register(organizerRoutes)
+      await api.register(accountRoutes)
       await api.register(tagsRoutes)
       await api.register(authRoutes)
     },

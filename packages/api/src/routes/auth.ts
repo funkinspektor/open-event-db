@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { and, eq, gt, isNull, sql } from 'drizzle-orm'
-import { magicLinkRequestSchema } from '@open-event-db/shared'
-import { generateToken, magicLinkTokens, publishers, sessions, sha256, type Publisher } from '@open-event-db/db'
+import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm'
+import { magicLinkRequestSchema, type AccountMe } from '@open-event-db/shared'
+import { generateToken, accounts, magicLinkTokens, organizerMembers, organizers, sessions, sha256, type Account } from '@open-event-db/db'
 import { db } from '../db.js'
 import { email } from '../email.js'
 import { unauthorized } from '../errors.js'
@@ -30,15 +30,15 @@ const magicLinkRateLimit = {
   },
 }
 
-async function sendMagicLink(publisher: Publisher): Promise<void> {
+async function sendMagicLink(account: Account): Promise<void> {
   const { token, hash } = generateToken()
   await db.insert(magicLinkTokens).values({
-    publisherId: publisher.id,
+    accountId: account.id,
     tokenHash: hash,
     expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
   })
   const url = `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
-  await email.transport.sendMagicLink({ to: publisher.email, url })
+  await email.transport.sendMagicLink({ to: account.email, url })
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -46,16 +46,16 @@ export async function authRoutes(app: FastifyInstance) {
     const { email: address } = magicLinkRequestSchema.parse(req.body)
     const normalized = address.toLowerCase()
 
-    const [publisher] = await db
+    const [account] = await db
       .select()
-      .from(publishers)
-      .where(sql`lower(${publishers.email}) = ${normalized}`)
+      .from(accounts)
+      .where(sql`lower(${accounts.email}) = ${normalized}`)
       .limit(1)
 
-    if (publisher?.verified) {
+    if (account) {
       // Issue and send in the background: if the response waited for this, its timing
       // would reveal whether the email is registered.
-      void sendMagicLink(publisher).catch((err) => req.log.error({ err }, 'sending magic link failed'))
+      void sendMagicLink(account).catch((err) => req.log.error({ err }, 'sending magic link failed'))
     }
 
     return { data: { message: "If this email is registered, you'll receive a login link." } }
@@ -78,12 +78,12 @@ export async function authRoutes(app: FastifyInstance) {
             gt(magicLinkTokens.expiresAt, now),
           ),
         )
-        .returning({ publisherId: magicLinkTokens.publisherId })
+        .returning({ accountId: magicLinkTokens.accountId })
       if (!t) return null
 
       const s = generateToken()
       await tx.insert(sessions).values({
-        publisherId: t.publisherId,
+        accountId: t.accountId,
         tokenHash: s.hash,
         expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
       })
@@ -108,22 +108,31 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/auth/me', async (req) => {
     await authenticate(req)
-    const p = req.publisher
-    if (!p || !req.authMethod) throw unauthorized()
-    return {
-      data: {
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        links: p.links,
-        verified: p.verified,
-        is_publisher: p.isPublisher,
-        is_scout: p.isScout,
-        created_at: p.createdAt.toISOString(),
-        email: p.email,
-        has_api_key: p.apiKeyHash !== null,
-        auth_method: req.authMethod,
-      },
+    const a = req.account
+    if (!a || !req.authMethod) throw unauthorized()
+    // All memberships, verified or not: the settings page lists both
+    const memberships = await db
+      .select({
+        id: organizers.id,
+        name: organizers.name,
+        slug: organizers.slug,
+        role: organizerMembers.role,
+        verified: organizers.verified,
+      })
+      .from(organizerMembers)
+      .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
+      .where(eq(organizerMembers.accountId, a.id))
+      .orderBy(asc(organizers.name), asc(organizers.id))
+    const data: AccountMe = {
+      id: a.id,
+      email: a.email,
+      handle: a.handle,
+      display_name: a.displayName,
+      is_scout: a.isScout,
+      has_api_key: a.apiKeyHash !== null,
+      auth_method: req.authMethod,
+      organizers: memberships,
     }
+    return { data }
   })
 }
