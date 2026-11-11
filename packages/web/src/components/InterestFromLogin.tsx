@@ -20,21 +20,17 @@ export function InterestFromLogin({ eventId, pending }: { eventId: string; pendi
   useEffect(() => {
     if (!pending || started.current) return
     started.current = true
-    const strip = () => {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('interest')
-      window.history.replaceState(window.history.state, '', url)
-    }
     fetch(`${API_URL}/api/v1/events/${eventId}/interest`, { method: 'PUT', credentials: 'include' })
       .then((res) => {
         if (res.status === 403) return router.replace('/welcome')
         setResult(res.ok ? 'saved' : 'failed')
-        strip()
-        router.refresh()
+        // A soft navigation to the clean URL: drops the parameter for good and re-renders the star. This
+        // component sits at the same place in the page either way, so its toast state survives.
+        router.replace(`/events/${eventId}`, { scroll: false })
       })
       .catch(() => {
         setResult('failed')
-        strip()
+        router.replace(`/events/${eventId}`, { scroll: false })
       })
   }, [pending, eventId, router])
 

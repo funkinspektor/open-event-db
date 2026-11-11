@@ -46,7 +46,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const [events, tags, past, interestedIds] = await Promise.all([
     getEvents(apiQuery, filters.mine ? (cookie ?? undefined) : undefined),
     getTags(),
-    filters.mine ? getEvents(pastQuery, cookie ?? undefined) : null,
+    // Skipped when the main list starts further back than the Past window: nothing is left for it.
+    filters.mine && pastQuery.get('from')! < pastQuery.get('to')! ? getEvents(pastQuery, cookie ?? undefined) : null,
     // Anonymous visitors cost no extra call; in "Only mine" every row is marked anyway.
     loggedIn && cookie && !filters.mine
       ? getInterestIds(
