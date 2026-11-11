@@ -2,22 +2,22 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
+  accounts,
   editHistory,
   events,
-  generateApiKey,
   ingestItems,
   ingestSources,
-  publishers,
-  type Publisher,
+  type Account,
 } from '@open-event-db/db'
 import { EVENT_IMAGE_MAX_BYTES } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 
 let app: FastifyInstance
-let owner: Publisher
-let stranger: Publisher
+let owner: Account
+let stranger: Account
 let ownerKey: string
 let strangerKey: string
 let store: ReturnType<typeof memoryImageStore>
@@ -36,19 +36,12 @@ async function newEvent(fields: Partial<typeof events.$inferInsert> = {}) {
 
 beforeAll(async () => {
   app = await buildApp({ logger: false })
-  const key = generateApiKey()
-  const other = generateApiKey()
-  ownerKey = key.key
-  strangerKey = other.key
-  const rows = await db
-    .insert(publishers)
-    .values([
-      { name: 'Image Owner', slug: `image-owner-${stamp}`, email: `image-owner-${stamp}@test.local`, verified: true, apiKeyHash: key.hash },
-      { name: 'Image Stranger', slug: `image-stranger-${stamp}`, email: `image-stranger-${stamp}@test.local`, verified: true, apiKeyHash: other.hash },
-    ])
-    .returning()
-  owner = rows.find((p) => p.slug.startsWith('image-owner'))!
-  stranger = rows.find((p) => p.slug.startsWith('image-stranger'))!
+  const o = await createAccount({ label: 'image-owner' })
+  const x = await createAccount({ label: 'image-stranger' })
+  owner = o.account
+  stranger = x.account
+  ownerKey = o.key
+  strangerKey = x.key
 })
 
 beforeEach(() => {
@@ -58,10 +51,8 @@ beforeEach(() => {
 afterEach(() => imageStore.reset())
 
 afterAll(async () => {
-  await db.delete(ingestSources).where(eq(ingestSources.publisherId, owner.id))
-  await db.delete(editHistory).where(inArray(editHistory.publisherId, [owner.id, stranger.id]))
-  await db.delete(events).where(eq(events.createdBy, owner.id))
-  await db.delete(publishers).where(inArray(publishers.id, [owner.id, stranger.id]))
+  await db.delete(ingestSources).where(eq(ingestSources.accountId, owner.id))
+  await cleanup()
   await app.close()
 })
 
@@ -189,17 +180,17 @@ describe('PUT/DELETE /events/:id/image', () => {
     const e = await newEvent()
     const [source] = await db
       .insert(ingestSources)
-      .values({ slug: `image-src-${stamp}`, name: 'Image source', kind: 'ical', url: 'https://feed.test/x.ics', publisherId: owner.id })
+      .values({ slug: `image-src-${stamp}`, name: 'Image source', kind: 'ical', url: 'https://feed.test/x.ics', accountId: owner.id })
       .returning()
     const [item] = await db
       .insert(ingestItems)
       .values({ sourceId: source!.id, externalId: 'x', status: 'accepted', draft: {}, raw: '', eventId: e.id })
       .returning()
-    await db.update(publishers).set({ isScout: true }).where(eq(publishers.id, owner.id))
+    await db.update(accounts).set({ isScout: true }).where(eq(accounts.id, owner.id))
     try {
       expect((await upload(e.id, PNG)).statusCode).toBe(200)
     } finally {
-      await db.update(publishers).set({ isScout: false }).where(eq(publishers.id, owner.id))
+      await db.update(accounts).set({ isScout: false }).where(eq(accounts.id, owner.id))
     }
     const [after] = await db.select().from(ingestItems).where(eq(ingestItems.id, item!.id))
     expect(after!.detachedAt).not.toBeNull()

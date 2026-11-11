@@ -1,16 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
-import { events, publishers, venues, type Venue } from '@open-event-db/db'
+import { events, venues, type Venue } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 import { findDuplicateCandidates } from './duplicates.js'
 
 const stamp = Date.now()
 let app: FastifyInstance
 let venue: Venue
 let otherVenue: Venue
-let publisherId: string
+let accountId: string
+let accountName: string
 const eventIds: string[] = []
 
 // 2026-11-14 is a Saturday in CET (UTC+1): 20:00 Berlin = 19:00Z
@@ -20,7 +22,7 @@ const nextNight = new Date('2026-11-15T19:00:00Z')
 async function addEvent(values: Partial<typeof events.$inferInsert> & { title: string; startsAt: Date }) {
   const [e] = await db
     .insert(events)
-    .values({ city: 'Dupcity', createdBy: publisherId, ...values })
+    .values({ city: 'Dupcity', createdBy: accountId, ...values })
     .returning()
   eventIds.push(e!.id)
   return e!
@@ -30,11 +32,9 @@ const mine = <T extends { id: string }>(rows: T[]) => rows.filter((r) => eventId
 
 beforeAll(async () => {
   app = await buildApp({ logger: false })
-  const [p] = await db
-    .insert(publishers)
-    .values({ name: `Dup Scout ${stamp}`, slug: `dup-scout-${stamp}`, email: `dup-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true })
-    .returning()
-  publisherId = p!.id
+  const { account } = await createAccount({ scout: true, organizer: false, label: 'dup-scout' })
+  accountId = account.id
+  accountName = account.displayName
   const vs = await db
     .insert(venues)
     .values([
@@ -49,7 +49,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(events).where(inArray(events.id, eventIds))
   await db.delete(venues).where(inArray(venues.id, [venue.id, otherVenue.id]))
-  await db.delete(publishers).where(eq(publishers.id, publisherId))
+  await cleanup()
   await app.close()
 })
 
@@ -64,7 +64,7 @@ describe('findDuplicateCandidates', () => {
       starts_at: night.toISOString(),
       ends_at: null,
       venue_name: venue.name,
-      added_by_name: `Dup Scout ${stamp}`,
+      added_by_name: accountName,
       likely: true,
     })
     expect(rows[0]!.similarity).toBeGreaterThanOrEqual(0.4)

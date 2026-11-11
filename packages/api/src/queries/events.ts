@@ -1,11 +1,11 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   eventOrganizers,
-  eventOwners,
   events,
   ingestItems,
   ingestSources,
-  publishers,
+  accounts,
+  organizers,
   venues,
   type Event,
   type Venue,
@@ -17,7 +17,7 @@ import {
   canonicalLineup,
   type EventAddedBy,
   type EventDetail,
-  type EventOwnerRole,
+  type EventOrganizerRole,
   type EventProvenance,
   type EventSlim,
 } from '@open-event-db/shared'
@@ -87,7 +87,7 @@ export function eventSearchSql(q: string) {
   )`
 }
 
-const hasOwners = sql`exists (select 1 from ${eventOrganizers} where ${eventOrganizers.eventId} = ${events.id})`
+const hasOrganizers = sql`exists (select 1 from ${eventOrganizers} where ${eventOrganizers.eventId} = ${events.id})`
 
 /** An official source lists the event right now: accepted (synced or not) and not gone from the site. */
 const listedByVenue = and(
@@ -99,7 +99,7 @@ const listedByVenue = and(
 
 /** The event's provenance; correlated on `events`, usable in a select or a where. */
 export const provenanceSql = sql<EventProvenance>`case
-  when ${hasOwners} then 'organizer'
+  when ${hasOrganizers} then 'organizer'
   when exists (select 1 from ${ingestItems} inner join ${ingestSources} on ${ingestSources.id} = ${ingestItems.sourceId} where ${listedByVenue}) then 'venue_site'
   else 'scout' end`
 
@@ -121,8 +121,8 @@ export const slimEventColumns = {
   venueId: venues.id,
   venueName: venues.name,
   venueCity: venues.city,
-  // Unclaimed (scout-added) events have no owner rows
-  claimed: sql<boolean>`${hasOwners}`,
+  // Unclaimed (scout-added) events have no organizer rows
+  claimed: sql<boolean>`${hasOrganizers}`,
   provenance: provenanceSql,
 }
 
@@ -172,7 +172,7 @@ function serializeEventDetail(
   e: Event,
   v: Venue | null,
   addedBy: EventAddedBy,
-  owners: { publisherId: string; slug: string; name: string; role: EventOwnerRole }[],
+  organizerRows: { id: string; slug: string; name: string; role: EventOrganizerRole }[],
   syncedFrom: EventDetail['synced_from'],
   venueListing: EventDetail['venue_listing'],
 ): EventDetail {
@@ -193,8 +193,8 @@ function serializeEventDetail(
     city: e.city,
     image_url: imageUrlOf(e.imageKey),
     added_by: addedBy,
-    claimed: owners.length > 0,
-    provenance: owners.length > 0 ? 'organizer' : venueListing ? 'venue_site' : 'scout',
+    claimed: organizerRows.length > 0,
+    provenance: organizerRows.length > 0 ? 'organizer' : venueListing ? 'venue_site' : 'scout',
     created_at: e.createdAt.toISOString(),
     updated_at: e.updatedAt.toISOString(),
     venue: v
@@ -206,12 +206,7 @@ function serializeEventDetail(
           coordinates: serializeCoordinates(v.coordinates),
         }
       : null,
-    owners: owners.map((o) => ({
-      publisher_id: o.publisherId,
-      slug: o.slug,
-      name: o.name,
-      role: o.role,
-    })),
+    organizers: organizerRows.map((o) => ({ id: o.id, name: o.name, slug: o.slug, role: o.role })),
     synced_from: syncedFrom,
     venue_listing: venueListing,
   }
@@ -223,17 +218,17 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
       event: events,
       venue: venues,
       addedBy: {
-        id: publishers.id,
-        slug: publishers.slug,
-        name: publishers.name,
-        is_scout: publishers.isScout,
+        id: accounts.id,
+        handle: accounts.handle,
+        display_name: accounts.displayName,
+        is_scout: accounts.isScout,
       },
       sourceName: ingestSources.name,
       itemDraft: ingestItems.draft,
     })
     .from(events)
     .leftJoin(venues, eq(events.venueId, venues.id))
-    .innerJoin(publishers, eq(publishers.id, events.createdBy))
+    .innerJoin(accounts, eq(accounts.id, events.createdBy))
     // Still synced from a feed: an item points here and no human edit has detached it
     .leftJoin(ingestItems, and(eq(ingestItems.eventId, events.id), isNull(ingestItems.detachedAt)))
     .leftJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
@@ -241,16 +236,16 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
     .limit(1)
   if (!row) return null
 
-  const owners = await db
+  const organizerRows = await db
     .select({
-      publisherId: eventOwners.publisherId,
-      role: eventOwners.role,
-      slug: publishers.slug,
-      name: publishers.name,
+      id: organizers.id,
+      role: eventOrganizers.role,
+      slug: organizers.slug,
+      name: organizers.name,
     })
-    .from(eventOwners)
-    .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
-    .where(eq(eventOwners.eventId, id))
+    .from(eventOrganizers)
+    .innerJoin(organizers, eq(organizers.id, eventOrganizers.organizerId))
+    .where(eq(eventOrganizers.eventId, id))
 
   const [listing] = await db
     .select({ sourceName: ingestSources.name, itemDraft: ingestItems.draft, lastSeenAt: ingestItems.lastSeenAt })
@@ -267,11 +262,11 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
   const venueListing = listing
     ? { source_name: listing.sourceName, source_url: sourceUrl(listing.itemDraft), last_seen_at: listing.lastSeenAt.toISOString() }
     : null
-  return serializeEventDetail(row.event, row.venue, row.addedBy, owners, syncedFrom, venueListing)
+  return serializeEventDetail(row.event, row.venue, row.addedBy, organizerRows, syncedFrom, venueListing)
 }
 
 /** Cancels an event, logs it and stops feed sync. No-op for an already cancelled event. */
-export async function cancelEvent(tx: DbOrTx, current: Event, publisherId: string): Promise<void> {
+export async function cancelEvent(tx: DbOrTx, current: Event, accountId: string): Promise<void> {
   if (current.status === 'cancelled') return
   const [updated] = await tx
     .update(events)
@@ -282,19 +277,19 @@ export async function cancelEvent(tx: DbOrTx, current: Event, publisherId: strin
   await logEdit(tx, {
     entityType: 'event',
     entityId: current.id,
-    publisherId,
+    accountId,
     action: 'cancelled',
     diff: diff(eventSnapshot(current), eventSnapshot(updated)),
   })
   await detachIngest(tx, current.id)
 }
 
-/** Owner rows in the shape the shared permission helpers expect. Empty = unclaimed. */
-export async function getOwners(
+/** Organizer rows in the shape the shared permission helpers expect. Empty = unclaimed. */
+export async function getOrganizers(
   eventId: string,
-): Promise<{ publisher_id: string; role: EventOwnerRole }[]> {
+): Promise<{ organizer_id: string; role: EventOrganizerRole }[]> {
   return db
-    .select({ publisher_id: eventOwners.publisherId, role: eventOwners.role })
-    .from(eventOwners)
-    .where(eq(eventOwners.eventId, eventId))
+    .select({ organizer_id: eventOrganizers.organizerId, role: eventOrganizers.role })
+    .from(eventOrganizers)
+    .where(eq(eventOrganizers.eventId, eventId))
 }

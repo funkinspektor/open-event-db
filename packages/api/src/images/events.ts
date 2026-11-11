@@ -9,7 +9,7 @@ import type { ImageType } from './sniff.js'
 
 export interface ReplaceImageOptions {
   /** Who the edit is logged for. */
-  publisherId: string
+  accountId: string
   /** A person's change: the feed must stop syncing this event. */
   detach?: boolean
   /**
@@ -79,7 +79,7 @@ export async function replaceEventImage(
       await logEdit(tx, {
         entityType: 'event',
         entityId: eventId,
-        publisherId: opts.publisherId,
+        accountId: opts.accountId,
         action: 'updated',
         diff: opts.ingestItem ? { ...changes, via: 'ingest' } : changes,
       })

@@ -6,7 +6,7 @@ import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { notFound } from '../errors.js'
 import { serializeCoordinates } from '../serializers.js'
-import { currentPublisher, requireRights, writeRateLimit } from '../auth.js'
+import { currentAccount, requireRights, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { serializeSlimEvent, slimEventColumns } from '../queries/events.js'
 
@@ -139,7 +139,7 @@ export async function venueRoutes(app: FastifyInstance) {
   })
 
   app.post('/venues', write, async (req, reply) => {
-    const me = currentPublisher(req)
+    const me = currentAccount(req)
     const body = venueCreateSchema.parse(req.body)
 
     const venue = await db.transaction(async (tx) => {
@@ -157,7 +157,7 @@ export async function venueRoutes(app: FastifyInstance) {
       await logEdit(tx, {
         entityType: 'venue',
         entityId: v.id,
-        publisherId: me.id,
+        accountId: me.id,
         action: 'created',
         diff: diff(null, venueSnapshot(v)),
       })
@@ -169,7 +169,7 @@ export async function venueRoutes(app: FastifyInstance) {
   })
 
   app.put<{ Params: { id: string } }>('/venues/:id', write, async (req) => {
-    const me = currentPublisher(req)
+    const me = currentAccount(req)
     const body = venueUpdateSchema.parse(req.body)
 
     const [current] = await db.select().from(venues).where(eq(venues.id, req.params.id)).limit(1)
@@ -198,7 +198,7 @@ export async function venueRoutes(app: FastifyInstance) {
       await logEdit(tx, {
         entityType: 'venue',
         entityId: v.id,
-        publisherId: me.id,
+        accountId: me.id,
         action: 'updated',
         diff: diff(venueSnapshot(current), venueSnapshot(v)),
       })

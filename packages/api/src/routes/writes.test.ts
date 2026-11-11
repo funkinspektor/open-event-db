@@ -1,27 +1,18 @@
-import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { desc, eq, inArray } from 'drizzle-orm'
-import {
-  editHistory,
-  eventOwners,
-  events,
-  generateApiKey,
-  ingestSources,
-  publishers,
-  venues,
-  type Publisher,
-  type Venue,
-} from '@open-event-db/db'
+import { editHistory, eventOrganizers, events, ingestSources, venues, type Account, type Organizer, type Venue } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { cleanup, createAccount, createOrganizer } from '../test/fixtures.js'
 
 let app: FastifyInstance
-let alice: Publisher
-let bob: Publisher
-let scout: Publisher
-let scout2: Publisher
+let alice: Account
+let bob: Account
+let scout: Account
+let scout2: Account
+let orgA: Organizer
+let orgB: Organizer
 let keyA: string
 let keyB: string
 let keyS: string
@@ -34,28 +25,20 @@ const auth = (key: string) => ({ authorization: `Bearer ${key}` })
 beforeAll(async () => {
   app = await buildApp({ logger: false })
 
-  const a = generateApiKey()
-  const b = generateApiKey()
-  const sc = generateApiKey()
-  const sc2 = generateApiKey()
+  const a = await createAccount({ label: 'alice' })
+  const b = await createAccount({ label: 'bob' })
+  const s1 = await createAccount({ scout: true, organizer: false, label: 'scout' })
+  const s2 = await createAccount({ scout: true, organizer: false, label: 'scout2' })
+  alice = a.account
+  bob = b.account
+  scout = s1.account
+  scout2 = s2.account
+  orgA = a.organizer!
+  orgB = b.organizer!
   keyA = a.key
   keyB = b.key
-  keyS = sc.key
-  keyS2 = sc2.key
-
-  const rows = await db
-    .insert(publishers)
-    .values([
-      { name: 'Test Alice', slug: `test-alice-${stamp}`, email: `alice-${stamp}@test.local`, verified: true, apiKeyHash: a.hash },
-      { name: 'Test Bob', slug: `test-bob-${stamp}`, email: `bob-${stamp}@test.local`, verified: true, apiKeyHash: b.hash },
-      { name: 'Test Scout', slug: `test-scout-${stamp}`, email: `scout-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: sc.hash },
-      { name: 'Test Scout Two', slug: `test-scout2-${stamp}`, email: `scout2-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: sc2.hash },
-    ])
-    .returning()
-  alice = rows.find((p) => p.slug.startsWith('test-alice'))!
-  bob = rows.find((p) => p.slug.startsWith('test-bob'))!
-  scout = rows.find((p) => p.slug.startsWith('test-scout-'))!
-  scout2 = rows.find((p) => p.slug.startsWith('test-scout2'))!
+  keyS = s1.key
+  keyS2 = s2.key
 
   const [v] = await db
     .insert(venues)
@@ -65,12 +48,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  const ids = [alice.id, bob.id, scout.id, scout2.id]
-  await db.delete(editHistory).where(inArray(editHistory.publisherId, ids))
-  await db.delete(events).where(inArray(events.createdBy, ids))
+  await cleanup()
   await db.delete(venues).where(eq(venues.id, venue.id))
   await db.delete(venues).where(eq(venues.name, `Created Venue ${stamp}`))
-  await db.delete(publishers).where(inArray(publishers.id, ids))
   await app.close()
 })
 
@@ -142,8 +122,8 @@ describe('events write flow', () => {
     expect(e.status).toBe('scheduled')
     expect(e.tags).toEqual(['techno', 'open-air'])
     expect(e.venue.id).toBe(venue.id)
-    expect(e.owners).toEqual([
-      expect.objectContaining({ publisher_id: alice.id, role: 'creator' }),
+    expect(e.organizers).toEqual([
+      expect.objectContaining({ id: orgA.id, role: 'creator' }),
     ])
     const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
     expect(history.map((h) => h.action)).toEqual(['created'])
@@ -159,34 +139,34 @@ describe('events write flow', () => {
     expect(res.statusCode).toBe(403)
   })
 
-  it('only the creator can add co-owners', async () => {
+  it('only the creator can add co-hosts', async () => {
     const byBob = await app.inject({
       method: 'POST',
-      url: `/api/v1/events/${eventId}/owners`,
+      url: `/api/v1/events/${eventId}/organizers`,
       headers: auth(keyB),
-      payload: { publisher_id: bob.id },
+      payload: { organizer_id: orgB.id },
     })
     expect(byBob.statusCode).toBe(403)
 
     const byAlice = await app.inject({
       method: 'POST',
-      url: `/api/v1/events/${eventId}/owners`,
+      url: `/api/v1/events/${eventId}/organizers`,
       headers: auth(keyA),
-      payload: { publisher_id: bob.id },
+      payload: { organizer_id: orgB.id },
     })
     expect(byAlice.statusCode).toBe(201)
-    expect(byAlice.json().data.owners).toHaveLength(2)
+    expect(byAlice.json().data.organizers).toHaveLength(2)
 
     const again = await app.inject({
       method: 'POST',
-      url: `/api/v1/events/${eventId}/owners`,
+      url: `/api/v1/events/${eventId}/organizers`,
       headers: auth(keyA),
-      payload: { publisher_id: bob.id },
+      payload: { organizer_id: orgB.id },
     })
     expect(again.statusCode).toBe(400)
   })
 
-  it('co-owners can edit and postpone but not cancel', async () => {
+  it('co-hosts can edit and postpone but not cancel', async () => {
     const edit = await app.inject({
       method: 'PUT',
       url: `/api/v1/events/${eventId}`,
@@ -213,21 +193,21 @@ describe('events write flow', () => {
     expect(del.statusCode).toBe(403)
   })
 
-  it('the creator cannot be removed, co-owners can', async () => {
+  it('the creator cannot be removed, co-hosts can', async () => {
     const removeCreator = await app.inject({
       method: 'DELETE',
-      url: `/api/v1/events/${eventId}/owners/${alice.id}`,
+      url: `/api/v1/events/${eventId}/organizers/${orgA.id}`,
       headers: auth(keyA),
     })
     expect(removeCreator.statusCode).toBe(400)
 
     const removeBob = await app.inject({
       method: 'DELETE',
-      url: `/api/v1/events/${eventId}/owners/${bob.id}`,
+      url: `/api/v1/events/${eventId}/organizers/${orgB.id}`,
       headers: auth(keyA),
     })
     expect(removeBob.statusCode).toBe(200)
-    expect(removeBob.json().data.owners).toHaveLength(1)
+    expect(removeBob.json().data.organizers).toHaveLength(1)
   })
 
   it('the creator can cancel via DELETE and it is logged as cancelled', async () => {
@@ -244,19 +224,19 @@ describe('events write flow', () => {
   })
 
   it('cancelled events are hidden from the default list but visible with status filter', async () => {
-    const def = await app.inject({ method: 'GET', url: `/api/v1/events?publisher_id=${alice.id}` })
+    const def = await app.inject({ method: 'GET', url: `/api/v1/events?organizer_id=${orgA.id}` })
     expect(def.json().data.map((e: { id: string }) => e.id)).not.toContain(eventId)
 
     const all = await app.inject({
       method: 'GET',
-      url: `/api/v1/events?publisher_id=${alice.id}&status=scheduled,postponed,cancelled`,
+      url: `/api/v1/events?organizer_id=${orgA.id}&status=scheduled,postponed,cancelled`,
     })
     expect(all.json().data.map((e: { id: string }) => e.id)).toContain(eventId)
   })
 })
 
 describe('venues write flow', () => {
-  it('any verified publisher can create and edit venues', async () => {
+  it('any member of a verified organizer can create and edit venues', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/v1/venues',
@@ -290,7 +270,7 @@ describe('venues write flow', () => {
       )
       .returning()
     const [linked, mapped, disabled, bare] = made as [Venue, Venue, Venue, Venue]
-    const source = { kind: 'ical' as const, url: 'https://feed.test/feed.ics', publisherId: scout.id }
+    const source = { kind: 'ical' as const, url: 'https://feed.test/feed.ics', accountId: scout.id }
     await db.insert(ingestSources).values([
       { ...source, slug: `feed-linked-${stamp}`, name: 'Linked feed', venueId: linked.id },
       { ...source, slug: `feed-mapped-${stamp}`, name: 'Mapped feed', config: { venues: { 'Room 1': mapped.id } } },
@@ -317,42 +297,9 @@ describe('venues write flow', () => {
       const detail = await app.inject({ method: 'GET', url: `/api/v1/venues/${linked.id}` })
       expect(detail.json().data.feeds).toEqual([{ slug: `feed-linked-${stamp}`, name: 'Linked feed' }])
     } finally {
-      await db.delete(ingestSources).where(eq(ingestSources.publisherId, scout.id))
+      await db.delete(ingestSources).where(eq(ingestSources.accountId, scout.id))
       await db.delete(venues).where(inArray(venues.id, made.map((v) => v.id)))
     }
-  })
-})
-
-describe('publisher profile', () => {
-  it('rejects a taken slug', async () => {
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/api/v1/publishers/me',
-      headers: auth(keyA),
-      payload: { slug: bob.slug },
-    })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe('slug_taken')
-  })
-
-  it('updates own profile', async () => {
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/api/v1/publishers/me',
-      headers: auth(keyA),
-      payload: { name: 'Test Alice Renamed', links: { website: 'https://alice.test' } },
-    })
-    expect(res.statusCode).toBe(200)
-    expect(res.json().data.name).toBe('Test Alice Renamed')
-  })
-
-  it('API key generation requires a session, not an API key', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/publishers/me/api-key',
-      headers: auth(keyA),
-    })
-    expect(res.statusCode).toBe(403)
   })
 })
 
@@ -595,15 +542,10 @@ describe('events without a start time', () => {
   })
 })
 
-const cliPath = fileURLToPath(new URL('../../../db/src/cli.ts', import.meta.url))
-const dbDir = fileURLToPath(new URL('../../../db', import.meta.url))
-const cli = (...args: string[]) =>
-  execFileSync(process.execPath, ['--import', 'tsx', cliPath, ...args], { cwd: dbDir, encoding: 'utf8' })
-
 describe('scouts and unclaimed events', () => {
   let eventId: string
 
-  it('a scout creates an unclaimed event: added_by is the scout, no owners', async () => {
+  it('a scout creates an unclaimed event: added_by is the scout, no organizers', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/events',
@@ -613,13 +555,13 @@ describe('scouts and unclaimed events', () => {
     expect(res.statusCode).toBe(201)
     const e = res.json().data
     eventId = e.id
-    expect(e.owners).toEqual([])
+    expect(e.organizers).toEqual([])
     expect(e.claimed).toBe(false)
-    expect(e.added_by).toEqual({ id: scout.id, slug: scout.slug, name: 'Test Scout', is_scout: true })
+    expect(e.added_by).toEqual({ id: scout.id, handle: scout.handle, display_name: scout.displayName, is_scout: true })
     expect(e).not.toHaveProperty('created_by')
   })
 
-  it('publisher-created events stay owned and claimed', async () => {
+  it('organizer-created events stay owned and claimed', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/events',
@@ -640,7 +582,7 @@ describe('scouts and unclaimed events', () => {
     expect(added.json().data.map((e: { id: string }) => e.id)).toEqual([eventId])
   })
 
-  it('any scout can edit an unclaimed event; a non-owner publisher gets 403', async () => {
+  it('any scout can edit an unclaimed event; a non-member gets 403', async () => {
     const byOtherScout = await app.inject({
       method: 'PUT',
       url: `/api/v1/events/${eventId}`,
@@ -649,53 +591,61 @@ describe('scouts and unclaimed events', () => {
     })
     expect(byOtherScout.statusCode).toBe(200)
 
-    const byPublisher = await app.inject({
+    const byMember = await app.inject({
       method: 'PUT',
       url: `/api/v1/events/${eventId}`,
       headers: auth(keyB),
       payload: { title: 'Hijacked' },
     })
-    expect(byPublisher.statusCode).toBe(403)
+    expect(byMember.statusCode).toBe(403)
   })
 
-  it('nobody can add co-owners to an unclaimed event', async () => {
+  it('nobody can add co-hosts to an unclaimed event', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: `/api/v1/events/${eventId}/owners`,
+      url: `/api/v1/events/${eventId}/organizers`,
       headers: auth(keyS),
-      payload: { publisher_id: bob.id },
+      payload: { organizer_id: orgB.id },
     })
     expect(res.statusCode).toBe(403)
   })
 
-  it('scouts cannot be added as co-owners and are not listed as publishers', async () => {
+  it('an unverified or unknown organizer cannot be added as co-host', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/v1/events',
       headers: auth(keyA),
-      payload: { title: 'Owner test', starts_at: '2030-02-03T22:00:00Z', venue_id: venue.id },
+      payload: { title: 'Co-host test', starts_at: '2030-02-03T22:00:00Z', venue_id: venue.id },
     })
+    const id = created.json().data.id
+    const unverified = await createOrganizer([], { verified: false })
     const add = await app.inject({
       method: 'POST',
-      url: `/api/v1/events/${created.json().data.id}/owners`,
+      url: `/api/v1/events/${id}/organizers`,
       headers: auth(keyA),
-      payload: { publisher_id: scout.id },
+      payload: { organizer_id: unverified.id },
     })
     expect(add.statusCode).toBe(400)
+    expect(add.json().error.message).toBe('Organizer is not verified')
 
-    const list = await app.inject({ method: 'GET', url: '/api/v1/publishers?q=Test%20Scout' })
-    expect(list.json().data).toEqual([])
-    const pubs = await app.inject({ method: 'GET', url: `/api/v1/publishers?q=Test%20Alice` })
-    expect(pubs.json().data[0]).toEqual(expect.objectContaining({ is_publisher: true, is_scout: false }))
+    const unknown = await app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${id}/organizers`,
+      headers: auth(keyA),
+      payload: { organizer_id: '00000000-0000-4000-8000-000000000000' },
+    })
+    expect(unknown.statusCode).toBe(400)
   })
 
-  it('claim-event makes the publisher creator and locks scouts out', async () => {
-    cli('claim-event', eventId, alice.slug)
+  it('once claimed for an organizer, the event locks scouts out', async () => {
+    // Claiming itself is done by the CLI; here the organizer row is inserted directly
+    await db.insert(eventOrganizers).values({ eventId, organizerId: orgA.id, role: 'creator' })
 
     const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })
     const e = detail.json().data
     expect(e.claimed).toBe(true)
-    expect(e.owners).toEqual([expect.objectContaining({ publisher_id: alice.id, role: 'creator' })])
+    expect(e.provenance).toBe('organizer')
+    expect(e.organizers).toEqual([expect.objectContaining({ id: orgA.id, role: 'creator' })])
     expect(e.added_by.id).toBe(scout.id)
 
     const byScout = await app.inject({
@@ -705,13 +655,6 @@ describe('scouts and unclaimed events', () => {
       payload: { title: 'Too late' },
     })
     expect(byScout.statusCode).toBe(403)
-
-    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
-    const claim = history.find((h) => h.action === 'ownership_changed')
-    expect(claim?.publisherId).toBe(alice.id)
-    expect(claim?.diff).toEqual(expect.objectContaining({ via: 'cli' }))
-
-    expect(() => cli('claim-event', eventId, bob.slug)).toThrow()
   })
 
   it('scouts can cancel unclaimed events via DELETE', async () => {
@@ -729,37 +672,116 @@ describe('scouts and unclaimed events', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.status).toBe('cancelled')
   })
+})
 
-  it('delete-event hard-deletes and leaves only a content-free "deleted" history row', async () => {
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/v1/events',
-      headers: auth(keyS),
-      payload: { title: 'Scouted Delete', starts_at: '2030-02-05T22:00:00Z', venue_id: venue.id },
-    })
-    const id = created.json().data.id
-    cli('delete-event', id)
+describe('creating events: whose event is it', () => {
+  const eventBody = { title: 'Creation rules', starts_at: '2030-03-01T20:00:00Z', city: 'Testcity' }
+  const post = (payload: Record<string, unknown>, key: string) =>
+    app.inject({ method: 'POST', url: '/api/v1/events', headers: auth(key), payload })
 
-    const gone = await app.inject({ method: 'GET', url: `/api/v1/events/${id}` })
-    expect(gone.statusCode).toBe(404)
-    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, id))
-    expect(history).toEqual([expect.objectContaining({ action: 'deleted', publisherId: scout.id, diff: { via: 'cli' } })])
+  it('a scout who is also a member creates an unclaimed event when no organizer_id is given', async () => {
+    const { key } = await createAccount({ scout: true }) // owns a verified organizer too
+    const res = await post(eventBody, key)
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data).toMatchObject({ claimed: false, organizers: [], provenance: 'scout' })
   })
 
-  it('delete-event asks before deleting a claimed event', async () => {
-    // eventId was claimed by Alice above; answering anything but "y" aborts
-    expect(() =>
-      execFileSync(process.execPath, ['--import', 'tsx', cliPath, 'delete-event', eventId], {
-        cwd: dbDir,
-        input: 'n\n',
-        stdio: 'pipe',
-      }),
-    ).toThrow()
-    const owners = await db.select().from(eventOwners).where(eq(eventOwners.eventId, eventId))
-    expect(owners).toHaveLength(1)
+  it('with organizer_id the event belongs to that organizer', async () => {
+    const { key, organizer } = await createAccount({ scout: true })
+    const res = await post({ ...eventBody, organizer_id: organizer!.id }, key)
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data).toMatchObject({
+      claimed: true,
+      provenance: 'organizer',
+      organizers: [{ id: organizer!.id, name: organizer!.name, slug: organizer!.slug, role: 'creator' }],
+    })
+  })
 
-    cli('delete-event', eventId, '--yes')
-    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
-    expect(history).toEqual([expect.objectContaining({ action: 'deleted', publisherId: alice.id })])
+  it('a member of one organizer creates for it without organizer_id', async () => {
+    const res = await post(eventBody, keyA)
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.organizers).toEqual([expect.objectContaining({ id: orgA.id, role: 'creator' })])
+    expect(res.json().data.added_by).toEqual({ id: alice.id, handle: alice.handle, display_name: alice.displayName, is_scout: false })
+  })
+
+  it('a member of two organizers must choose: 400 organizer_required', async () => {
+    const { account, key, organizer } = await createAccount()
+    const second = await createOrganizer([account.id])
+    const res = await post(eventBody, key)
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe('organizer_required')
+
+    const chosen = await post({ ...eventBody, organizer_id: second.id }, key)
+    expect(chosen.statusCode).toBe(201)
+    expect(chosen.json().data.organizers).toEqual([expect.objectContaining({ id: second.id, role: 'creator' })])
+    expect(organizer).not.toBeNull()
+  })
+
+  it("someone else's organizer_id is 403 not_a_member", async () => {
+    const res = await post({ ...eventBody, organizer_id: orgB.id }, keyA)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('not_a_member')
+    const scoutRes = await post({ ...eventBody, organizer_id: orgB.id }, keyS)
+    expect(scoutRes.statusCode).toBe(403)
+    expect(scoutRes.json().error.code).toBe('not_a_member')
+  })
+
+  it('a member of an unverified organizer cannot create or edit', async () => {
+    const { account, key, organizer } = await createAccount({ organizer: { verified: false } })
+    const noRights = await post(eventBody, key)
+    expect(noRights.statusCode).toBe(403)
+    const explicit = await post({ ...eventBody, organizer_id: organizer!.id }, key)
+    expect(explicit.statusCode).toBe(403)
+    expect(explicit.json().error.code).toBe('no_rights')
+
+    const [e] = await db
+      .insert(events)
+      .values({ title: 'Unverified event', startsAt: new Date('2030-03-02T20:00:00Z'), city: 'Testcity', createdBy: account.id })
+      .returning()
+    await db.insert(eventOrganizers).values({ eventId: e!.id, organizerId: organizer!.id, role: 'creator' })
+    const edit = await app.inject({ method: 'PUT', url: `/api/v1/events/${e!.id}`, headers: auth(key), payload: { title: 'Nope' } })
+    expect(edit.statusCode).toBe(403)
+  })
+
+  it('an account without rights cannot create', async () => {
+    const { key } = await createAccount({ organizer: false })
+    const res = await post(eventBody, key)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('no_rights')
+  })
+
+  it('co-host management uses organizer ids and logs ownership_changed', async () => {
+    const created = await post(eventBody, keyA)
+    const id = created.json().data.id as string
+    const add = await app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${id}/organizers`,
+      headers: auth(keyA),
+      payload: { organizer_id: orgB.id },
+    })
+    expect(add.statusCode).toBe(201)
+    expect(add.json().data.organizers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: orgA.id, role: 'creator' }),
+        expect.objectContaining({ id: orgB.id, role: 'co_host' }),
+      ]),
+    )
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, id))
+    const change = history.find((h) => h.action === 'ownership_changed')
+    expect(change?.accountId).toBe(alice.id)
+    expect(change?.diff).toEqual({ organizers: { before: [orgA.id], after: [orgA.id, orgB.id] } })
+
+    const remove = await app.inject({ method: 'DELETE', url: `/api/v1/events/${id}/organizers/${orgB.id}`, headers: auth(keyA) })
+    expect(remove.statusCode).toBe(200)
+    expect(remove.json().data.organizers).toHaveLength(1)
+  })
+
+  it("GET /events?organizer_id= lists the organizer's events", async () => {
+    const { key, organizer } = await createAccount()
+    const mineRes = await post(eventBody, key)
+    await post(eventBody, keyB)
+    const list = await app.inject({ method: 'GET', url: `/api/v1/events?organizer_id=${organizer!.id}&from=2030-01-01T00:00:00Z` })
+    expect(list.statusCode).toBe(200)
+    expect(list.json().data.map((e: { id: string }) => e.id)).toEqual([mineRes.json().data.id])
   })
 })

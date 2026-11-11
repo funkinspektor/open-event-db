@@ -29,7 +29,7 @@ export async function syncItemImage(item: IngestItem, draft: IngestDraft, publis
     const image = draft.image_url ? await fetchRemoteImage(draft.image_url, fetchImpl) : null
     if (draft.image_url && !image) return
     await replaceEventImage(item.eventId, image, {
-      publisherId,
+      accountId: publisherId,
       ingestItem: { id: item.id, sourceUrl: draft.image_url },
     })
   } catch (err) {
@@ -46,7 +46,7 @@ export async function copyItemImage(eventId: string, draft: IngestDraft, publish
   try {
     const image = await fetchRemoteImage(draft.image_url, fetchImpl)
     if (!image) return false
-    return (await replaceEventImage(eventId, image, { publisherId })).applied
+    return (await replaceEventImage(eventId, image, { accountId: publisherId })).applied
   } catch (err) {
     console.warn(`Could not copy the feed image onto event ${eventId}:`, err instanceof Error ? err.message : err)
     return false

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm'
-import { events, publishers, venues } from '@open-event-db/db'
+import { accounts, events, venues } from '@open-event-db/db'
 import type { DuplicateCandidate } from '@open-event-db/shared'
 import { db } from '../db.js'
 import { berlinInstant, berlinParts, nextDay } from '../extract/normalize.js'
@@ -76,12 +76,12 @@ export async function findDuplicateCandidates(
       startTimeKnown: events.startTimeKnown,
       endsAt: events.endsAt,
       venueName: venues.name,
-      addedByName: publishers.name,
+      addedByName: accounts.displayName,
       similarity,
     })
     .from(events)
     .leftJoin(venues, eq(events.venueId, venues.id))
-    .innerJoin(publishers, eq(events.createdBy, publishers.id))
+    .innerJoin(accounts, eq(events.createdBy, accounts.id))
     .where(and(...conditions))
     .orderBy(...(title ? [desc(similarity)] : []), asc(events.startsAt), asc(events.id))
     .limit(limit)
