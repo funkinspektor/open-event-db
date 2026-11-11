@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { and, eq, isNull, sql } from 'drizzle-orm'
-import { accounts, editHistory, generateToken, magicLinkTokens, sessions } from '@open-event-db/db'
+import { accounts, editHistory, generateToken, magicLinkTokens, sessions, sha256 } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { email } from '../email.js'
 import { cleanup, createAccount, createOrganizer } from '../test/fixtures.js'
 
 let app: FastifyInstance
-const mails: { to: string; url: string; kind: string }[] = []
+const mails: { to: string; url: string; kind: string; requesterHandle?: string }[] = []
 const notices: { to: string; newEmail: string }[] = []
 const u = () => Math.random().toString(36).slice(2, 8)
 
@@ -40,7 +40,7 @@ async function sessionAccount(opts: { onboarded?: boolean; label?: string } = {}
 }
 
 const call = (
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   url: string,
   cookie?: string,
   payload?: unknown,
@@ -63,6 +63,7 @@ describe('session-only', () => {
     const { key } = await createAccount({ label: 'keyonly', organizer: false })
     const h = { authorization: `Bearer ${key}` }
     const routes: ['GET' | 'POST' | 'DELETE', string, unknown?][] = [
+      ['POST', '/accounts/me/email/confirm', { token: 'x' }],
       ['POST', '/accounts/me/onboarding', { display_name: 'A', handle: 'a-a-a', accept_terms: true }],
       ['POST', '/accounts/me/email', { email: 'x@y.test' }],
       ['GET', '/accounts/me/delete-preview'],
@@ -124,20 +125,40 @@ describe('onboarding', () => {
   })
 })
 
+const tokenOf = (url: string) => new URL(url).searchParams.get('token')!
+
+/** Requests an email change and waits for the (background) mail to the address. */
+async function requestChange(cookie: string, address: string) {
+  const res = await call('POST', '/accounts/me/email', cookie, { email: address })
+  expect(res.statusCode).toBe(200)
+  await vi.waitFor(() => expect(mails.some((m) => m.to === address.toLowerCase() && m.kind === 'email_change')).toBe(true))
+  return mails.filter((m) => m.to === address.toLowerCase() && m.kind === 'email_change').at(-1)!
+}
+
+const confirm = (cookie: string | undefined, token: string) => call('POST', '/accounts/me/email/confirm', cookie, { token })
+
 describe('email change', () => {
-  it('never reveals a taken address and the click then redirects to ?email=taken', async () => {
+  it('sends the link to the web app, naming the requesting handle', async () => {
+    const { account, cookie } = await sessionAccount()
+    const mail = await requestChange(cookie, `web-${u()}@test.local`)
+    expect(mail.url).toMatch(/\/confirm-email\?token=[A-Za-z0-9_-]+$/)
+    expect(mail.url).not.toContain('/auth/verify')
+    expect(mail.requesterHandle).toBe(account.handle)
+  })
+
+  it('never reveals a taken address; confirming then reports taken and changes nothing', async () => {
     const { account: other } = await sessionAccount()
     const { account, cookie } = await sessionAccount()
-    mails.length = 0
     const res = await call('POST', '/accounts/me/email', cookie, { email: other.email.toUpperCase() })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: { sent: true } })
-    expect(mails).toHaveLength(1)
-    expect(mails[0]).toMatchObject({ to: other.email.toLowerCase(), kind: 'email_change' })
+    await vi.waitFor(() => expect(mails.some((m) => m.to === other.email.toLowerCase())).toBe(true))
+    const mail = mails.filter((m) => m.to === other.email.toLowerCase()).at(-1)!
+    expect(mail.kind).toBe('email_change')
 
-    const click = await app.inject({ method: 'GET', url: pathOf(mails[0]!.url) })
-    expect(click.statusCode).toBe(302)
-    expect(click.headers.location).toMatch(/\/profile\?email=taken$/)
+    const done = await confirm(cookie, tokenOf(mail.url))
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ data: { result: 'taken' } })
     const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
     expect(row!.email).toBe(account.email)
     const [o] = await db.select().from(accounts).where(eq(accounts.id, other.id))
@@ -150,8 +171,7 @@ describe('email change', () => {
     expect(same.statusCode).toBe(400)
     expect(same.json().error.code).toBe('same_email')
     const fresh = `new-${u()}@test.local`
-    mails.length = 0
-    await call('POST', '/accounts/me/email', cookie, { email: fresh })
+    await requestChange(cookie, fresh)
     const [t] = await db
       .select()
       .from(magicLinkTokens)
@@ -163,33 +183,72 @@ describe('email change', () => {
   it('applies a free address, notifies the old one, keeps sessions and uses the link once', async () => {
     const { account, cookie } = await sessionAccount()
     const fresh = `changed-${u()}@test.local`
-    mails.length = 0
     notices.length = 0
-    await call('POST', '/accounts/me/email', cookie, { email: fresh })
-    const link = pathOf(mails[0]!.url)
-    const click = await app.inject({ method: 'GET', url: link })
-    expect(click.headers.location).toMatch(/\/profile\?email=changed$/)
+    const mail = await requestChange(cookie, fresh)
+    const done = await confirm(cookie, tokenOf(mail.url))
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ data: { result: 'changed' } })
     const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
     expect(row!.email).toBe(fresh)
     expect(notices).toEqual([{ to: account.email, newEmail: fresh }])
     expect((await call('GET', '/auth/me', cookie)).json().data.email).toBe(fresh)
 
-    const again = await app.inject({ method: 'GET', url: link })
-    expect(again.headers.location).toMatch(/login\?error=expired$/)
+    const again = await confirm(cookie, tokenOf(mail.url))
+    expect(again.statusCode).toBe(400)
+    expect(again.json().error.code).toBe('invalid_token')
     expect(notices).toHaveLength(1)
   })
 
-  it('a link requested earlier dies when another address wins', async () => {
+  it('refuses another account without consuming the token; the right account can still use it', async () => {
     const { account, cookie } = await sessionAccount()
-    mails.length = 0
-    await call('POST', '/accounts/me/email', cookie, { email: `first-${u()}@test.local` })
-    await call('POST', '/accounts/me/email', cookie, { email: `second-${u()}@test.local` })
-    const [first, second] = mails
-    expect((await app.inject({ method: 'GET', url: pathOf(second!.url) })).headers.location).toMatch(/email=changed$/)
-    const old = await app.inject({ method: 'GET', url: pathOf(first!.url) })
-    expect(old.headers.location).toMatch(/login\?error=expired$/)
+    const { cookie: otherCookie } = await sessionAccount()
+    const fresh = `owner-${u()}@test.local`
+    const mail = await requestChange(cookie, fresh)
+    const wrong = await confirm(otherCookie, tokenOf(mail.url))
+    expect(wrong.statusCode).toBe(403)
+    expect(wrong.json().error.code).toBe('wrong_account')
+    const [t] = await db.select().from(magicLinkTokens).where(eq(magicLinkTokens.tokenHash, sha256(tokenOf(mail.url))))
+    expect(t!.usedAt).toBeNull()
+    const right = await confirm(cookie, tokenOf(mail.url))
+    expect(right.json()).toEqual({ data: { result: 'changed' } })
     const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
-    expect(row!.email).toBe(second!.to)
+    expect(row!.email).toBe(fresh)
+  })
+
+  it('requires a session and rejects unknown tokens', async () => {
+    const { cookie } = await sessionAccount()
+    const mail = await requestChange(cookie, `anon-${u()}@test.local`)
+    expect((await confirm(undefined, tokenOf(mail.url))).statusCode).toBe(401)
+    const unknown = await confirm(cookie, 'nope')
+    expect(unknown.statusCode).toBe(400)
+    expect(unknown.json().error.code).toBe('invalid_token')
+    // still usable
+    expect((await confirm(cookie, tokenOf(mail.url))).json()).toEqual({ data: { result: 'changed' } })
+  })
+
+  it('GET /auth/verify never applies an email_change token', async () => {
+    const { account, cookie } = await sessionAccount()
+    const fresh = `get-${u()}@test.local`
+    const mail = await requestChange(cookie, fresh)
+    const res = await app.inject({ method: 'GET', url: `/api/v1/auth/verify?token=${encodeURIComponent(tokenOf(mail.url))}` })
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toMatch(/\/login\?error=invalid$/)
+    expect(res.cookies.find((c) => c.name === 'oedb_session')).toBeUndefined()
+    const [t] = await db.select().from(magicLinkTokens).where(eq(magicLinkTokens.tokenHash, sha256(tokenOf(mail.url))))
+    expect(t!.usedAt).toBeNull()
+    const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
+    expect(row!.email).toBe(account.email)
+  })
+
+  it('a link requested earlier dies when a newer one is requested', async () => {
+    const { account, cookie } = await sessionAccount()
+    const first = await requestChange(cookie, `first-${u()}@test.local`)
+    const second = await requestChange(cookie, `second-${u()}@test.local`)
+    const old = await confirm(cookie, tokenOf(first.url))
+    expect(old.statusCode).toBe(400)
+    expect((await confirm(cookie, tokenOf(second.url))).json()).toEqual({ data: { result: 'changed' } })
+    const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
+    expect(row!.email).toBe(second.to)
   })
 
   it('kills unused login links of the old address', async () => {
@@ -198,10 +257,8 @@ describe('email change', () => {
     await db
       .insert(magicLinkTokens)
       .values({ accountId: account.id, email: account.email, tokenHash: oldLogin.hash, expiresAt: new Date(Date.now() + 600_000) })
-    const fresh = `moved-${u()}@test.local`
-    mails.length = 0
-    await call('POST', '/accounts/me/email', cookie, { email: fresh })
-    await app.inject({ method: 'GET', url: pathOf(mails[0]!.url) })
+    const mail = await requestChange(cookie, `moved-${u()}@test.local`)
+    await confirm(cookie, tokenOf(mail.url))
     const unused = await db
       .select()
       .from(magicLinkTokens)
@@ -229,22 +286,85 @@ describe('email change', () => {
     expect(ok.headers.location).toMatch(/\/dashboard$/)
   })
 
-  it('redirects to expired when the account was deleted meanwhile', async () => {
+  it('a deleted account can no longer confirm (token gone)', async () => {
     const { account, cookie } = await sessionAccount()
-    mails.length = 0
-    await call('POST', '/accounts/me/email', cookie, { email: `late-${u()}@test.local` })
+    const { cookie: otherCookie } = await sessionAccount()
+    const mail = await requestChange(cookie, `late-${u()}@test.local`)
     await call('DELETE', '/accounts/me', cookie, { confirm_handle: account.handle })
-    const res = await app.inject({ method: 'GET', url: pathOf(mails[0]!.url) })
-    expect(res.headers.location).toMatch(/login\?error=expired$/)
+    const res = await confirm(otherCookie, tokenOf(mail.url))
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe('invalid_token')
   })
 
-  it('is rate limited', async () => {
+  it('allows 3 requests per hour per account, the 4th gets 429', async () => {
     const { cookie } = await sessionAccount()
-    let last = 0
-    for (let i = 0; i < 35; i++) {
-      last = (await call('POST', '/accounts/me/email', cookie, { email: `rl-${i}-${u()}@test.local` })).statusCode
+    for (let i = 0; i < 3; i++) {
+      expect((await call('POST', '/accounts/me/email', cookie, { email: `rl-${i}-${u()}@test.local` })).statusCode).toBe(200)
     }
-    expect(last).toBe(429)
+    const res = await call('POST', '/accounts/me/email', cookie, { email: `rl-4-${u()}@test.local` })
+    expect(res.statusCode).toBe(429)
+    expect(res.json().error.code).toBe('rate_limited')
+  })
+
+  it('allows 3 requests per hour per target address across accounts, the 4th gets 429', async () => {
+    const target = `bomb-${u()}@test.local`
+    for (let i = 0; i < 3; i++) {
+      const { cookie } = await sessionAccount()
+      expect((await call('POST', '/accounts/me/email', cookie, { email: i === 1 ? target.toUpperCase() : target })).statusCode).toBe(200)
+    }
+    const { cookie } = await sessionAccount()
+    const res = await call('POST', '/accounts/me/email', cookie, { email: target })
+    expect(res.statusCode).toBe(429)
+    expect(res.json().error.code).toBe('rate_limited')
+  })
+
+  it('a transport error does not fail the request', async () => {
+    const { cookie } = await sessionAccount()
+    const saved = email.transport
+    email.setTransport({
+      async sendMagicLink() {
+        throw new Error('boom')
+      },
+      async sendEmailChangedNotice() {},
+    })
+    try {
+      const res = await call('POST', '/accounts/me/email', cookie, { email: `fail-${u()}@test.local` })
+      expect(res.statusCode).toBe(200)
+    } finally {
+      email.setTransport(saved)
+    }
+  })
+})
+
+describe('reserved handles', () => {
+  const reserved = ['deleted-00000000-0000-0000-0000-000000000000', 'deleted-x', 'new-abcd1234']
+
+  it('onboarding rejects them with 400 handle_reserved', async () => {
+    const { cookie } = await sessionAccount({ onboarded: false })
+    for (const handle of reserved) {
+      const res = await call('POST', '/accounts/me/onboarding', cookie, { display_name: 'Kim', handle, accept_terms: true })
+      expect(res.statusCode, handle).toBe(400)
+      expect(res.json().error.code).toBe('handle_reserved')
+    }
+    // a similar but non-provisional handle is fine
+    const ok = await call('POST', '/accounts/me/onboarding', cookie, { display_name: 'Kim', handle: `new-abcd12345-${u()}`, accept_terms: true })
+    expect(ok.statusCode).toBe(200)
+  })
+
+  it('PUT /accounts/me rejects them with 400 handle_reserved', async () => {
+    const { cookie } = await sessionAccount()
+    for (const handle of reserved) {
+      const res = await call('PUT', '/accounts/me', cookie, { handle })
+      expect(res.statusCode, handle).toBe(400)
+      expect(res.json().error.code).toBe('handle_reserved')
+    }
+  })
+
+  it('check-handle reports them unavailable', async () => {
+    for (const handle of reserved) {
+      const res = await app.inject({ method: 'GET', url: `/api/v1/accounts/check-handle?handle=${handle}` })
+      expect(res.json().data.available, handle).toBe(false)
+    }
   })
 })
 

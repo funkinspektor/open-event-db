@@ -4,6 +4,8 @@ export interface MagicLinkEmail {
   to: string
   url: string
   kind: MagicLinkKind
+  /** email_change only: the handle of the account asking to use this address. */
+  requesterHandle?: string
 }
 
 export interface EmailChangedNoticeEmail {
@@ -30,10 +32,10 @@ export const isDeliverable = (address: string) => !UNDELIVERABLE.test(address.tr
 
 interface MagicLinkCopy {
   subject: (brand: string) => string
-  intro: (brand: string) => string
+  intro: (brand: string, handle?: string) => string
   cta: (brand: string) => string
   validity: string
-  ignore: string
+  ignore: (handle?: string) => string
 }
 
 const MAGIC_LINK_COPY: Record<MagicLinkKind, MagicLinkCopy> = {
@@ -42,21 +44,22 @@ const MAGIC_LINK_COPY: Record<MagicLinkKind, MagicLinkCopy> = {
     intro: (b) => `Here is your login link for ${b}:`,
     cta: (b) => `Log in to ${b}`,
     validity: 'The link is valid for 15 minutes and can be used once.',
-    ignore: "If you didn't request it, you can ignore this email.",
+    ignore: () => "If you didn't request it, you can ignore this email.",
   },
   signup: {
     subject: (b) => `Confirm your email to join ${b}`,
     intro: (b) => `Confirm your email address to join ${b}:`,
     cta: (b) => `Confirm email and join ${b}`,
     validity: 'The link is valid for 15 minutes and can be used once.',
-    ignore: "If you didn't request it, you can ignore this email. No account is created until you click the link.",
+    ignore: () => "If you didn't request it, you can ignore this email. No account is created until you click the link.",
   },
   email_change: {
     subject: (b) => `Confirm your new ${b} email`,
-    intro: (b) => `Confirm this address as the new email for your ${b} account:`,
+    intro: (b, h) =>
+      `Someone signed in as @${h ?? '?'} asked to use this address for their ${b} account. To confirm, open this link while logged in as @${h ?? '?'}:`,
     cta: () => 'Confirm new email',
     validity: 'The link is valid for 24 hours and can be used once.',
-    ignore: "If you didn't request this change, you can ignore this email; your address stays as it is.",
+    ignore: (h) => `If this wasn't you, ignore this mail: nothing changes unless you confirm while logged in as @${h ?? '?'}.`,
   },
 }
 
@@ -109,7 +112,7 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
 
   return {
     async sendMagicLink(msg) {
-      const { to, url, kind } = msg
+      const { to, url, kind, requesterHandle } = msg
       // Outside production the link is always printed too, so seed accounts stay usable.
       if (!isProduction) await consoleTransport.sendMagicLink(msg)
       if (!isDeliverable(to)) return
@@ -119,12 +122,12 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
       await post(
         to,
         copy.subject(brand),
-        [copy.intro(brand), '', url, '', copy.validity, copy.ignore].join('\n'),
+        [copy.intro(brand, requesterHandle), '', url, '', copy.validity, copy.ignore(requesterHandle)].join('\n'),
         [
-          `<p>${copy.intro(brand)}</p>`,
+          `<p>${escapeHtml(copy.intro(brand, requesterHandle))}</p>`,
           `<p><a href="${escapeHtml(url)}">${copy.cta(brand)}</a></p>`,
           `<p>${copy.validity}<br>`,
-          `${copy.ignore}</p>`,
+          `${escapeHtml(copy.ignore(requesterHandle))}</p>`,
         ].join('\n'),
       )
     },

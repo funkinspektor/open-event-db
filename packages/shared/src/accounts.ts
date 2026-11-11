@@ -69,6 +69,10 @@ export const emailChangeSchema = z.object({
   email: z.string().trim().email(),
 })
 
+export const emailChangeConfirmSchema = z.object({
+  token: z.string().min(1).max(200),
+})
+
 export const deleteAccountSchema = z.object({
   confirm_handle: z.string().min(1),
 })

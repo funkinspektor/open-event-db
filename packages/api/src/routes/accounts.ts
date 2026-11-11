@@ -1,9 +1,10 @@
-import type { FastifyInstance } from 'fastify'
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import {
   accountUpdateSchema,
   checkHandleQuerySchema,
   deleteAccountSchema,
+  emailChangeConfirmSchema,
   emailChangeSchema,
   onboardingSchema,
 } from '@open-event-db/shared'
@@ -13,11 +14,13 @@ import {
   generateApiKey,
   generateToken,
   magicLinkTokens,
+  sha256,
   soleMemberships,
   type Account,
 } from '@open-event-db/db'
 import { db } from '../db.js'
-import { ApiError, badRequest } from '../errors.js'
+import { ApiError, badRequest, forbidden } from '../errors.js'
+import { email as mail } from '../email.js'
 import { accountMe, API_PUBLIC_URL, cookieOptions, sendMagicLink } from './auth.js'
 import { SESSION_COOKIE, currentAccount, requireAuth, requireSession, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
@@ -25,6 +28,41 @@ import { diff, logEdit } from '../history.js'
 function isUniqueViolation(err: unknown): boolean {
   const e = err as { code?: string; cause?: { code?: string } } | null
   return e?.code === '23505' || e?.cause?.code === '23505'
+}
+
+/**
+ * Handles an account picks itself must not collide with the ones the system generates: `deleted-<id>` (set on
+ * deletion; pre-claiming it would break that account's later deletion) and the provisional `new-xxxxxxxx`.
+ */
+export const isReservedHandle = (h: string) => h.startsWith('deleted-') || /^new-[a-z0-9]{8}$/.test(h)
+const reservedHandle = () => badRequest('This handle is reserved', 'handle_reserved')
+
+// An email-change link goes to a third party and is valid for 24 h, so the endpoint is limited per account
+// and per target address. In memory is enough: the API runs as a single instance.
+const EMAIL_CHANGE_LIMIT = 3
+const EMAIL_CHANGE_WINDOW_MS = 60 * 60 * 1000
+const emailChangeHits = new Map<string, number[]>()
+
+function allowEmailChangeTarget(address: string, now = Date.now()): boolean {
+  const recent = (emailChangeHits.get(address) ?? []).filter((t) => now - t < EMAIL_CHANGE_WINDOW_MS)
+  if (recent.length >= EMAIL_CHANGE_LIMIT) {
+    emailChangeHits.set(address, recent)
+    return false
+  }
+  recent.push(now)
+  emailChangeHits.set(address, recent)
+  if (emailChangeHits.size > 1000) {
+    for (const [key, times] of emailChangeHits) {
+      if (times.every((t) => now - t >= EMAIL_CHANGE_WINDOW_MS)) emailChangeHits.delete(key)
+    }
+  }
+  return true
+}
+
+const emailChangeRateLimit = {
+  max: EMAIL_CHANGE_LIMIT,
+  timeWindow: '1 hour',
+  keyGenerator: (req: FastifyRequest) => `email-change:${req.account?.id ?? req.ip}`,
 }
 
 const calendarUrl = (token: string) => `${API_PUBLIC_URL}/cal/${token}.ics`
@@ -48,7 +86,7 @@ export async function accountRoutes(app: FastifyInstance) {
       .from(accounts)
       .where(eq(accounts.handle, handle))
       .limit(1)
-    return { data: { available: !row } }
+    return { data: { available: !row && !isReservedHandle(handle) } }
   })
 
   app.put('/accounts/me', write, async (req) => {
@@ -58,6 +96,7 @@ export async function accountRoutes(app: FastifyInstance) {
     const patch: Partial<typeof accounts.$inferInsert> = {}
     if (body.display_name !== undefined) patch.displayName = body.display_name
     if (body.handle !== undefined && body.handle !== me.handle) {
+      if (isReservedHandle(body.handle)) throw reservedHandle()
       const [taken] = await db
         .select({ id: accounts.id })
         .from(accounts)
@@ -112,6 +151,7 @@ export async function accountRoutes(app: FastifyInstance) {
     if (me.onboardedAt) throw new ApiError(409, 'already_onboarded', 'This account is already set up')
 
     if (body.handle !== me.handle) {
+      if (isReservedHandle(body.handle)) throw reservedHandle()
       const [taken] = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.handle, body.handle)).limit(1)
       if (taken) throw badRequest('This handle is already taken', 'handle_taken')
     }
@@ -141,20 +181,119 @@ export async function accountRoutes(app: FastifyInstance) {
     return { data: await accountMe({ ...me, ...updated }, 'session') }
   })
 
-  app.post('/accounts/me/email', sessionWrite, async (req) => {
+  app.post(
+    '/accounts/me/email',
+    { onRequest: requireSession, config: { rateLimit: emailChangeRateLimit } },
+    async (req) => {
+      const me = currentAccount(req)
+      const { email: raw } = emailChangeSchema.parse(req.body)
+      const address = raw.toLowerCase()
+      if (address === me.email.toLowerCase()) {
+        throw badRequest('This is already your email address', 'same_email')
+      }
+      if (!allowEmailChangeTarget(address)) {
+        throw new ApiError(429, 'rate_limited', 'Rate limit exceeded, retry later')
+      }
+      // Only the newest link counts
+      await db
+        .delete(magicLinkTokens)
+        .where(
+          and(eq(magicLinkTokens.accountId, me.id), eq(magicLinkTokens.kind, 'email_change'), isNull(magicLinkTokens.usedAt)),
+        )
+      // Sent whether or not the address is taken (the confirmation shows that), so this response reveals
+      // nothing. In the background, so a transport error cannot fail the request after the old links are gone.
+      void sendMagicLink({
+        kind: 'email_change',
+        to: address,
+        accountId: me.id,
+        newEmail: address,
+        requesterHandle: me.handle,
+      }).catch((err) => req.log.error({ err }, 'sending email-change link failed'))
+      return { data: { sent: true } }
+    },
+  )
+
+  // Confirmation is a POST from the logged-in account that asked for the change: opening the mailed link
+  // (a mail scanner, the address's owner) alone binds nothing.
+  app.post('/accounts/me/email/confirm', sessionWrite, async (req) => {
     const me = currentAccount(req)
-    const { email: raw } = emailChangeSchema.parse(req.body)
-    const address = raw.toLowerCase()
-    if (address === me.email.toLowerCase()) {
-      throw badRequest('This is already your email address', 'same_email')
+    const { token } = emailChangeConfirmSchema.parse(req.body)
+    const hash = sha256(token)
+    const now = new Date()
+
+    const [pending] = await db
+      .select({ accountId: magicLinkTokens.accountId })
+      .from(magicLinkTokens)
+      .where(
+        and(
+          eq(magicLinkTokens.tokenHash, hash),
+          eq(magicLinkTokens.kind, 'email_change'),
+          isNull(magicLinkTokens.usedAt),
+          gt(magicLinkTokens.expiresAt, now),
+        ),
+      )
+      .limit(1)
+    if (!pending) throw badRequest('This link is invalid or has expired', 'invalid_token')
+    // Checked before claiming, so the right account can still use the link
+    if (pending.accountId !== me.id) throw forbidden('This link belongs to another account', 'wrong_account')
+
+    const outcome = await db.transaction(async (tx) => {
+      // Claim in one statement so two concurrent confirmations can't both apply it.
+      const [t] = await tx
+        .update(magicLinkTokens)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(magicLinkTokens.tokenHash, hash),
+            eq(magicLinkTokens.kind, 'email_change'),
+            eq(magicLinkTokens.accountId, me.id),
+            isNull(magicLinkTokens.usedAt),
+            gt(magicLinkTokens.expiresAt, now),
+          ),
+        )
+        .returning({ newEmail: magicLinkTokens.newEmail })
+      if (!t?.newEmail) throw badRequest('This link is invalid or has expired', 'invalid_token')
+      const newEmail = t.newEmail.toLowerCase()
+
+      const [account] = await tx.select({ email: accounts.email }).from(accounts).where(eq(accounts.id, me.id)).limit(1)
+      if (!account) throw badRequest('This link is invalid or has expired', 'invalid_token')
+      const oldEmail = account.email
+      if (oldEmail.toLowerCase() === newEmail) return { result: 'changed' as const, oldEmail, newEmail }
+
+      const [taken] = await tx
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(sql`lower(${accounts.email}) = ${newEmail}`)
+        .limit(1)
+      if (taken) return { result: 'taken' as const, oldEmail, newEmail }
+      try {
+        // A savepoint: losing a race on the unique email must not abort the surrounding transaction.
+        await tx.transaction((sp) =>
+          sp.update(accounts).set({ email: newEmail, updatedAt: now }).where(eq(accounts.id, me.id)),
+        )
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err
+        return { result: 'taken' as const, oldEmail, newEmail }
+      }
+      // Links sent to the old address must not outlive it; other pending changes are void too.
+      await tx
+        .delete(magicLinkTokens)
+        .where(
+          and(
+            eq(magicLinkTokens.accountId, me.id),
+            isNull(magicLinkTokens.usedAt),
+            sql`${magicLinkTokens.kind} in ('login', 'email_change')`,
+          ),
+        )
+      return { result: 'changed' as const, oldEmail, newEmail }
+    })
+
+    if (outcome.result === 'changed' && outcome.oldEmail.toLowerCase() !== outcome.newEmail) {
+      await mail.transport
+        .sendEmailChangedNotice({ to: outcome.oldEmail, newEmail: outcome.newEmail })
+        .catch((err) => req.log.error({ err }, 'sending email-change notice failed'))
     }
-    // Only the newest link counts
-    await db
-      .delete(magicLinkTokens)
-      .where(and(eq(magicLinkTokens.accountId, me.id), eq(magicLinkTokens.kind, 'email_change'), isNull(magicLinkTokens.usedAt)))
-    // Sent whether or not the address is taken: the click shows that, so this response reveals nothing.
-    await sendMagicLink({ kind: 'email_change', to: address, accountId: me.id, newEmail: address })
-    return { data: { sent: true } }
+    return { data: { result: outcome.result } }
   })
 
   app.get('/accounts/me/delete-preview', { onRequest: requireSession }, async (req) => {

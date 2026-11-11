@@ -45,6 +45,8 @@ export interface SendMagicLinkInput {
   returnTo?: string | null
   newEmail?: string
   requestIp?: string
+  /** email_change: the handle of the requesting account, named in the mail. */
+  requesterHandle?: string
 }
 
 /** Stores a token and returns the link URL. Pass `tx` to run inside a transaction. */
@@ -61,12 +63,15 @@ async function insertToken(input: SendMagicLinkInput, tx: Pick<typeof db, 'inser
     tokenHash: hash,
     expiresAt: new Date(Date.now() + ttl),
   })
+  // Email-change links open a web page that confirms with a POST from a logged-in session; a plain GET
+  // (a mail scanner, someone else clicking) must never bind an address to an account.
+  if (input.kind === 'email_change') return `${WEB_URL}/confirm-email?token=${encodeURIComponent(token)}`
   return `${API_PUBLIC_URL}/api/v1/auth/verify?token=${encodeURIComponent(token)}`
 }
 
 export async function sendMagicLink(input: SendMagicLinkInput): Promise<void> {
   const url = await insertToken(input)
-  await email.transport.sendMagicLink({ to: input.to, url, kind: input.kind })
+  await email.transport.sendMagicLink({ to: input.to, url, kind: input.kind, requesterHandle: input.requesterHandle })
 }
 
 /**
@@ -226,9 +231,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!token) return reply.redirect(`${WEB_URL}/login?error=invalid`)
 
     const now = new Date()
-    type Claimed =
-      | { type: 'session'; sessionToken: string; returnTo: string | null }
-      | { type: 'email'; outcome: 'changed' | 'taken'; oldEmail: string; newEmail: string }
+    type Claimed = { sessionToken: string; returnTo: string | null }
     const claimed: Claimed | null = await db.transaction(async (tx) => {
       // Claim the token in one statement so two concurrent clicks can't both use it.
       const [t] = await tx
@@ -239,51 +242,16 @@ export async function authRoutes(app: FastifyInstance) {
             eq(magicLinkTokens.tokenHash, sha256(token)),
             isNull(magicLinkTokens.usedAt),
             gt(magicLinkTokens.expiresAt, now),
+            // email_change links are confirmed through POST /accounts/me/email/confirm, never by a GET
+            inArray(magicLinkTokens.kind, ['login', 'signup']),
           ),
         )
         .returning({
           accountId: magicLinkTokens.accountId,
-          kind: magicLinkTokens.kind,
           email: magicLinkTokens.email,
-          newEmail: magicLinkTokens.newEmail,
           returnTo: magicLinkTokens.returnTo,
         })
       if (!t) return null
-
-      if (t.kind === 'email_change') {
-        if (!t.accountId || !t.newEmail) return null
-        const [account] = await tx.select().from(accounts).where(eq(accounts.id, t.accountId)).limit(1)
-        if (!account) return null
-        const newEmail = t.newEmail.toLowerCase()
-        const oldEmail = account.email
-        if (oldEmail.toLowerCase() === newEmail) return { type: 'email', outcome: 'changed', oldEmail, newEmail }
-        const [taken] = await tx
-          .select({ id: accounts.id })
-          .from(accounts)
-          .where(sql`lower(${accounts.email}) = ${newEmail}`)
-          .limit(1)
-        if (taken) return { type: 'email', outcome: 'taken', oldEmail, newEmail }
-        try {
-          // A savepoint: losing a race on the unique email must not abort the surrounding transaction.
-          await tx.transaction((sp) =>
-            sp.update(accounts).set({ email: newEmail, updatedAt: now }).where(eq(accounts.id, account.id)),
-          )
-        } catch (err) {
-          if (!isUniqueViolation(err)) throw err
-          return { type: 'email', outcome: 'taken', oldEmail, newEmail }
-        }
-        // Links sent to the old address must not outlive it; other pending changes are void too.
-        await tx
-          .delete(magicLinkTokens)
-          .where(
-            and(
-              eq(magicLinkTokens.accountId, account.id),
-              isNull(magicLinkTokens.usedAt),
-              inArray(magicLinkTokens.kind, ['login', 'email_change']),
-            ),
-          )
-        return { type: 'email', outcome: 'changed', oldEmail, newEmail }
-      }
 
       let accountId: string
       if (t.accountId) {
@@ -300,17 +268,16 @@ export async function authRoutes(app: FastifyInstance) {
         tokenHash: s.hash,
         expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
       })
-      return { type: 'session', sessionToken: s.token, returnTo: safeReturnTo(t.returnTo) }
+      return { sessionToken: s.token, returnTo: safeReturnTo(t.returnTo) }
     })
 
-    if (!claimed) return reply.redirect(`${WEB_URL}/login?error=expired`)
-    if (claimed.type === 'email') {
-      if (claimed.outcome === 'changed' && claimed.oldEmail.toLowerCase() !== claimed.newEmail) {
-        await email.transport
-          .sendEmailChangedNotice({ to: claimed.oldEmail, newEmail: claimed.newEmail })
-          .catch((err) => req.log.error({ err }, 'sending email-change notice failed'))
-      }
-      return reply.redirect(`${WEB_URL}/profile?email=${claimed.outcome}`)
+    if (!claimed) {
+      const [pending] = await db
+        .select({ kind: magicLinkTokens.kind })
+        .from(magicLinkTokens)
+        .where(and(eq(magicLinkTokens.tokenHash, sha256(token)), eq(magicLinkTokens.kind, 'email_change')))
+        .limit(1)
+      return reply.redirect(`${WEB_URL}/login?error=${pending ? 'invalid' : 'expired'}`)
     }
     const { sessionToken, returnTo } = claimed
 
