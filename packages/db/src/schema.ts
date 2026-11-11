@@ -16,12 +16,13 @@ import {
 
 export const eventStatus = pgEnum('event_status', ['scheduled', 'cancelled', 'postponed'])
 export const eventCategory = pgEnum('event_category', ['concert', 'party'])
-export const eventOwnerRole = pgEnum('event_owner_role', ['creator', 'co_owner'])
+export const eventOrganizerRole = pgEnum('event_organizer_role', ['creator', 'co_host'])
+export const organizerMemberRole = pgEnum('organizer_member_role', ['owner', 'member'])
 export const editHistoryEntityType = pgEnum('edit_history_entity_type', [
   'event',
   'venue',
-  'publisher',
-  'invite',
+  'account',
+  'organizer',
 ])
 export const editHistoryAction = pgEnum('edit_history_action', [
   'created',
@@ -39,22 +40,46 @@ type Links = Record<string, string>
 /** Same shape as `Lineup` in @open-event-db/shared, which validates it. */
 type Lineup = { name: string | null; acts: { name: string; time: string | null; live: boolean; note: string | null }[] }[]
 
-export const publishers = pgTable('publishers', {
+/** A person with a login. Rights come from `is_scout` and from membership in a verified organizer. */
+export const accounts = pgTable('accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
   email: text('email').notNull().unique(),
-  verified: boolean('verified').notNull().default(false),
-  /** Creates owned events. False for pure scouts. */
-  isPublisher: boolean('is_publisher').notNull().default(true),
-  /** Adds unclaimed events on behalf of organizers who aren't on the platform yet. */
+  /** Slug format; a separate namespace from organizer slugs. */
+  handle: text('handle').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  /** Adds and edits unclaimed events on behalf of organizers who aren't on the platform yet. */
   isScout: boolean('is_scout').notNull().default(false),
-  invitedBy: uuid('invited_by').references((): any => publishers.id, { onDelete: 'set null' }),
+  /** API keys act with the account's rights. */
   apiKeyHash: text('api_key_hash'),
-  links: jsonb('links').$type<Links>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/** The public profile of whoever makes events: a collective, a solo DJ, the team running a venue. */
+export const organizers = pgTable('organizers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  links: jsonb('links').$type<Links>().notNull().default({}),
+  /** Only members of a verified organizer act for it. */
+  verified: boolean('verified').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const organizerMembers = pgTable(
+  'organizer_members',
+  {
+    organizerId: uuid('organizer_id')
+      .notNull()
+      .references(() => organizers.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    role: organizerMemberRole('role').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.organizerId, t.accountId] })],
+)
 
 export const venues = pgTable('venues', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -86,10 +111,10 @@ export const events = pgTable(
     categories: eventCategory('categories').array().notNull().default(sql`ARRAY[]::event_category[]`),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     links: jsonb('links').$type<Links>().notNull().default({}),
-    /** Immutable "Added by": survives claims, so provenance is kept. Ownership lives in event_owners. */
+    /** Immutable "Added by" account: survives claims, so provenance is kept. Ownership lives in event_organizers. */
     createdBy: uuid('created_by')
       .notNull()
-      .references(() => publishers.id, { onDelete: 'restrict' }),
+      .references(() => accounts.id, { onDelete: 'restrict' }),
     status: eventStatus('status').notNull().default('scheduled'),
     recurrence: text('recurrence'),
     /** Object key in the image store (`events/<id>/<uuid>.jpg`); the API turns it into `image_url`. */
@@ -103,43 +128,31 @@ export const events = pgTable(
   ],
 )
 
-export const eventOwners = pgTable(
-  'event_owners',
+export const eventOrganizers = pgTable(
+  'event_organizers',
   {
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
-    publisherId: uuid('publisher_id')
+    organizerId: uuid('organizer_id')
       .notNull()
-      .references(() => publishers.id, { onDelete: 'cascade' }),
-    role: eventOwnerRole('role').notNull(),
+      .references(() => organizers.id, { onDelete: 'cascade' }),
+    role: eventOrganizerRole('role').notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.eventId, t.publisherId] }),
-    // At most one creator. An event without any owner row is unclaimed (added by a scout).
-    uniqueIndex('event_owners_one_creator_per_event')
+    primaryKey({ columns: [t.eventId, t.organizerId] }),
+    // At most one creator. An event without any organizer row is unclaimed (added by a scout).
+    uniqueIndex('event_organizers_one_creator_per_event')
       .on(t.eventId)
       .where(sql`${t.role} = 'creator'`),
   ],
 )
 
-export const invites = pgTable('invites', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  token: text('token').notNull().unique(),
-  invitedBy: uuid('invited_by')
-    .notNull()
-    .references(() => publishers.id, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
-  claimedBy: uuid('claimed_by').references(() => publishers.id, { onDelete: 'set null' }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  publisherId: uuid('publisher_id')
+  accountId: uuid('account_id')
     .notNull()
-    .references(() => publishers.id, { onDelete: 'cascade' }),
+    .references(() => accounts.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull().unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -147,9 +160,9 @@ export const sessions = pgTable('sessions', {
 
 export const magicLinkTokens = pgTable('magic_link_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
-  publisherId: uuid('publisher_id')
+  accountId: uuid('account_id')
     .notNull()
-    .references(() => publishers.id, { onDelete: 'cascade' }),
+    .references(() => accounts.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
@@ -159,9 +172,9 @@ export const editHistory = pgTable('edit_history', {
   id: uuid('id').primaryKey().defaultRandom(),
   entityType: editHistoryEntityType('entity_type').notNull(),
   entityId: uuid('entity_id').notNull(),
-  publisherId: uuid('publisher_id')
+  accountId: uuid('account_id')
     .notNull()
-    .references(() => publishers.id, { onDelete: 'restrict' }),
+    .references(() => accounts.id, { onDelete: 'restrict' }),
   action: editHistoryAction('action').notNull(),
   // Field changes as { before, after }; CLI actions add `via: 'cli'`
   diff: jsonb('diff').$type<Record<string, unknown>>().notNull(),
@@ -174,10 +187,10 @@ export const ingestSources = pgTable('ingest_sources', {
   name: text('name').notNull(),
   kind: ingestSourceKind('kind').notNull(),
   url: text('url').notNull(),
-  /** Scout publisher that sync edits are attributed to. */
-  publisherId: uuid('publisher_id')
+  /** Scout account that sync edits are attributed to. */
+  accountId: uuid('account_id')
     .notNull()
-    .references(() => publishers.id, { onDelete: 'restrict' }),
+    .references(() => accounts.id, { onDelete: 'restrict' }),
   config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
   /** The venue whose program this feed carries; null for aggregators and organizers that play many venues. */
   venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
@@ -208,7 +221,7 @@ export const ingestItems = pgTable(
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
     goneAt: timestamp('gone_at', { withTimezone: true }),
     goneResolvedAt: timestamp('gone_resolved_at', { withTimezone: true }),
-    decidedBy: uuid('decided_by').references(() => publishers.id, { onDelete: 'set null' }),
+    decidedBy: uuid('decided_by').references(() => accounts.id, { onDelete: 'set null' }),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
     detachedAt: timestamp('detached_at', { withTimezone: true }),
@@ -229,16 +242,18 @@ export const ingestItems = pgTable(
   ],
 )
 
-export type Publisher = typeof publishers.$inferSelect
-export type NewPublisher = typeof publishers.$inferInsert
+export type Account = typeof accounts.$inferSelect
+export type NewAccount = typeof accounts.$inferInsert
+export type Organizer = typeof organizers.$inferSelect
+export type NewOrganizer = typeof organizers.$inferInsert
+export type OrganizerMember = typeof organizerMembers.$inferSelect
+export type NewOrganizerMember = typeof organizerMembers.$inferInsert
 export type Venue = typeof venues.$inferSelect
 export type NewVenue = typeof venues.$inferInsert
 export type Event = typeof events.$inferSelect
 export type NewEvent = typeof events.$inferInsert
-export type EventOwner = typeof eventOwners.$inferSelect
-export type NewEventOwner = typeof eventOwners.$inferInsert
-export type Invite = typeof invites.$inferSelect
-export type NewInvite = typeof invites.$inferInsert
+export type EventOrganizer = typeof eventOrganizers.$inferSelect
+export type NewEventOrganizer = typeof eventOrganizers.$inferInsert
 export type Session = typeof sessions.$inferSelect
 export type NewSession = typeof sessions.$inferInsert
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect
