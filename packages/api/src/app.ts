@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit'
 import { errorHandler } from './error-handler.js'
 import { notFound } from './errors.js'
 import { healthRoutes } from './routes/health.js'
+import { calendarRoutes } from './routes/calendar.js'
 import { tagsRoutes } from './routes/tags.js'
 import { organizerRoutes } from './routes/organizers.js'
 import { accountRoutes } from './routes/accounts.js'
@@ -74,6 +75,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     return reply.type(found.type).header('cache-control', IMAGE_CACHE_CONTROL).send(found.data)
   })
   await app.register(internalRoutes)
+  await app.register(calendarRoutes)
   await app.register(
     async (api) => {
       // ID path params are UUIDs; anything else can't match a row, so answer 404
