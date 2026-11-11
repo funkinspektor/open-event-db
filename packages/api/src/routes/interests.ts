@@ -21,11 +21,17 @@ async function requireEvent(id: string): Promise<void> {
 export async function interestRoutes(app: FastifyInstance) {
   app.put<{ Params: { id: string } }>('/events/:id/interest', write, async (req, reply) => {
     const me = currentAccount(req)
-    await requireEvent(req.params.id)
-    await db
-      .insert(eventInterests)
-      .values({ accountId: me.id, eventId: req.params.id })
-      .onConflictDoNothing()
+    try {
+      await db
+        .insert(eventInterests)
+        .values({ accountId: me.id, eventId: req.params.id })
+        .onConflictDoNothing()
+    } catch (err) {
+      // No event with this id (also when it is hard-deleted mid-request): the FK rejects the row
+      const code = (err as { code?: string; cause?: { code?: string } }).code ?? (err as { cause?: { code?: string } }).cause?.code
+      if (code === '23503') throw notFound('Event not found')
+      throw err
+    }
     return reply.code(204).send()
   })
 

@@ -194,11 +194,14 @@ export async function eventRoutes(app: FastifyInstance) {
     return { data }
   })
 
-  app.get<{ Params: { id: string } }>('/events/:id', async (req) => {
+  app.get<{ Params: { id: string } }>('/events/:id', async (req, reply) => {
+    // The body varies by credential (`interested`)
+    reply.header('Vary', 'Cookie, Authorization')
     const detail = await getEventDetail(req.params.id)
     if (!detail) throw notFound('Event not found')
     await authenticateOptional(req)
     if (!req.account) return { data: detail }
+    reply.header('Cache-Control', 'private')
     const [mark] = await db
       .select({ id: eventInterests.eventId })
       .from(eventInterests)
