@@ -2,9 +2,11 @@ import { createInterface } from 'node:readline/promises'
 import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { EVENT_TZ, ingestSourceConfigSchema } from '@open-event-db/shared'
 import { createDb } from './index.js'
+import { deleteAccount, soleMemberships } from './accounts.js'
 import {
   accounts,
   editHistory,
+  eventInterests,
   eventOrganizers,
   events,
   ingestItems,
@@ -55,6 +57,7 @@ function usage(): never {
                                                         Berlin times, venue, lineup, links, image and organizers
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-account <handle> [--yes]           Delete an account: personal data goes, its events stay
+  pnpm db:cli interest-stats [--upcoming] [--limit N]   Events by number of interested accounts (default limit 20)
   pnpm db:cli ingest-add-source <slug> <name> <url> <scout_handle> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse|squarespace|schokoladen|festsaal|lido|supamolly|beateuwe|so36|frannz] [--config '<json>'] [--venue <venue_id>] [--unofficial]
                                                         Add a feed source (default: iCal) whose events a scout reviews;
                                                         --venue for the venue whose program it carries,
@@ -173,7 +176,7 @@ switch (cmd) {
     const scout = flags.has('--scout')
     const [a] = await db
       .insert(accounts)
-      .values({ handle, email, displayName: nameArg?.trim() || handle, isScout: scout })
+      .values({ handle, email, displayName: nameArg?.trim() || handle, isScout: scout, onboardedAt: new Date() })
       .returning({ id: accounts.id, handle: accounts.handle })
     console.log(`Created ${scout ? 'scout ' : ''}account ${a?.handle} (${a?.id})`)
     break
@@ -454,17 +457,7 @@ switch (cmd) {
       .from(events)
       .where(eq(events.createdBy, a.id))
     const count = row?.count ?? 0
-    const memberships = await db
-      .select({
-        name: organizers.name,
-        slug: organizers.slug,
-        members: sql<number>`(select count(*)::int from organizer_members om where om.organizer_id = ${organizers.id})`,
-      })
-      .from(organizerMembers)
-      .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
-      .where(eq(organizerMembers.accountId, a.id))
-    // Organizers where this account is the only member stay public, without members
-    const orphaned = memberships.filter((m) => m.members === 1).map((m) => `${m.name} (${m.slug})`)
+    const orphaned = (await soleMemberships(db, a.id)).map((m) => `${m.name} (${m.slug})`)
     const orphanNote = orphaned.length ? ` Organizer(s) left without members: ${orphaned.join(', ')}.` : ''
     if (flags.has('--yes')) {
       if (orphaned.length) console.warn(`Organizer(s) left without members: ${orphaned.join(', ')}`)
@@ -473,37 +466,26 @@ switch (cmd) {
       if (!ok) fail('Aborted')
     }
 
-    // Events, feed sources and edit history reference the account row (onDelete: restrict), so the row stays as
-    // an anonymous placeholder: "Added by" then reads "Deleted account". Everything personal is removed.
-    await db.transaction(async (tx) => {
-      await tx.delete(sessions).where(eq(sessions.accountId, a.id))
-      await tx.delete(magicLinkTokens).where(eq(magicLinkTokens.accountId, a.id))
-      await tx.delete(organizerMembers).where(eq(organizerMembers.accountId, a.id))
-      // Profile history holds their old names
-      await tx
-        .delete(editHistory)
-        .where(and(eq(editHistory.entityType, 'account'), eq(editHistory.entityId, a.id)))
-      await tx
-        .update(accounts)
-        .set({
-          displayName: 'Deleted account',
-          handle: `deleted-${a.id}`,
-          // Unique and NOT NULL; the reserved .invalid TLD can never receive mail
-          email: `deleted-${a.id}@invalid`,
-          isScout: false,
-          apiKeyHash: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(accounts.id, a.id))
-      await tx.insert(editHistory).values({
-        entityType: 'account',
-        entityId: a.id,
-        accountId: a.id,
-        action: 'deleted',
-        diff: { via: 'cli' },
-      })
-    })
+    await deleteAccount(db, a.id)
     console.log(`Deleted the account of ${a.displayName} (${handle}); ${count} event(s) kept as "Deleted account"`)
+    break
+  }
+  case 'interest-stats': {
+    const limitAt = rawArgv.indexOf('--limit')
+    const limit = limitAt === -1 ? 20 : Number(rawArgv[limitAt + 1])
+    if (!Number.isInteger(limit) || limit < 1) fail('--limit needs a positive number')
+    const count = sql<number>`count(*)::int`
+    const rows = await db
+      .select({ id: events.id, title: events.title, startsAt: events.startsAt, count })
+      .from(eventInterests)
+      .innerJoin(events, eq(events.id, eventInterests.eventId))
+      .where(flags.has('--upcoming') ? sql`${events.startsAt} >= now()` : undefined)
+      .groupBy(events.id)
+      .orderBy(sql`count(*) desc`, events.startsAt)
+      .limit(limit)
+    console.log('count  starts_at  title  (event id)')
+    if (!rows.length) console.log('No interests yet.')
+    for (const r of rows) console.log(`${r.count}  ${r.startsAt.toISOString()}  ${r.title}  (${r.id})`)
     break
   }
   case 'ingest-add-source': {
