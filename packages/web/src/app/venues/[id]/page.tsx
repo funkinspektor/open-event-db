@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ALL_STATUSES, getEvents, getVenue, isUuid } from '@/lib/api'
 import { getCurrentAccount } from '@/lib/session'
+import { canCreateEvents } from '@/lib/permissions'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { EventRow } from '@/components/EventRow'
 import { EventList } from '@/components/EventList'
@@ -82,7 +83,7 @@ export default async function VenuePage({ params }: { params: Params }) {
             <BackIcon />
             Venues
           </Link>
-          {me && (
+          {canCreateEvents(me) && (
             <Link href={`/venues/${v.id}/edit`} className="kk-btn kk-btn--outline">
               Edit venue
             </Link>

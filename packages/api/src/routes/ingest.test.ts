@@ -617,7 +617,7 @@ describe('POST /ingest/items/:id/accept', () => {
   })
 
   it('accepting a feed item always creates an unclaimed event, even when the scout is an organizer member', async () => {
-    const { account, key, organizer } = await createAccount({ scout: true }) // also owns a verified organizer
+    const { account, key } = await createAccount({ scout: true }) // also owns a verified organizer
     const item = await newItem()
     const res = await post(`/items/${item.id}/accept`, key)
     expect(res.statusCode).toBe(200)
@@ -627,7 +627,6 @@ describe('POST /ingest/items/:id/accept', () => {
     const acceptedEvent = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
     expect(acceptedEvent).toMatchObject({ claimed: false, organizers: [] })
     expect(await db.select().from(eventOrganizers).where(eq(eventOrganizers.eventId, eventId))).toEqual([])
-    expect(organizer).not.toBeNull()
     // Attributed as before: to the source's scout, with the accepting scout as the actor of the log
     expect((await eventRow(eventId)).createdBy).toBe(feedScout.id)
     const [log] = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))

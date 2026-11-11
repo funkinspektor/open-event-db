@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { desc, eq, inArray } from 'drizzle-orm'
-import { editHistory, eventOrganizers, events, ingestSources, venues, type Account, type Organizer, type Venue } from '@open-event-db/db'
+import { editHistory, eventOrganizers, events, ingestSources, organizers, venues, type Account, type Organizer, type Venue } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { cleanup, createAccount, createOrganizer } from '../test/fixtures.js'
@@ -778,7 +778,7 @@ describe('creating events: whose event is it', () => {
   })
 
   it('a member of two organizers must choose: 400 organizer_required', async () => {
-    const { account, key, organizer } = await createAccount()
+    const { account, key } = await createAccount()
     const second = await createOrganizer([account.id])
     const res = await post(eventBody, key)
     expect(res.statusCode).toBe(400)
@@ -787,7 +787,6 @@ describe('creating events: whose event is it', () => {
     const chosen = await post({ ...eventBody, organizer_id: second.id }, key)
     expect(chosen.statusCode).toBe(201)
     expect(chosen.json().data.organizers).toEqual([expect.objectContaining({ id: second.id, role: 'creator' })])
-    expect(organizer).not.toBeNull()
   })
 
   it("someone else's organizer_id is 403 not_a_member", async () => {
@@ -803,6 +802,7 @@ describe('creating events: whose event is it', () => {
     const { account, key, organizer } = await createAccount({ organizer: { verified: false } })
     const noRights = await post(eventBody, key)
     expect(noRights.statusCode).toBe(403)
+    expect(noRights.json().error.code).toBe('no_rights')
     const explicit = await post({ ...eventBody, organizer_id: organizer!.id }, key)
     expect(explicit.statusCode).toBe(403)
     expect(explicit.json().error.code).toBe('no_rights')
@@ -847,6 +847,59 @@ describe('creating events: whose event is it', () => {
     const remove = await app.inject({ method: 'DELETE', url: `/api/v1/events/${id}/organizers/${orgB.id}`, headers: auth(keyA) })
     expect(remove.statusCode).toBe(200)
     expect(remove.json().data.organizers).toHaveLength(1)
+  })
+
+  it('a second member of the creator organizer can edit, cancel and manage co-hosts', async () => {
+    const a = await createAccount({ organizer: false, label: 'multi-a' })
+    const b = await createAccount({ organizer: false, label: 'multi-b' })
+    const team = await createOrganizer([a.account.id, b.account.id])
+    const cohost = await createOrganizer([])
+    const created = await post({ ...eventBody, organizer_id: team.id }, a.key)
+    expect(created.statusCode).toBe(201)
+    const id = created.json().data.id as string
+
+    const edit = await app.inject({ method: 'PUT', url: `/api/v1/events/${id}`, headers: auth(b.key), payload: { title: 'Edited by member' } })
+    expect(edit.statusCode).toBe(200)
+    const add = await app.inject({ method: 'POST', url: `/api/v1/events/${id}/organizers`, headers: auth(b.key), payload: { organizer_id: cohost.id } })
+    expect(add.statusCode).toBe(201)
+    const remove = await app.inject({ method: 'DELETE', url: `/api/v1/events/${id}/organizers/${cohost.id}`, headers: auth(b.key) })
+    expect(remove.statusCode).toBe(200)
+    const cancel = await app.inject({ method: 'DELETE', url: `/api/v1/events/${id}`, headers: auth(b.key) })
+    expect(cancel.statusCode).toBe(200)
+  })
+
+  it('a member of a co-host organizer cannot manage co-hosts: 403', async () => {
+    const owner = await createAccount({ label: 'cohost-owner' })
+    const guest = await createAccount({ label: 'cohost-guest' }) // owns a verified organizer
+    const third = await createOrganizer([])
+    const created = await post({ ...eventBody, organizer_id: owner.organizer!.id }, owner.key)
+    const id = created.json().data.id as string
+    const add = await app.inject({ method: 'POST', url: `/api/v1/events/${id}/organizers`, headers: auth(owner.key), payload: { organizer_id: guest.organizer!.id } })
+    expect(add.statusCode).toBe(201)
+
+    const addDenied = await app.inject({ method: 'POST', url: `/api/v1/events/${id}/organizers`, headers: auth(guest.key), payload: { organizer_id: third.id } })
+    expect(addDenied.statusCode).toBe(403)
+    const removeDenied = await app.inject({ method: 'DELETE', url: `/api/v1/events/${id}/organizers/${guest.organizer!.id}`, headers: auth(guest.key) })
+    expect(removeDenied.statusCode).toBe(403)
+  })
+
+  it('added_by.is_organizer_member stays true for a migrated organizer whose account lost its membership', async () => {
+    const old = await createAccount({ organizer: false, label: 'migrated' })
+    // A migrated publisher: the organizer has the same id as the old account
+    const [org] = await db
+      .insert(organizers)
+      .values({ id: old.account.id, name: 'Migrated Org', slug: `migrated-${old.account.id.slice(0, 8)}`, verified: true })
+      .returning()
+    const [e] = await db
+      .insert(events)
+      .values({ title: 'Migrated event', startsAt: new Date('2030-03-05T20:00:00Z'), city: 'Testcity', createdBy: old.account.id })
+      .returning()
+    await db.insert(eventOrganizers).values({ eventId: e!.id, organizerId: org!.id, role: 'creator' })
+    // no membership at all (the merged-away account lost it)
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${e!.id}` })
+    expect(detail.json().data.added_by.is_organizer_member).toBe(true)
+    await db.delete(eventOrganizers).where(eq(eventOrganizers.eventId, e!.id))
+    await db.delete(organizers).where(eq(organizers.id, org!.id))
   })
 
   it("GET /events?organizer_id= lists the organizer's events", async () => {

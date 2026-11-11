@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getIngestCount } from '@/lib/api'
+import { canCreateEvents } from '@/lib/permissions'
 import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
 import { Logo } from './Logo'
 import { LogoutButton } from './LogoutButton'
@@ -41,9 +42,11 @@ export async function Header() {
         <div className="kk-header__end">
           {me ? (
             <UserMenu name={me.display_name}>
-              <Link href="/events/new" className="kk-menu__item">
-                Create event
-              </Link>
+              {canCreateEvents(me) && (
+                <Link href="/events/new" className="kk-menu__item">
+                  Create event
+                </Link>
+              )}
               <Link href="/dashboard" className="kk-menu__item">
                 Dashboard
               </Link>

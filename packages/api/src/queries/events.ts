@@ -223,11 +223,17 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
         handle: accounts.handle,
         display_name: accounts.displayName,
         is_scout: accounts.isScout,
-        is_organizer_member: sql<boolean>`exists (
+        // Also true when the creator's id is one of the event's organizer ids: organizers migrated from
+        // publishers keep the publisher's id, so their events still count as "by the organizer" after the
+        // old login is merged away and loses its membership.
+        is_organizer_member: sql<boolean>`(exists (
           select 1 from ${eventOrganizers} eo
           join ${organizerMembers} om on om.organizer_id = eo.organizer_id
           where eo.event_id = ${events.id} and om.account_id = ${events.createdBy}
-        )`,
+        ) or exists (
+          select 1 from ${eventOrganizers} eo
+          where eo.event_id = ${events.id} and eo.organizer_id = ${events.createdBy}
+        ))`,
       },
       sourceName: ingestSources.name,
       itemDraft: ingestItems.draft,

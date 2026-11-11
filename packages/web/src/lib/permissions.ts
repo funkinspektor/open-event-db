@@ -10,3 +10,8 @@ export function permissionEvent(event: Pick<EventDetail, 'organizers'>): Permiss
 export function permissionActor(me: Pick<AccountMe, 'id' | 'is_scout' | 'organizers'>): PermissionActor {
   return { id: me.id, is_scout: me.is_scout, organizer_ids: me.organizers.filter((o) => o.verified).map((o) => o.id) }
 }
+
+/** Creating events needs a scout or a member of at least one verified organizer. */
+export function canCreateEvents(me: Pick<AccountMe, 'is_scout' | 'organizers'> | null): boolean {
+  return !!me && (me.is_scout || me.organizers.some((o) => o.verified))
+}

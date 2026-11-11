@@ -49,7 +49,9 @@ export default async function DashboardPage() {
     for (const e of data) organizerEvents.set(e.id, e)
   }
   const mine = [...organizerEvents.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-  const added = me.is_scout ? (await getEvents(listQuery('added_by', me.id))).data : []
+  const added = me.is_scout
+    ? (await getEvents(listQuery('added_by', me.id))).data.filter((e) => !organizerEvents.has(e.id))
+    : []
 
   // Claimed events the scout added are read-only for them, unless they belong to its organizer; name who claimed them
   const claimedBy = new Map<string, string>()
