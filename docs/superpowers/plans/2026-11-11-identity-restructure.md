@@ -265,7 +265,17 @@ it('GET /events?organizer_id= lists the organizer\'s events', …)
 - Consumes: Tasks 3–4.
 - Produces: nothing new; source attribution reads `ingestSources.accountId`; "claimed" checks use organizers; merge permission uses `canEdit(…, actorOf(me))`.
 
-- [ ] **Step 1: Port the listed tests to the fixtures** (scouts: `createAccount({ scout: true, organizer: false })`). No new behavior → no new test cases.
+- [ ] **Step 1: Port the listed tests to the fixtures** (scouts: `createAccount({ scout: true, organizer: false })`), and add one test to `ingest.test.ts` that pins existing behavior:
+
+```ts
+it('accepting a feed item always creates an unclaimed event, even when the scout is an organizer member', async () => {
+  const { key } = await createAccount({ scout: true }) // also owns a verified organizer
+  // accept a pending item of a test source with this key
+  expect(acceptedEvent).toMatchObject({ claimed: false, organizers: [] })
+})
+```
+
+The accept endpoint takes no `organizer_id`; an accepted event can be claimed for an organizer afterwards (`claim-event` until step 4 of the spec).
 - [ ] **Step 2: Implement the renames** in the listed source files.
 - [ ] **Step 3: Full API verification**
 

@@ -145,6 +145,7 @@ Same rules, new subject. The actor becomes `{ id, is_scout, organizer_ids }` (id
 Creating an event: the request takes an optional `organizer_id`.
 - With `organizer_id`: the event is created for that organizer (creator). The account must be a member of it and the organizer verified (403 `not_a_member` otherwise).
 - Without `organizer_id`: a **scout** creates an unclaimed event (a scout who is also an organizer member must not turn every scouted event into their collective's event); a non-scout member of exactly one verified organizer creates it for that organizer; a non-scout member of several gets 400 `organizer_required`; an account with neither right gets 403.
+- Accepting a feed item in the inbox always creates an unclaimed event, whoever accepts it; it can be claimed for an organizer afterwards.
 - The web form shows a "Publish as" select whenever the account has more than one option (its verified organizers, plus "As scout, without organizer" for scouts). Scouts default to the scout option.
 
 This is today's behavior expressed in the new model.
