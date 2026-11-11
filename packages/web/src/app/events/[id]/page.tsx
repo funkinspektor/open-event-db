@@ -73,8 +73,8 @@ export default async function EventPage({ params, searchParams }: { params: Para
   const [e, me, { saved }] = await Promise.all([load(params), getCurrentAccount(), searchParams])
   const savedMessage = saved ? SAVED_MESSAGES[saved] : undefined
   const canEdit = !!me && canEditEvent(permissionEvent(e), permissionActor(me))
-  // Show who added a claimed event only when it was a scout rather than one of the organizer's members
-  const addedByOther = e.claimed && e.added_by.is_scout
+  // Show who added a claimed event only when the adder isn't a member of its organizers (i.e. a scout)
+  const addedByOther = e.claimed && !e.added_by.is_organizer_member
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -163,7 +163,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
             {addedByOther && (
               <p className="m-0 text-[14px] text-muted">
                 Added by {e.added_by.display_name}
-                {' · Scout'}
+                {e.added_by.is_scout && <> · Scout</>}
               </p>
             )}
           </section>

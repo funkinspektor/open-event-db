@@ -40,6 +40,7 @@ export default async function DashboardPage() {
   // Members see the events of their verified organizers; scouts also see the events they added (claimed or not)
   const verified = me.organizers.filter((o) => o.verified)
   const isMember = verified.length > 0
+  const canCreate = isMember || me.is_scout
   const now = new Date()
   const actor = permissionActor(me)
 
@@ -128,12 +129,22 @@ export default async function DashboardPage() {
             </Link>
           ))}
         </div>
-        <Link href="/events/new" className="kk-btn kk-btn--primary kk-btn--lg">
-          + Create event
-        </Link>
+        {canCreate && (
+          <Link href="/events/new" className="kk-btn kk-btn--primary kk-btn--lg">
+            + Create event
+          </Link>
+        )}
       </section>
 
-      {mine.length === 0 && added.length === 0 && (
+      {!canCreate && (
+        <section>
+          <h2 className="kk-section-title">No events yet</h2>
+          <hr className="kk-rule" />
+          <p className="kk-empty">Events can be added by members of a verified organizer and by scouts.</p>
+        </section>
+      )}
+
+      {canCreate && mine.length === 0 && added.length === 0 && (
         <section>
           <h2 className="kk-section-title">
             {me.is_scout ? 'You’re in. Add your first event.' : 'You’re in. Create your first event.'}

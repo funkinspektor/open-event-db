@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   eventOrganizers,
+  organizerMembers,
   events,
   ingestItems,
   ingestSources,
@@ -222,6 +223,11 @@ export async function getEventDetail(id: string): Promise<EventDetail | null> {
         handle: accounts.handle,
         display_name: accounts.displayName,
         is_scout: accounts.isScout,
+        is_organizer_member: sql<boolean>`exists (
+          select 1 from ${eventOrganizers} eo
+          join ${organizerMembers} om on om.organizer_id = eo.organizer_id
+          where eo.event_id = ${events.id} and om.account_id = ${events.createdBy}
+        )`,
       },
       sourceName: ingestSources.name,
       itemDraft: ingestItems.draft,

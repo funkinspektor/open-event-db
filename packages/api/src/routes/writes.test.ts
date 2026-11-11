@@ -571,8 +571,26 @@ describe('scouts and unclaimed events', () => {
     eventId = e.id
     expect(e.organizers).toEqual([])
     expect(e.claimed).toBe(false)
-    expect(e.added_by).toEqual({ id: scout.id, handle: scout.handle, display_name: scout.displayName, is_scout: true })
+    expect(e.added_by).toEqual({ id: scout.id, handle: scout.handle, display_name: scout.displayName, is_scout: true, is_organizer_member: false })
     expect(e).not.toHaveProperty('created_by')
+  })
+
+  it('added_by.is_organizer_member is true for a scout who belongs to the organizer, false for an unclaimed event', async () => {
+    const m = await createAccount({ scout: true, organizer: false, label: 'scoutmember' })
+    const own = await createOrganizer([m.account.id])
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(m.key),
+      payload: { title: 'Member Night', starts_at: '2030-02-03T22:00:00Z', venue_id: venue.id, organizer_id: own.id },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.added_by).toMatchObject({ is_scout: true, is_organizer_member: true })
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${res.json().data.id}` })
+    expect(detail.json().data.added_by.is_organizer_member).toBe(true)
+
+    const unclaimed = await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })
+    expect(unclaimed.json().data.added_by.is_organizer_member).toBe(false)
   })
 
   it('organizer-created events stay owned and claimed', async () => {
@@ -584,7 +602,7 @@ describe('scouts and unclaimed events', () => {
     })
     const e = res.json().data
     expect(e.claimed).toBe(true)
-    expect(e.added_by).toEqual(expect.objectContaining({ id: alice.id, is_scout: false }))
+    expect(e.added_by).toEqual(expect.objectContaining({ id: alice.id, is_scout: false, is_organizer_member: true }))
   })
 
   it('lists unclaimed events in the feed with claimed=false and filters by added_by', async () => {
@@ -660,6 +678,7 @@ describe('scouts and unclaimed events', () => {
     expect(e.provenance).toBe('organizer')
     expect(e.organizers).toEqual([expect.objectContaining({ id: orgA.id, role: 'creator' })])
     expect(e.added_by.id).toBe(scout.id)
+    expect(e.added_by.is_organizer_member).toBe(false)
 
     const byScout = await app.inject({
       method: 'PUT',
@@ -755,7 +774,7 @@ describe('creating events: whose event is it', () => {
     const res = await post(eventBody, keyA)
     expect(res.statusCode).toBe(201)
     expect(res.json().data.organizers).toEqual([expect.objectContaining({ id: orgA.id, role: 'creator' })])
-    expect(res.json().data.added_by).toEqual({ id: alice.id, handle: alice.handle, display_name: alice.displayName, is_scout: false })
+    expect(res.json().data.added_by).toEqual({ id: alice.id, handle: alice.handle, display_name: alice.displayName, is_scout: false, is_organizer_member: true })
   })
 
   it('a member of two organizers must choose: 400 organizer_required', async () => {

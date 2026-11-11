@@ -116,6 +116,8 @@ export const eventAddedBySchema = z.object({
   handle: z.string(),
   display_name: z.string(),
   is_scout: z.boolean(),
+  /** Whether the adding account belongs to any of the event's organizers (any role). */
+  is_organizer_member: z.boolean(),
 })
 
 export type EventAddedBy = z.infer<typeof eventAddedBySchema>
