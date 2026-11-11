@@ -50,6 +50,8 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   status: csvOrArray(eventStatusSchema),
   provenance: csvOrArray(eventProvenanceSchema),
   q: z.string().min(1).optional(),
+  /** Only events the authenticated account marked as interesting. */
+  mine: z.coerce.boolean().optional(),
   /** Sort by start time: `asc` (soonest first, default) or `desc` (newest first, e.g. for past events). */
   order: z.enum(['asc', 'desc']).default('asc'),
 })
@@ -131,6 +133,8 @@ export const eventDetailSchema = eventSlimSchema
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
     venue: venueDetailEmbedSchema.nullable(),
+    /** Whether the authenticated account marked this event; absent for anonymous requests. */
+    interested: z.boolean().optional(),
     organizers: z.array(eventOrganizerSchema),
     /** Set while a feed keeps this event in sync; editing detaches it. */
     synced_from: z.object({ source_name: z.string(), source_url: z.string().url().nullable() }).nullable(),

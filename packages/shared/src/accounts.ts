@@ -25,6 +25,10 @@ export const accountMeSchema = z.object({
   is_scout: z.boolean(),
   has_api_key: z.boolean(),
   auth_method: z.enum(['api_key', 'session']),
+  /** False until the person has finished /welcome. */
+  onboarded: z.boolean(),
+  /** Whether a personal calendar feed URL exists. */
+  has_calendar: z.boolean(),
   organizers: z.array(accountMembershipSchema),
 })
 
@@ -49,4 +53,26 @@ export const apiKeyResponseSchema = z.object({
 
 export const magicLinkRequestSchema = z.object({
   email: z.string().trim().email(),
+  /** Same-site path to land on after login; validated with `safeReturnTo`, silently dropped if unsafe. */
+  return_to: z.string().max(2000).optional(),
+})
+
+export const onboardingSchema = z.object({
+  display_name: z.string().trim().min(1).max(60),
+  handle: handleSchema,
+  accept_terms: z.literal(true),
+})
+
+export type OnboardingInput = z.infer<typeof onboardingSchema>
+
+export const emailChangeSchema = z.object({
+  email: z.string().trim().email(),
+})
+
+export const deleteAccountSchema = z.object({
+  confirm_handle: z.string().min(1),
+})
+
+export const interestIdsResponseSchema = z.object({
+  data: z.object({ event_ids: z.array(z.string().uuid()) }),
 })
