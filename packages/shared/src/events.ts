@@ -51,7 +51,10 @@ export const eventListQuerySchema = cursorQuerySchema.extend({
   provenance: csvOrArray(eventProvenanceSchema),
   q: z.string().min(1).optional(),
   /** Only events the authenticated account marked as interesting. */
-  mine: z.coerce.boolean().optional(),
+  mine: z
+    .enum(['true', '1', 'false', '0'])
+    .transform((v) => v === 'true' || v === '1')
+    .optional(),
   /** Sort by start time: `asc` (soonest first, default) or `desc` (newest first, e.g. for past events). */
   order: z.enum(['asc', 'desc']).default('asc'),
 })

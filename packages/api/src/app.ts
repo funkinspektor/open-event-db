@@ -10,6 +10,7 @@ import { organizerRoutes } from './routes/organizers.js'
 import { accountRoutes } from './routes/accounts.js'
 import { venueRoutes } from './routes/venues.js'
 import { eventRoutes } from './routes/events.js'
+import { interestRoutes } from './routes/interests.js'
 import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
 import { ingestRoutes } from './routes/ingest.js'
@@ -91,6 +92,7 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
       await api.register(accountRoutes)
       await api.register(tagsRoutes)
       await api.register(authRoutes)
+      await api.register(interestRoutes)
     },
     { prefix: '/api/v1' },
   )

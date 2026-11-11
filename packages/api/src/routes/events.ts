@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import {
   and,
   arrayOverlaps,
@@ -27,11 +27,11 @@ import {
   normalizeTags,
   type EventStatus,
 } from '@open-event-db/shared'
-import { eventOrganizers, events, organizers, venues } from '@open-event-db/db'
+import { eventInterests, eventOrganizers, events, organizers, venues } from '@open-event-db/db'
 import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { ApiError, badRequest, forbidden, notFound } from '../errors.js'
-import { actorOf, currentAccount, requireAuth, requireRights, writeRateLimit, type AuthAccount } from '../auth.js'
+import { actorOf, authenticate, currentAccount, requireAuth, requireRights, writeRateLimit, type AuthAccount } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { detachIngest } from '../ingest/detach.js'
 import { calendarDay } from '../ingest/normalize.js'
@@ -63,6 +63,17 @@ async function venueCity(venueId: string): Promise<string> {
   const [v] = await db.select({ city: venues.city }).from(venues).where(eq(venues.id, venueId)).limit(1)
   if (!v) throw badRequest('venue_id does not reference an existing venue')
   return v.city
+}
+
+/** Authenticates a public read: a missing or invalid credential just means anonymous. */
+async function authenticateOptional(req: FastifyRequest): Promise<void> {
+  try {
+    await authenticate(req)
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.statusCode !== 401) throw err
+    req.account = null
+    req.authMethod = null
+  }
 }
 
 async function loadEvent(id: string) {
@@ -105,6 +116,17 @@ export async function eventRoutes(app: FastifyInstance) {
     const decoded = cursor ? decodeCursor<EventCursor>(cursor) : null
 
     const conditions = [inArray(events.status, status)]
+
+    if (query.mine) {
+      await authenticateOptional(req)
+      const me = currentAccount(req)
+      conditions.push(
+        inArray(
+          events.id,
+          db.select({ id: eventInterests.eventId }).from(eventInterests).where(eq(eventInterests.accountId, me.id)),
+        ),
+      )
+    }
 
     // An event stays listed until it is over, not just until it starts.
     // Also on later pages: ongoing events come first, so a cursor can lie before now.
@@ -175,7 +197,14 @@ export async function eventRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/events/:id', async (req) => {
     const detail = await getEventDetail(req.params.id)
     if (!detail) throw notFound('Event not found')
-    return { data: detail }
+    await authenticateOptional(req)
+    if (!req.account) return { data: detail }
+    const [mark] = await db
+      .select({ id: eventInterests.eventId })
+      .from(eventInterests)
+      .where(and(eq(eventInterests.accountId, req.account.id), eq(eventInterests.eventId, detail.id)))
+      .limit(1)
+    return { data: { ...detail, interested: !!mark } }
   })
 
   app.post('/events', { ...write, onRequest: requireRights }, async (req, reply) => {
