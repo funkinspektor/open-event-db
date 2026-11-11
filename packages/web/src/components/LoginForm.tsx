@@ -5,7 +5,7 @@ import { useState } from 'react'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 const isDev = process.env.NODE_ENV !== 'production'
 
-export function LoginForm() {
+export function LoginForm({ returnTo }: { returnTo?: string }) {
   const [email, setEmail] = useState('')
   const [state, setState] = useState<'idle' | 'busy' | 'sent' | 'limited' | 'error'>('idle')
 
@@ -17,8 +17,8 @@ export function LoginForm() {
           Check your email
         </h2>
         <p className="m-0 text-muted">
-          If <span className="font-medium text-ink">{email}</span> is registered, a login link is on its way. It’s
-          valid for 15 minutes.
+          A login link is on its way to <span className="font-medium text-ink">{email}</span>. It’s valid for 15
+          minutes.
         </p>
         {isDev && <p className="kk-hint m-0">Dev mode: no email is sent — the link is printed in the API server log.</p>}
       </div>
@@ -35,7 +35,7 @@ export function LoginForm() {
           const res = await fetch(`${API_URL}/api/v1/auth/magic-link`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify(returnTo ? { email, return_to: returnTo } : { email }),
           })
           if (res.status === 429) return setState('limited')
           if (!res.ok) return setState('error')

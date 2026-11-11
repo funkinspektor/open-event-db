@@ -6,12 +6,18 @@ import { getCurrentAccount } from '@/lib/session'
 import { AccountForm } from '@/components/AccountForm'
 import { OrganizerForm } from '@/components/OrganizerForm'
 import { ApiKeySection } from '@/components/ApiKeySection'
+import { EmailChangeForm } from '@/components/EmailChangeForm'
+import { DeleteAccountSection } from '@/components/DeleteAccountSection'
 import { Headline } from '@/components/Headline'
 import { NextIcon } from '@/components/Icons'
 
 export const metadata: Metadata = { title: 'Profile' }
 
-export default async function ProfilePage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
+
+export default async function ProfilePage({ searchParams }: { searchParams: SearchParams }) {
+  const sp = await searchParams
+  const emailResult = sp.email === 'changed' || sp.email === 'taken' ? sp.email : undefined
   const me = await getCurrentAccount()
   if (!me) redirect('/login')
 
@@ -30,6 +36,7 @@ export default async function ProfilePage() {
       <section className="flex flex-col gap-4">
         <h2 className="kk-section-title">Your account</h2>
         <AccountForm me={me} />
+        <EmailChangeForm email={me.email} result={emailResult} />
       </section>
 
       {organizers.map(({ m, links }) => (
@@ -51,6 +58,8 @@ export default async function ProfilePage() {
       ))}
 
       <ApiKeySection hasApiKey={me.has_api_key} />
+
+      <DeleteAccountSection handle={me.handle} />
     </div>
   )
 }

@@ -3,9 +3,13 @@ import '@/styles/kellerkompass/components.css'
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import Link from 'next/link'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { Germania_One, JetBrains_Mono, Schibsted_Grotesk } from 'next/font/google'
 import { Header } from '@/components/Header'
 import { SITE_URL } from '@/lib/site'
+import { getCurrentAccount } from '@/lib/session'
+import { needsWelcome } from '@/lib/onboarding'
 
 // Self-hosted at build time by next/font — visitors never request fonts from Google.
 const germaniaOne = Germania_One({ weight: '400', subsets: ['latin'], variable: '--font-germania-one' })
@@ -38,7 +42,13 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Onboarding gate: an account that hasn't finished /welcome can't use the rest of the site.
+  // getCurrentAccount is cached per request, so the header's lookup reuses this one.
+  const path = (await headers()).get('x-pathname') ?? '/'
+  const me = await getCurrentAccount()
+  if (needsWelcome(path, me)) redirect('/welcome?return_to=' + encodeURIComponent(path))
+
   return (
     <html
       lang="en"

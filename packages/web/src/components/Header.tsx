@@ -47,6 +47,9 @@ export async function Header() {
                   Create event
                 </Link>
               )}
+              <Link href="/?mine=1" className="kk-menu__item">
+                My events
+              </Link>
               <Link href="/dashboard" className="kk-menu__item">
                 Dashboard
               </Link>

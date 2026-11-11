@@ -27,7 +27,10 @@ export function middleware(req: NextRequest) {
   const denied = unauthorized(req)
   if (denied) return denied
 
-  const res = NextResponse.next()
+  // The root layout reads the path from here to send accounts that haven't finished /welcome there.
+  const headers = new Headers(req.headers)
+  headers.set('x-pathname', req.nextUrl.pathname + req.nextUrl.search)
+  const res = NextResponse.next({ request: { headers } })
   if (process.env.SITE_NOINDEX === 'true') res.headers.set('X-Robots-Tag', 'noindex, nofollow')
 
   // The API sets the session cookie once at login, but the session itself slides with activity.

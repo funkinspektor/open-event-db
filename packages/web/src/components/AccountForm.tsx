@@ -120,12 +120,6 @@ export function AccountForm({ me }: { me: AccountMe }) {
             {HANDLE_HINT[handleState].text}
           </span>
         </label>
-
-        <label className="kk-field">
-          Email
-          <input value={me.email} disabled className="kk-input" />
-          <span className="kk-hint">Used for login links. Can’t be changed yet.</span>
-        </label>
       </div>
 
       {error && (
