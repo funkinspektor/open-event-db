@@ -59,7 +59,26 @@ describe('toICalendar', () => {
   it('escapes commas, semicolons, backslashes and newlines', () => {
     const out = render(ev({ title: 'A, B; C \\ D', descriptionPlain: 'line1\nline2' }))
     expect(out).toContain('SUMMARY:A\\, B\\; C \\\\ D\r\n')
-    expect(out).toContain('DESCRIPTION:line1\\nline2\\n\\n' + `${webUrl}/events/`)
+    expect(out).toContain('DESCRIPTION:line1\\nline2\\n' + `${webUrl}/events/`)
+  })
+
+  it('names the calendar "Kellerkompass – My events" (en dash)', () => {
+    expect(render(ev())).toContain('X-WR-CALNAME:Kellerkompass – My events\r\n')
+  })
+
+  it('cuts the description at 500 code points, trims, then newline and URL', () => {
+    const url = `${webUrl}/events/11111111-1111-4111-8111-111111111111`
+    const unfolded = (e: CalendarEvent) =>
+      render(e).replace(/\r\n /g, '').split('\r\n').find((l) => l.startsWith('DESCRIPTION:'))!.slice('DESCRIPTION:'.length)
+    const plain = 'abcdefghij'.repeat(100)
+    expect(unfolded(ev({ descriptionPlain: plain }))).toBe(`${plain.slice(0, 500)}\\n${url}`)
+    // surrogate pairs are not split: 500 emoji stay whole, the rest is dropped
+    const emoji = '😀'.repeat(1000)
+    expect(unfolded(ev({ descriptionPlain: emoji }))).toBe(`${'😀'.repeat(500)}\\n${url}`)
+    // trailing whitespace after the cut is trimmed
+    const spaced = 'a'.repeat(499) + ' ' + 'b'.repeat(100)
+    expect(unfolded(ev({ descriptionPlain: spaced }))).toBe(`${'a'.repeat(499)}\\n${url}`)
+    expect(unfolded(ev())).toBe(url)
   })
 
   it('folds long lines at 75 octets without splitting multi-byte characters', () => {

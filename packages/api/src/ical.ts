@@ -13,6 +13,7 @@ export interface CalendarEvent {
   updatedAt: Date
 }
 
+const DESCRIPTION_MAX_CHARS = 500
 const DEFAULT_DURATION_MS = 4 * 60 * 60 * 1000
 const pad = (n: number, w = 2) => String(n).padStart(w, '0')
 
@@ -79,13 +80,15 @@ export function toICalendar(events: CalendarEvent[], opts: { now: Date; webUrl: 
     'PRODID:-//Kellerkompass//Marked events//DE',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:Kellerkompass',
+    'X-WR-CALNAME:Kellerkompass – My events',
     'X-PUBLISHED-TTL:PT1H',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
   ]
   for (const e of events) {
     const url = `${opts.webUrl}/events/${e.id}`
-    const description = e.descriptionPlain ? `${e.descriptionPlain}\n\n${url}` : url
+    // First 500 code points (not UTF-16 units, so no surrogate pair is split), one newline, then the link
+    const text = Array.from(e.descriptionPlain).slice(0, DESCRIPTION_MAX_CHARS).join('').trimEnd()
+    const description = text ? `${text}\n${url}` : url
     const seq = Math.max(0, Math.floor((e.updatedAt.getTime() - e.createdAt.getTime()) / 1000))
     lines.push('BEGIN:VEVENT', `UID:${e.id}@kellerkompass.de`, `DTSTAMP:${stamp}`)
     if (e.startTimeKnown) {
