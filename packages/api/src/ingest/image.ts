@@ -21,7 +21,7 @@ export const ingestImages = {
  * image into the store, removes it when the feed dropped it. A failed fetch changes nothing, so the next
  * run (which compares again) retries. Never throws: an image must not fail an accept or a run.
  */
-export async function syncItemImage(item: IngestItem, draft: IngestDraft, publisherId: string): Promise<void> {
+export async function syncItemImage(item: IngestItem, draft: IngestDraft, accountId: string): Promise<void> {
   if (item.status !== 'accepted' || !item.eventId || item.detachedAt || !imageStore.store) return
   if (draft.image_url === item.imageSourceUrl) return
 
@@ -29,7 +29,7 @@ export async function syncItemImage(item: IngestItem, draft: IngestDraft, publis
     const image = draft.image_url ? await fetchRemoteImage(draft.image_url, fetchImpl) : null
     if (draft.image_url && !image) return
     await replaceEventImage(item.eventId, image, {
-      accountId: publisherId,
+      accountId,
       ingestItem: { id: item.id, sourceUrl: draft.image_url },
     })
   } catch (err) {
@@ -41,12 +41,12 @@ export async function syncItemImage(item: IngestItem, draft: IngestDraft, publis
  * Copies the feed image onto an event once, as a person's edit: for a scout who links an item without
  * keeping it synced. Never throws; returns whether the event now shows the feed image.
  */
-export async function copyItemImage(eventId: string, draft: IngestDraft, publisherId: string): Promise<boolean> {
+export async function copyItemImage(eventId: string, draft: IngestDraft, accountId: string): Promise<boolean> {
   if (!draft.image_url || !imageStore.store) return false
   try {
     const image = await fetchRemoteImage(draft.image_url, fetchImpl)
     if (!image) return false
-    return (await replaceEventImage(eventId, image, { accountId: publisherId })).applied
+    return (await replaceEventImage(eventId, image, { accountId })).applied
   } catch (err) {
     console.warn(`Could not copy the feed image onto event ${eventId}:`, err instanceof Error ? err.message : err)
     return false

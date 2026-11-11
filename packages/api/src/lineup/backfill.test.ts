@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq, inArray } from 'drizzle-orm'
-import { editHistory, events, ingestItems, ingestSources, publishers, type Publisher } from '@open-event-db/db'
+import { editHistory, events, ingestItems, ingestSources, type Account } from '@open-event-db/db'
 import { db } from '../db.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 import { backfillMarkdownLineups } from './backfill.js'
 
 const stamp = Date.now()
-let scout: Publisher
+let scout: Account
 const ids: string[] = []
 const sourceIds: string[] = []
 
@@ -29,18 +30,13 @@ async function newEvent(description: string, lineup: unknown[] = []) {
 const row = async (id: string) => (await db.select().from(events).where(eq(events.id, id)))[0]!
 
 beforeAll(async () => {
-  const [p] = await db
-    .insert(publishers)
-    .values({ name: 'Backfill Scout', slug: `backfill-${stamp}`, email: `backfill-${stamp}@test.local`, verified: true, isScout: true })
-    .returning()
-  scout = p!
+  scout = (await createAccount({ scout: true, organizer: false })).account
 })
 
 afterAll(async () => {
   if (sourceIds.length) await db.delete(ingestSources).where(inArray(ingestSources.id, sourceIds))
-  await db.delete(editHistory).where(inArray(editHistory.entityId, ids))
   await db.delete(events).where(inArray(events.id, ids))
-  await db.delete(publishers).where(eq(publishers.id, scout.id))
+  await cleanup()
 })
 
 describe('backfillMarkdownLineups', () => {
@@ -63,7 +59,7 @@ describe('backfillMarkdownLineups', () => {
 
     const history = await db.select().from(editHistory).where(eq(editHistory.entityId, listed.id))
     expect(history).toHaveLength(1)
-    expect(history[0]).toMatchObject({ action: 'updated', publisherId: scout.id })
+    expect(history[0]).toMatchObject({ action: 'updated', accountId: scout.id })
     expect(history[0]!.diff).toMatchObject({ via: 'cli', description: { after: 'A night.' } })
 
     expect(await backfillMarkdownLineups({ write: false, ids })).toEqual([])
@@ -73,7 +69,7 @@ describe('backfillMarkdownLineups', () => {
     const synced = await newEvent('A night.\n\n**Lineup**\n- A')
     const [source] = await db
       .insert(ingestSources)
-      .values({ slug: `backfill-src-${stamp}`, name: 'Backfill source', kind: 'ical', url: 'https://backfill.test/feed', publisherId: scout.id, config: {} })
+      .values({ slug: `backfill-src-${stamp}`, name: 'Backfill source', kind: 'ical', url: 'https://backfill.test/feed', accountId: scout.id, config: {} })
       .returning()
     sourceIds.push(source!.id)
     await db.insert(ingestItems).values({

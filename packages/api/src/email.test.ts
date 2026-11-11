@@ -47,7 +47,7 @@ describe('scaleway transport', () => {
     expect(body.html).toContain('href="http://x/verify?token=abc"')
   })
 
-  it('never mails reserved domains like the seed publishers', async () => {
+  it('never mails reserved domains like the seed accounts', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

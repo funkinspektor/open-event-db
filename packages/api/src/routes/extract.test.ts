@@ -1,17 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { inArray } from 'drizzle-orm'
-import { generateApiKey, publishers, type Publisher } from '@open-event-db/db'
 import { EXTRACT_DAILY_LIMIT, EXTRACT_MAX_IMAGES, type Extraction, type Lineup } from '@open-event-db/shared'
-import { db } from '../db.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 import { buildApp } from '../app.js'
 import { lineupReading } from '../extract/lineup.js'
 import { ExtractionError, vision, type ExtractImage } from '../extract/vision.js'
 
 let app: FastifyInstance
-const created: Publisher[] = []
-const keys: Record<'publisher' | 'scout' | 'limited', string> = { publisher: '', scout: '', limited: '' }
-const stamp = Date.now()
+const keys: Record<'member' | 'scout' | 'limited', string> = { member: '', scout: '', limited: '' }
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)])
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(32)])
@@ -70,18 +66,9 @@ const postParts = async (key: string | null, parts: [string, Buffer | string][])
 
 beforeAll(async () => {
   app = await buildApp({ logger: false })
-  const k = { publisher: generateApiKey(), scout: generateApiKey(), limited: generateApiKey() }
-  for (const [role, { key }] of Object.entries(k)) keys[role as keyof typeof keys] = key
-  created.push(
-    ...(await db
-      .insert(publishers)
-      .values([
-        { name: 'Extract Pub', slug: `extract-pub-${stamp}`, email: `extract-pub-${stamp}@test.local`, verified: true, apiKeyHash: k.publisher.hash },
-        { name: 'Extract Scout', slug: `extract-scout-${stamp}`, email: `extract-scout-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: k.scout.hash },
-        { name: 'Extract Limited', slug: `extract-limited-${stamp}`, email: `extract-limited-${stamp}@test.local`, verified: true, apiKeyHash: k.limited.hash },
-      ])
-      .returning()),
-  )
+  keys.member = (await createAccount({ label: 'extract-member' })).key
+  keys.scout = (await createAccount({ scout: true, organizer: false, label: 'extract-scout' })).key
+  keys.limited = (await createAccount({ label: 'extract-limited' })).key
 })
 
 beforeEach(() => {
@@ -91,7 +78,7 @@ beforeEach(() => {
 
 afterAll(async () => {
   vision.reset()
-  await db.delete(publishers).where(inArray(publishers.id, created.map((p) => p.id)))
+  await cleanup()
   await app.close()
 })
 
@@ -102,8 +89,8 @@ describe('POST /events/extract', () => {
     expect(received).toHaveLength(0)
   })
 
-  it('returns a normalized draft to publishers and scouts', async () => {
-    for (const key of [keys.publisher, keys.scout]) {
+  it('returns a normalized draft to organizer members and scouts', async () => {
+    for (const key of [keys.member, keys.scout]) {
       const res = await post(key, PNG)
       expect(res.statusCode).toBe(200)
       expect(res.json().data).toEqual({
@@ -124,27 +111,27 @@ describe('POST /events/extract', () => {
   })
 
   it('passes the sniffed image type, not the claimed one', async () => {
-    await post(keys.publisher, WEBP, 'image/png')
+    await post(keys.member, WEBP, 'image/png')
     expect(received[0]?.[0]?.type).toBe('image/webp')
   })
 
   it('rejects bodies that are not images', async () => {
-    expect((await post(keys.publisher, Buffer.from('not an image at all'))).statusCode).toBe(415)
-    const json = await post(keys.publisher, JSON.stringify({ hello: 'world' }), 'application/json')
+    expect((await post(keys.member, Buffer.from('not an image at all'))).statusCode).toBe(415)
+    const json = await post(keys.member, JSON.stringify({ hello: 'world' }), 'application/json')
     expect(json.statusCode).toBe(415)
     expect(json.json().error.code).toBe('unsupported_media_type')
     expect(received).toHaveLength(0)
   })
 
   it('rejects bodies over 6 MiB', async () => {
-    const res = await post(keys.publisher, Buffer.concat([PNG, Buffer.alloc(6 * MiB)]))
+    const res = await post(keys.member, Buffer.concat([PNG, Buffer.alloc(6 * MiB)]))
     expect(res.statusCode).toBe(413)
     expect(res.json().error.code).toBe('payload_too_large')
   })
 
   describe('multipart', () => {
     it('sends all images to the model in one call, in order', async () => {
-      const res = await postParts(keys.publisher, [['image', PNG], ['image', JPEG], ['image', WEBP]])
+      const res = await postParts(keys.member, [['image', PNG], ['image', JPEG], ['image', WEBP]])
       expect(res.statusCode).toBe(200)
       expect(res.json().data.title).toBe('Keller Nacht')
       expect(received).toHaveLength(1)
@@ -152,46 +139,46 @@ describe('POST /events/extract', () => {
     })
 
     it('accepts a single image', async () => {
-      expect((await postParts(keys.publisher, [['image', JPEG]])).statusCode).toBe(200)
+      expect((await postParts(keys.member, [['image', JPEG]])).statusCode).toBe(200)
       expect(received[0]).toHaveLength(1)
     })
 
     it(`allows ${EXTRACT_MAX_IMAGES} images, not more`, async () => {
-      const ok = await postParts(keys.publisher, Array.from({ length: EXTRACT_MAX_IMAGES }, () => ['image', JPEG]))
+      const ok = await postParts(keys.member, Array.from({ length: EXTRACT_MAX_IMAGES }, () => ['image', JPEG]))
       expect(ok.statusCode).toBe(200)
-      const tooMany = await postParts(keys.publisher, Array.from({ length: EXTRACT_MAX_IMAGES + 1 }, () => ['image', JPEG]))
+      const tooMany = await postParts(keys.member, Array.from({ length: EXTRACT_MAX_IMAGES + 1 }, () => ['image', JPEG]))
       expect(tooMany.statusCode).toBe(400)
       expect(tooMany.json().error.code).toBe('too_many_images')
       expect(received).toHaveLength(1)
     })
 
     it('checks every part by its signature', async () => {
-      const res = await postParts(keys.publisher, [['image', PNG], ['image', Buffer.from('not an image at all')]])
+      const res = await postParts(keys.member, [['image', PNG], ['image', Buffer.from('not an image at all')]])
       expect(res.statusCode).toBe(415)
       expect(res.json().error.code).toBe('unsupported_media_type')
       expect(received).toHaveLength(0)
     })
 
     it('needs at least one part named image', async () => {
-      const res = await postParts(keys.publisher, [['file', PNG], ['note', 'hello']])
+      const res = await postParts(keys.member, [['file', PNG], ['note', 'hello']])
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe('no_images')
     })
 
     it('rejects text parts named image', async () => {
-      expect((await postParts(keys.publisher, [['image', 'hello']])).statusCode).toBe(415)
+      expect((await postParts(keys.member, [['image', 'hello']])).statusCode).toBe(415)
     })
 
     it('limits the whole body to 6 MiB', async () => {
       const big = Buffer.concat([JPEG, Buffer.alloc(2 * MiB)])
-      const res = await postParts(keys.publisher, [['image', big], ['image', big], ['image', big]])
+      const res = await postParts(keys.member, [['image', big], ['image', big], ['image', big]])
       expect(res.statusCode).toBe(413)
       expect(res.json().error.code).toBe('payload_too_large')
       expect(received).toHaveLength(0)
     })
 
     it('rejects a malformed body', async () => {
-      const res = await post(keys.publisher, 'garbage', 'multipart/form-data; boundary=xyz')
+      const res = await post(keys.member, 'garbage', 'multipart/form-data; boundary=xyz')
       expect(res.statusCode).toBe(400)
       expect(received).toHaveLength(0)
     })
@@ -217,7 +204,7 @@ describe('POST /events/extract', () => {
     stub(async () => {
       throw new ExtractionError(kind, 'secret provider detail')
     })
-    const res = await post(keys.publisher, PNG)
+    const res = await post(keys.member, PNG)
     expect(res.statusCode).toBe(status)
     expect(res.json().error.code).toBe(code)
     expect(res.body).not.toContain('secret provider detail')
@@ -225,7 +212,7 @@ describe('POST /events/extract', () => {
 
   it('reports an image without event details', async () => {
     stub(async () => ({ ...extraction, title: null, date: null, venue_name: null, description: null, lineup: [] }))
-    const res = await post(keys.publisher, PNG)
+    const res = await post(keys.member, PNG)
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('nothing_extracted')
   })
@@ -272,16 +259,16 @@ describe('POST /events/extract-lineup', () => {
   })
 
   it('returns the lineup read from the text', async () => {
-    const res = await postText(keys.publisher, { text: 'Live: Volcan' })
+    const res = await postText(keys.member, { text: 'Live: Volcan' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: { lineup } })
     expect(texts).toEqual(['Live: Volcan'])
   })
 
   it('rejects an empty or overlong text', async () => {
-    expect((await postText(keys.publisher, { text: '   ' })).statusCode).toBe(400)
-    expect((await postText(keys.publisher, { text: 'x'.repeat(10_001) })).statusCode).toBe(400)
-    expect((await postText(keys.publisher, {})).statusCode).toBe(400)
+    expect((await postText(keys.member, { text: '   ' })).statusCode).toBe(400)
+    expect((await postText(keys.member, { text: 'x'.repeat(10_001) })).statusCode).toBe(400)
+    expect((await postText(keys.member, {})).statusCode).toBe(400)
     expect(texts).toEqual([])
   })
 
@@ -294,7 +281,7 @@ describe('POST /events/extract-lineup', () => {
     stubReader(async () => {
       throw new ExtractionError(kind, 'secret provider detail')
     })
-    const res = await postText(keys.publisher, { text: 'Live: Volcan' })
+    const res = await postText(keys.member, { text: 'Live: Volcan' })
     expect(res.statusCode).toBe(status)
     expect(res.json().error.code).toBe(code)
     expect(res.json().error.message).toMatch(/lineup/i)
@@ -303,7 +290,7 @@ describe('POST /events/extract-lineup', () => {
 
   it('reports a text without a lineup', async () => {
     stubReader(async () => [])
-    const res = await postText(keys.publisher, { text: 'A night of dark wave.' })
+    const res = await postText(keys.member, { text: 'A night of dark wave.' })
     expect(res.statusCode).toBe(422)
     expect(res.json().error).toMatchObject({ code: 'nothing_extracted', message: 'No lineup found in the description' })
   })

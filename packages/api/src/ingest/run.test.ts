@@ -7,14 +7,14 @@ import {
   events,
   ingestItems,
   ingestSources,
-  publishers,
+  type Account,
   type IngestItem,
   type IngestSource,
-  type Publisher,
   venues,
 } from '@open-event-db/db'
 import type { Extraction } from '@open-event-db/shared'
 import { db } from '../db.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 import { textExtraction } from '../extract/text.js'
 import { lineupReading } from '../extract/lineup.js'
 import { ExtractionError } from '../extract/vision.js'
@@ -33,7 +33,7 @@ const LATER = new Date('2026-10-29T05:00:00Z')
 const LATEST = new Date('2026-10-30T05:00:00Z')
 
 const stamp = Date.now()
-let scout: Publisher
+let scout: Account
 let seq = 0
 const sourceIds: string[] = []
 const venueIds: string[] = []
@@ -80,7 +80,7 @@ async function newSource(
       name: `Run source ${seq}`,
       kind,
       url: `https://${slug}.test/?scope={from}--{to}`,
-      publisherId: scout.id,
+      accountId: scout.id,
       config,
     })
     .returning()
@@ -132,18 +132,7 @@ const withoutPersian = (text: string) =>
   text.replace(/BEGIN:VEVENT\r\n(?:(?!BEGIN:VEVENT)[\s\S])*?-2391@[\s\S]*?END:VEVENT\r\n/, '')
 
 beforeAll(async () => {
-  const [p] = await db
-    .insert(publishers)
-    .values({
-      name: 'Run Scout',
-      slug: `run-scout-${stamp}`,
-      email: `run-scout-${stamp}@test.local`,
-      verified: true,
-      isPublisher: false,
-      isScout: true,
-    })
-    .returning()
-  scout = p!
+  scout = (await createAccount({ scout: true, organizer: false })).account
 })
 
 afterEach(() => {
@@ -154,10 +143,10 @@ afterEach(() => {
 
 afterAll(async () => {
   if (sourceIds.length) await db.delete(ingestSources).where(inArray(ingestSources.id, sourceIds))
-  await db.delete(editHistory).where(eq(editHistory.publisherId, scout.id))
+  await db.delete(editHistory).where(eq(editHistory.accountId, scout.id))
   await db.delete(events).where(eq(events.createdBy, scout.id))
   if (venueIds.length) await db.delete(venues).where(inArray(venues.id, venueIds))
-  await db.delete(publishers).where(eq(publishers.id, scout.id))
+  await cleanup()
 })
 
 describe('feedUrl', () => {
@@ -286,7 +275,7 @@ describe('runIngest', () => {
 
     const history = await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))
     expect(history).toHaveLength(1)
-    expect(history[0]).toMatchObject({ entityType: 'event', action: 'updated', publisherId: scout.id })
+    expect(history[0]).toMatchObject({ entityType: 'event', action: 'updated', accountId: scout.id })
     expect(history[0]!.diff.via).toBe('ingest')
     expect(history[0]!.diff.starts_at).toEqual({
       before: '2026-10-30T21:00:00.000Z',

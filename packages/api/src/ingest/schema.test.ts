@@ -1,25 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
-import { ingestItems, ingestSources, publishers, type IngestSource, type Publisher } from '@open-event-db/db'
+import { ingestItems, ingestSources, type Account, type IngestSource } from '@open-event-db/db'
 import { db } from '../db.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 
 const stamp = Date.now()
-let scout: Publisher
+let scout: Account
 let source: IngestSource
 
 beforeAll(async () => {
-  const [p] = await db
-    .insert(publishers)
-    .values({
-      name: 'Ingest Schema Scout',
-      slug: `ingest-schema-scout-${stamp}`,
-      email: `ingest-schema-scout-${stamp}@test.local`,
-      verified: true,
-      isPublisher: false,
-      isScout: true,
-    })
-    .returning()
-  scout = p!
+  scout = (await createAccount({ scout: true, organizer: false })).account
   const [s] = await db
     .insert(ingestSources)
     .values({
@@ -27,7 +17,7 @@ beforeAll(async () => {
       name: 'Schema test source',
       kind: 'ical',
       url: 'https://example.test/feed.ics',
-      publisherId: scout.id,
+      accountId: scout.id,
     })
     .returning()
   source = s!
@@ -36,7 +26,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // items cascade with their source
   await db.delete(ingestSources).where(eq(ingestSources.id, source.id))
-  await db.delete(publishers).where(eq(publishers.id, scout.id))
+  await cleanup()
 })
 
 describe('ingest schema', () => {

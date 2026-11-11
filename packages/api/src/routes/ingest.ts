@@ -22,9 +22,9 @@ import { events, ingestItems, ingestSources, venues, type IngestItem } from '@op
 import { db } from '../db.js'
 import { decodeCursor, encodeCursor } from '../cursor.js'
 import { badRequest, conflict, forbidden, notFound } from '../errors.js'
-import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
+import { actorOf, currentAccount, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
-import { cancelEvent, eventSnapshot, getOwners } from '../queries/events.js'
+import { cancelEvent, eventSnapshot, getOrganizers } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
 import { copyItemImage, syncItemImage } from '../ingest/image.js'
@@ -37,7 +37,7 @@ const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
 
 /** The inbox is shared by scouts only. Returns the acting scout. */
 function requireScout(req: FastifyRequest) {
-  const me = currentPublisher(req)
+  const me = currentAccount(req)
   if (!me.isScout) throw forbidden('Only scouts can use the inbox')
   return me
 }
@@ -46,7 +46,7 @@ function requireScout(req: FastifyRequest) {
 // judge a misfit; those it did are Filtered out. A filtered item is still an open item with every action.
 const isNew = () => and(isOpen(), or(isNull(ingestItems.fitVerdict), ne(ingestItems.fitVerdict, 'no')))
 const isFiltered = () => and(isOpen(), eq(ingestItems.fitVerdict, 'no'))
-// Accepted items that left their feed and still wait for a decision. Detached items (claimed, edited by a
+// Accepted items that left their feed and still wait for a decision. Detached items (with organizers, edited by a
 // human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(
   eq(ingestItems.status, 'accepted'),
@@ -334,7 +334,7 @@ export async function ingestRoutes(app: FastifyInstance) {
         }
       }
 
-      // Created by the source's scout and left unclaimed: no owner row
+      // Created by the source's scout and left unclaimed: no organizer rows
       const [event] = await tx
         .insert(events)
         .values({
@@ -349,14 +349,14 @@ export async function ingestRoutes(app: FastifyInstance) {
           categories: draft.categories,
           tags: [],
           links: draft.links,
-          createdBy: source.publisherId,
+          createdBy: source.accountId,
         })
         .returning()
       if (!event) throw new Error('insert returned no row')
       await logEdit(tx, {
         entityType: 'event',
         entityId: event.id,
-        publisherId: me.id,
+        accountId: me.id,
         action: 'created',
         diff: { ...diff(null, eventSnapshot(event)), via: 'ingest' },
       })
@@ -410,9 +410,9 @@ export async function ingestRoutes(app: FastifyInstance) {
       // Event first, then items: the lock order of PUT/DELETE /events/:id and the sync run
       const [target] = await tx.select().from(events).where(eq(events.id, event_id)).for('update')
       if (!target) throw notFound('Event not found')
-      // Taking the feed's fields is an edit: a claimed event is its owners' (a plain link changes nothing)
-      if (merging && !canEdit({ owners: await getOwners(event_id) }, { id: me.id, is_scout: me.isScout })) {
-        throw forbidden('Only event owners can edit this event')
+      // Taking the feed's fields is an edit: an event with organizers is theirs (a plain link changes nothing)
+      if (merging && !canEdit({ organizers: await getOrganizers(event_id) }, actorOf(me))) {
+        throw forbidden('Only members of the event\'s organizers can edit it')
       }
       // An item the event was synced from (re-posted under a new id) must not later offer it as gone
       await detachIngest(tx, event_id)
@@ -444,7 +444,7 @@ export async function ingestRoutes(app: FastifyInstance) {
         await logEdit(tx, {
           entityType: 'event',
           entityId: event_id,
-          publisherId: me.id,
+          accountId: me.id,
           action: 'updated',
           diff: { ...diff(eventSnapshot(target), eventSnapshot(updated)), via: 'ingest-link' },
         })

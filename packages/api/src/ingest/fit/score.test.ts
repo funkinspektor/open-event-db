@@ -1,15 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { events, ingestItems, ingestSources, publishers, type IngestItem, type IngestSource, type Publisher } from '@open-event-db/db'
+import { events, ingestItems, ingestSources, type Account, type IngestItem, type IngestSource } from '@open-event-db/db'
 import { ingestDraftSchema } from '@open-event-db/shared'
 import { db } from '../../db.js'
+import { cleanup, createAccount } from '../../test/fixtures.js'
 import { fingerprint, subjectOf } from './prompt.js'
 import { selectExamples, scorePending } from './score.js'
 import { fitScoring, type FitScorer } from './scorer.js'
 
 const stamp = Date.now()
 const DAY = 86_400_000
-let scout: Publisher
+let scout: Account
 let source: IngestSource
 let seq = 0
 
@@ -62,18 +63,7 @@ const itemRow = async (id: string) => (await db.select().from(ingestItems).where
 const score = (opts: Parameters<typeof scorePending>[0] = {}) => scorePending({ only: [source.slug], ...opts })
 
 beforeAll(async () => {
-  const [p] = await db
-    .insert(publishers)
-    .values({
-      name: 'Fit Scout',
-      slug: `fit-scout-${stamp}`,
-      email: `fit-scout-${stamp}@test.local`,
-      verified: true,
-      isPublisher: false,
-      isScout: true,
-    })
-    .returning()
-  scout = p!
+  scout = (await createAccount({ scout: true, organizer: false })).account
 })
 
 // Every test starts with a fresh source so its items cannot leak into the next one
@@ -81,7 +71,7 @@ beforeEach(async () => {
   const slug = `fit-${stamp}-${++seq}`
   const [s] = await db
     .insert(ingestSources)
-    .values({ slug, name: `Fit source ${seq}`, kind: 'ical', url: `https://${slug}.test/`, publisherId: scout.id })
+    .values({ slug, name: `Fit source ${seq}`, kind: 'ical', url: `https://${slug}.test/`, accountId: scout.id })
     .returning()
   source = s!
 })
@@ -92,9 +82,8 @@ afterEach(() => {
 })
 
 afterAll(async () => {
-  await db.delete(ingestSources).where(eq(ingestSources.publisherId, scout.id))
-  await db.delete(events).where(eq(events.createdBy, scout.id))
-  await db.delete(publishers).where(eq(publishers.id, scout.id))
+  await db.delete(ingestSources).where(eq(ingestSources.accountId, scout.id))
+  await cleanup()
 })
 
 describe('scorePending', () => {

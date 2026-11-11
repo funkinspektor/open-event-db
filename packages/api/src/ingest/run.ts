@@ -169,7 +169,7 @@ async function syncEvent(tx: DbOrTx, source: IngestSource, eventId: string, draf
   await logEdit(tx, {
     entityType: 'event',
     entityId: eventId,
-    publisherId: source.publisherId,
+    accountId: source.accountId,
     action: 'updated',
     diff: { ...changes, via: 'ingest' },
   })
@@ -206,7 +206,7 @@ async function ingestEvent(
       .where(eq(ingestItems.id, item.id))
     // An unchanged feed still retries an image that could not be fetched before
     const stored = ingestDraftSchema.safeParse(item.draft)
-    if (stored.success) await syncItemImage(item, stored.data, source.publisherId)
+    if (stored.success) await syncItemImage(item, stored.data, source.accountId)
     return
   }
 
@@ -262,7 +262,7 @@ async function ingestEvent(
     return current
   })
   // Outside the transaction: fetching the image must not hold the event and item locks
-  if (updated) await syncItemImage(updated, draft, source.publisherId)
+  if (updated) await syncItemImage(updated, draft, source.accountId)
   result.updated++
 }
 

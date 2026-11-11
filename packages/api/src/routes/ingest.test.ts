@@ -5,21 +5,21 @@ import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
   editHistory,
-  eventOwners,
+  eventOrganizers,
   events,
-  generateApiKey,
   ingestItems,
   ingestSources,
-  publishers,
   venues,
+  type Account,
   type IngestItem,
-  type Publisher,
+  type Organizer,
   type Venue,
 } from '@open-event-db/db'
 import { ingestSourceConfigSchema } from '@open-event-db/shared'
 import { encodeCursor } from '../cursor.js'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { cleanup, createAccount } from '../test/fixtures.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
 import { ingestImages } from '../ingest/image.js'
 import { parseUrbanSpreeDetail, type UrbanSpreeCard } from '../ingest/adapters/urbanspree.js'
@@ -28,9 +28,10 @@ import { normalizeFeedEvent } from '../ingest/normalize.js'
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9])
 
 let app: FastifyInstance
-let scout: Publisher
-let feedScout: Publisher
-let alice: Publisher
+let scout: Account
+let feedScout: Account
+let alice: Account
+let aliceOrganizer: Organizer
 let keyScout: string
 let keyAlice: string
 let venue: Venue
@@ -90,21 +91,14 @@ const post = (url: string, key: string, payload: unknown = {}) =>
 
 beforeAll(async () => {
   app = await buildApp({ logger: false })
-  const s = generateApiKey()
-  const a = generateApiKey()
-  keyScout = s.key
-  keyAlice = a.key
-  const rows = await db
-    .insert(publishers)
-    .values([
-      { name: 'Inbox Scout', slug: `inbox-scout-${stamp}`, email: `inbox-scout-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true, apiKeyHash: s.hash },
-      { name: 'Inbox Alice', slug: `inbox-alice-${stamp}`, email: `inbox-alice-${stamp}@test.local`, verified: true, apiKeyHash: a.hash },
-      { name: 'Feed Scout', slug: `inbox-feed-scout-${stamp}`, email: `inbox-feed-${stamp}@test.local`, verified: true, isPublisher: false, isScout: true },
-    ])
-    .returning()
-  scout = rows.find((p) => p.slug.startsWith('inbox-scout'))!
-  alice = rows.find((p) => p.slug.startsWith('inbox-alice'))!
-  feedScout = rows.find((p) => p.slug.startsWith('inbox-feed-scout'))!
+  const sc = await createAccount({ scout: true, organizer: false, label: 'inbox-scout' })
+  const al = await createAccount({ label: 'inbox-alice' })
+  scout = sc.account
+  keyScout = sc.key
+  alice = al.account
+  aliceOrganizer = al.organizer!
+  keyAlice = al.key
+  feedScout = (await createAccount({ scout: true, organizer: false, label: 'inbox-feed-scout' })).account
 
   const [v] = await db
     .insert(venues)
@@ -113,7 +107,7 @@ beforeAll(async () => {
   venue = v!
   const [src] = await db
     .insert(ingestSources)
-    .values({ slug: `inbox-${stamp}`, name: sourceName, kind: 'ical', url: 'https://inbox.test/feed.ics', publisherId: feedScout.id })
+    .values({ slug: `inbox-${stamp}`, name: sourceName, kind: 'ical', url: 'https://inbox.test/feed.ics', accountId: feedScout.id })
     .returning()
   sourceId = src!.id
 })
@@ -124,10 +118,10 @@ afterAll(async () => {
   const allEventIds = [...new Set([...eventIds, ...created.map((e) => e.id)])]
   await db.delete(ingestSources).where(eq(ingestSources.id, sourceId)) // cascades items
   if (allEventIds.length) await db.delete(editHistory).where(inArray(editHistory.entityId, allEventIds))
-  await db.delete(editHistory).where(inArray(editHistory.publisherId, ids))
+  await db.delete(editHistory).where(inArray(editHistory.accountId, ids))
   await db.delete(events).where(inArray(events.id, allEventIds))
   await db.delete(venues).where(eq(venues.id, venue.id))
-  await db.delete(publishers).where(inArray(publishers.id, ids))
+  await cleanup()
   await app.close()
 })
 
@@ -309,7 +303,7 @@ describe('GET /ingest/items and /ingest/count', () => {
   it('pages through a view in start order and filters it by source', async () => {
     const [other] = await db
       .insert(ingestSources)
-      .values({ slug: `inbox-b-${stamp}`, name: `${sourceName} B`, kind: 'ical', url: 'https://inbox.test/b.ics', publisherId: feedScout.id })
+      .values({ slug: `inbox-b-${stamp}`, name: `${sourceName} B`, kind: 'ical', url: 'https://inbox.test/b.ics', accountId: feedScout.id })
       .returning()
     const page = (query: string) =>
       app.inject({ method: 'GET', url: `/api/v1/ingest/items?source=inbox-b-${stamp}&${query}`, headers: auth(keyScout) })
@@ -360,7 +354,7 @@ describe('GET /ingest/items and /ingest/count', () => {
       fitSource = `inbox-fit-${stamp}`
       const [src] = await db
         .insert(ingestSources)
-        .values({ slug: fitSource, name: `${sourceName} Fit`, kind: 'ical', url: 'https://inbox.test/fit.ics', publisherId: feedScout.id })
+        .values({ slug: fitSource, name: `${sourceName} Fit`, kind: 'ical', url: 'https://inbox.test/fit.ics', accountId: feedScout.id })
         .returning()
       const at = (d: number, verdict?: 'fit' | 'maybe' | 'no') =>
         newItem(
@@ -458,7 +452,7 @@ describe('GET /ingest/accuracy', () => {
     const slug = `inbox-acc-${stamp}`
     const [src] = await db
       .insert(ingestSources)
-      .values({ slug, name: `${sourceName} Accuracy`, kind: 'ical', url: 'https://inbox.test/acc.ics', publisherId: feedScout.id })
+      .values({ slug, name: `${sourceName} Accuracy`, kind: 'ical', url: 'https://inbox.test/acc.ics', accountId: feedScout.id })
       .returning()
     try {
       const now = Date.now()
@@ -605,7 +599,7 @@ describe('POST /ingest/items/:id/accept', () => {
     expect(event.links).toEqual({ website: 'https://feed.test/e' })
     expect(event.tags).toEqual([])
     expect(event.claimed).toBe(false)
-    expect(event.owners).toEqual([])
+    expect(event.organizers).toEqual([])
     expect(event.added_by.id).toBe(feedScout.id)
     expect(event.synced_from).toEqual({ source_name: sourceName, source_url: 'https://feed.test/e' })
 
@@ -616,10 +610,28 @@ describe('POST /ingest/items/:id/accept', () => {
     expect(stored.decidedAt).not.toBeNull()
     expect(stored.detachedAt).toBeNull()
 
-    const [owner] = await db.select().from(eventOwners).where(eq(eventOwners.eventId, eventId))
-    expect(owner).toBeUndefined()
+    const rows = await db.select().from(eventOrganizers).where(eq(eventOrganizers.eventId, eventId))
+    expect(rows).toEqual([])
     const [log] = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
     expect(log?.action).toBe('created')
+  })
+
+  it('accepting a feed item always creates an unclaimed event, even when the scout is an organizer member', async () => {
+    const { account, key, organizer } = await createAccount({ scout: true }) // also owns a verified organizer
+    const item = await newItem()
+    const res = await post(`/items/${item.id}/accept`, key)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+
+    const acceptedEvent = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
+    expect(acceptedEvent).toMatchObject({ claimed: false, organizers: [] })
+    expect(await db.select().from(eventOrganizers).where(eq(eventOrganizers.eventId, eventId))).toEqual([])
+    expect(organizer).not.toBeNull()
+    // Attributed as before: to the source's scout, with the accepting scout as the actor of the log
+    expect((await eventRow(eventId)).createdBy).toBe(feedScout.id)
+    const [log] = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    expect(log?.accountId).toBe(account.id)
   })
 
   it('uses the draft city without a venue', async () => {
@@ -861,7 +873,7 @@ describe('POST /ingest/items/:id/link', () => {
 
       const history = await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))
       const merge = history.find((h) => (h.diff as { via?: string }).via === 'ingest-link')
-      expect(merge?.publisherId).toBe(scout.id)
+      expect(merge?.accountId).toBe(scout.id)
       expect(Object.keys(merge!.diff as object).sort()).toEqual(['categories', 'description', 'links', 'via'])
     })
 
@@ -912,9 +924,9 @@ describe('POST /ingest/items/:id/link', () => {
       expect(detail.json().data.synced_from).not.toBeNull()
     })
 
-    it('leaves a claimed event to its owners: no fields, but a plain link still works', async () => {
+    it('leaves an event with organizers to them: no fields, but a plain link still works', async () => {
       const event = await ownEvent({ createdBy: alice.id })
-      await db.insert(eventOwners).values({ eventId: event.id, publisherId: alice.id, role: 'creator' })
+      await db.insert(eventOrganizers).values({ eventId: event.id, organizerId: aliceOrganizer.id, role: 'creator' })
       const item = await newItem({}, spreeDraft())
 
       const merge = await post(`/items/${item.id}/link`, keyScout, { event_id: event.id, fields: ['description'] })
@@ -923,7 +935,7 @@ describe('POST /ingest/items/:id/link', () => {
       expect((await eventRow(event.id)).description).toBe(event.description)
 
       expect((await post(`/items/${item.id}/link`, keyScout, { event_id: event.id })).statusCode).toBe(200)
-      await db.delete(eventOwners).where(eq(eventOwners.eventId, event.id))
+      await db.delete(eventOrganizers).where(eq(eventOrganizers.eventId, event.id))
     })
   })
 
@@ -990,7 +1002,7 @@ describe('gone items', () => {
     expect((await itemRow(item.id)).detachedAt).not.toBeNull()
     const log = await db.select().from(editHistory).where(eq(editHistory.entityId, event.id))
     expect(log.map((l) => l.action)).toContain('cancelled')
-    expect(log.find((l) => l.action === 'cancelled')?.publisherId).toBe(scout.id)
+    expect(log.find((l) => l.action === 'cancelled')?.accountId).toBe(scout.id)
     expect(await listIds('gone')).not.toContain(item.id)
   })
 
@@ -1100,7 +1112,7 @@ describe('provenance', () => {
   it('an unofficial source does not vouch for an event', async () => {
     const [src] = await db
       .insert(ingestSources)
-      .values({ slug: `prov-agg-${stamp}`, name: 'Aggregator', kind: 'ical', url: 'https://agg.test/feed.ics', publisherId: feedScout.id, official: false })
+      .values({ slug: `prov-agg-${stamp}`, name: 'Aggregator', kind: 'ical', url: 'https://agg.test/feed.ics', accountId: feedScout.id, official: false })
       .returning()
     try {
       const e = await scoutEvent()
@@ -1116,7 +1128,7 @@ describe('provenance', () => {
   it('an organizer claim outranks the venue listing', async () => {
     const e = await scoutEvent()
     await newItem({ status: 'accepted', eventId: e.id })
-    await db.insert(eventOwners).values({ eventId: e.id, publisherId: alice.id, role: 'creator' })
+    await db.insert(eventOrganizers).values({ eventId: e.id, organizerId: aliceOrganizer.id, role: 'creator' })
     const detail = await detailOf(e.id)
     expect(detail.provenance).toBe('organizer')
     expect(detail.venue_listing).not.toBeNull()

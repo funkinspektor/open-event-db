@@ -48,7 +48,7 @@ export async function backfillMarkdownLineups(opts: { write: boolean; ids?: stri
       await logEdit(tx, {
         entityType: 'event',
         entityId: e.id,
-        publisherId: e.createdBy,
+        accountId: e.createdBy,
         action: 'updated',
         diff: { ...diff(eventSnapshot(e), eventSnapshot(updated)), via: 'cli' },
       })

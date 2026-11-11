@@ -5,6 +5,7 @@ import {
   editHistory,
   events,
   generateApiKey,
+  ingestSources,
   organizerMembers,
   organizers,
   type Account,
@@ -67,6 +68,8 @@ export async function createAccount(
 /** Removes everything the helpers created, in FK-safe order. */
 export async function cleanup(): Promise<void> {
   if (accountIds.length > 0) {
+    // ingest_sources.account_id restricts account deletion; their items cascade
+    await db.delete(ingestSources).where(inArray(ingestSources.accountId, accountIds))
     await db.delete(editHistory).where(inArray(editHistory.accountId, accountIds))
     // event_organizers rows go with the events
     await db.delete(events).where(inArray(events.createdBy, accountIds))
