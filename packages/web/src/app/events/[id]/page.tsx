@@ -3,7 +3,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { canEdit as canEditEvent } from '@open-event-db/shared'
 import { getEvent, isUuid } from '@/lib/api'
-import { getCurrentAccount } from '@/lib/session'
+import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
+import { InterestFromLogin } from '@/components/InterestFromLogin'
+import { InterestToggle } from '@/components/InterestToggle'
 import { permissionActor, permissionEvent } from '@/lib/permissions'
 import { absoluteUrl, shareMetadata } from '@/lib/site'
 import { dayKey, formatDate, formatDateTime } from '@/lib/format'
@@ -15,7 +17,7 @@ import { Toast } from '@/components/Toast'
 import { CONTACT_EMAIL } from '@/content/legal/operator'
 
 type Params = Promise<{ id: string }>
-type SearchParams = Promise<{ saved?: string }>
+type SearchParams = Promise<{ saved?: string; interest?: string }>
 
 const SAVED_MESSAGES: Record<string, string> = {
   created: 'Event created — it’s live now.',
@@ -29,10 +31,10 @@ const SAVED_MESSAGES: Record<string, string> = {
   merged: 'Linked — the feed’s fields are in.',
 }
 
-async function load(params: Params) {
+async function load(params: Params, cookie?: string | null) {
   const { id } = await params
   if (!isUuid(id)) notFound()
-  const event = await getEvent(id)
+  const event = await getEvent(id, cookie ?? undefined)
   if (!event) notFound()
   return event
 }
@@ -70,7 +72,10 @@ const SCHEMA_STATUS = {
 } as const
 
 export default async function EventPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
-  const [e, me, { saved }] = await Promise.all([load(params), getCurrentAccount(), searchParams])
+  const cookie = await getSessionCookieHeader()
+  const [e, me, { saved, interest }] = await Promise.all([load(params, cookie), getCurrentAccount(), searchParams])
+  // Logged out: the star opens the login. Logged in: it shows what the API says about this account.
+  const interested = me ? (e.interested ?? false) : null
   const savedMessage = saved ? SAVED_MESSAGES[saved] : undefined
   const canEdit = !!me && canEditEvent(permissionEvent(e), permissionActor(me))
   // Show who added a claimed event only when the adder isn't a member of its organizers (i.e. a scout)
@@ -120,6 +125,7 @@ export default async function EventPage({ params, searchParams }: { params: Para
     <article className="kk-container">
       <JsonLd data={jsonLd} />
       {savedMessage && canEdit && <Toast message={savedMessage} param="saved" />}
+      {interest === '1' && me?.onboarded && <InterestFromLogin eventId={e.id} />}
 
       <EventDetailBody
         title={e.title}
@@ -139,12 +145,15 @@ export default async function EventPage({ params, searchParams }: { params: Para
         imageUrl={e.image_url}
         back={{ href: '/', label: 'Events' }}
         topAction={
-          canEdit && (
-            <Link href={`/events/${e.id}/edit`} className="kk-btn kk-btn--outline">
-              {/* The button's gap spaces the two words */}
-              Edit<span className="hidden sm:inline">event</span>
-            </Link>
-          )
+          <div className="flex items-center gap-3">
+            <InterestToggle eventId={e.id} interested={interested} />
+            {canEdit && (
+              <Link href={`/events/${e.id}/edit`} className="kk-btn kk-btn--outline">
+                {/* The button's gap spaces the two words */}
+                Edit<span className="hidden sm:inline">event</span>
+              </Link>
+            )}
+          </div>
         }
       >
         {e.claimed ? (

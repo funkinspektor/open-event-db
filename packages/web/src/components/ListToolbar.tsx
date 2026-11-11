@@ -17,7 +17,16 @@ const SEARCH_DEBOUNCE_MS = 300
 // there; on phones a search button expands it over the whole toolbar, with Cancel to leave.
 // The filter button opens a panel with date range, categories and tags: a dropdown on desktop, a bottom sheet on phones.
 // Nothing changes until "Show events"; closing without applying drops the selection.
-export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: string[] }) {
+export function ListToolbar({
+  filters,
+  allTags,
+  loggedIn = false,
+}: {
+  filters: Filters
+  allTags: string[]
+  /** Shows the "Only mine" toggle. */
+  loggedIn?: boolean
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [phone, setPhone] = useState(false)
@@ -338,6 +347,16 @@ export function ListToolbar({ filters, allTags }: { filters: Filters; allTags: s
               </button>
               {open && !phone && panel}
             </div>
+            {loggedIn && (
+              <button
+                type="button"
+                className="kk-filterbtn kk-filterbtn--mine"
+                aria-pressed={!!filters.mine}
+                onClick={() => router.push(filtersToHref({ ...filters, mine: filters.mine ? undefined : true }))}
+              >
+                Only mine
+              </button>
+            )}
             {phone && (
               <button type="button" className="kk-searchbtn" aria-label="Search events" onClick={openSearch}>
                 <SearchIcon />

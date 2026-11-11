@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { EventSlim } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
 import { dayKey, formatDay, formatRowDate, formatTime, formatTimeRange, isHappeningNow, knownStart } from '@/lib/format'
+import { InterestToggle } from './InterestToggle'
 import { StatusBadge } from './StatusBadge'
 
 interface Props {
@@ -18,6 +19,8 @@ interface Props {
   now?: Date
   /** In the home list's Ongoing section: since when and until when, instead of the day's times. */
   ongoing?: boolean
+  /** Shows the interest star: whether the logged-in account marked the event, or `null` when logged out. Omitted = no star. */
+  interested?: boolean | null
 }
 
 /** Ongoing rows: "until 05:00" when it ends today, "until Sun 30.11" when later. */
@@ -38,6 +41,7 @@ export function EventRow({
   titleSize,
   now = new Date(),
   ongoing = false,
+  interested,
 }: Props) {
   const running = event.status !== 'cancelled' && isHappeningNow(event, now)
   const cancelled = event.status === 'cancelled'
@@ -93,6 +97,7 @@ export function EventRow({
                 {t}
               </Link>
             )))}
+        {interested !== undefined && <InterestToggle eventId={event.id} interested={interested} />}
       </div>
     </article>
   )

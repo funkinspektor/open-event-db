@@ -25,8 +25,9 @@ export const ALL_STATUSES = 'scheduled,postponed,cancelled'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUuid = (s: string) => UUID_RE.test(s)
 
-async function get<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store', headers: INTERNAL_HEADERS })
+async function get<T>(path: string, cookieHeader?: string): Promise<T | null> {
+  const headers = cookieHeader ? { ...INTERNAL_HEADERS, cookie: cookieHeader } : INTERNAL_HEADERS
+  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store', headers })
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`API ${res.status} for ${path}`)
   return (await res.json()) as T
@@ -37,14 +38,25 @@ export interface EventListResponse {
   meta: Meta
 }
 
-export async function getEvents(params: URLSearchParams): Promise<EventListResponse> {
-  const res = await get<EventListResponse>(`/api/v1/events?${params.toString()}`)
+/** `cookieHeader` is required for `mine=true` lists (the account's own events). */
+export async function getEvents(params: URLSearchParams, cookieHeader?: string): Promise<EventListResponse> {
+  const res = await get<EventListResponse>(`/api/v1/events?${params.toString()}`, cookieHeader)
   return res ?? { data: [], meta: { cursor: null, has_more: false } }
 }
 
-export async function getEvent(id: string): Promise<EventDetail | null> {
-  const res = await get<{ data: EventDetail }>(`/api/v1/events/${id}`)
+/** With the session cookie the detail also says whether the account marked the event (`interested`). */
+export async function getEvent(id: string, cookieHeader?: string): Promise<EventDetail | null> {
+  const res = await get<{ data: EventDetail }>(`/api/v1/events/${id}`, cookieHeader)
   return res?.data ?? null
+}
+
+/** Ids of the events the account marked, whose start lies in [from, to). Needs the session cookie. */
+export async function getInterestIds(cookie: string, from?: Date, to?: Date): Promise<Set<string>> {
+  const qs = new URLSearchParams()
+  if (from) qs.set('from', from.toISOString())
+  if (to) qs.set('to', to.toISOString())
+  const res = await get<{ data: { event_ids: string[] } }>(`/api/v1/accounts/me/interests?${qs}`, cookie)
+  return new Set(res?.data.event_ids ?? [])
 }
 
 export async function getVenue(id: string): Promise<Venue | null> {

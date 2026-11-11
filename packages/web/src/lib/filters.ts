@@ -21,6 +21,8 @@ export interface Filters {
   /** Custom range as Berlin calendar days (YYYY-MM-DD), both inclusive; only used when range is 'custom'. */
   from?: string
   to?: string
+  /** Only events the logged-in account marked ("Only mine"). */
+  mine?: boolean
 }
 
 type SP = Record<string, string | string[] | undefined>
@@ -39,6 +41,7 @@ export function parseFilters(sp: SP): Filters {
   const categories = parseCategories(first(sp.categories))
   const city = first(sp.city) ?? 'Berlin'
   const q = first(sp.q)?.trim().slice(0, 100) || undefined
+  const mine = first(sp.mine) === '1' ? true : undefined
 
   // A custom range (?from=…&to=…) wins over the preset ranges.
   let from = first(sp.from)
@@ -47,11 +50,11 @@ export function parseFilters(sp: SP): Filters {
     from = isDay(from) ? from : undefined
     to = isDay(to) ? to : undefined
     if (from && to && from > to) [from, to] = [to, from]
-    return { range: 'custom', categories, tags, city, q, from, to }
+    return { range: 'custom', categories, tags, city, q, from, to, mine }
   }
 
   const range = RANGES.some((r) => r.key === rangeRaw) ? (rangeRaw as Range) : 'upcoming'
-  return { range, categories, tags, city, q }
+  return { range, categories, tags, city, q, mine }
 }
 
 // Same DD.MM style as the day headings in the listing.
@@ -78,6 +81,7 @@ export function filtersToHref(f: Filters): string {
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   if (f.city !== 'Berlin') qs.set('city', f.city)
   if (f.q) qs.set('q', f.q)
+  if (f.mine) qs.set('mine', '1')
   const s = qs.toString()
   return s ? `/?${s}` : '/'
 }
@@ -163,6 +167,7 @@ export function buildApiQuery(f: Filters, limit = 20): URLSearchParams {
   if (f.categories.length) qs.set('categories', f.categories.join(','))
   if (f.tags.length) qs.set('tags', f.tags.join(','))
   if (f.q) qs.set('q', f.q)
+  if (f.mine) qs.set('mine', 'true')
   const { from, to } = f.range === 'custom' ? customRangeToDates(f.from, f.to) : rangeToDates(f.range)
   if (from) qs.set('from', from.toISOString())
   if (to) qs.set('to', to.toISOString())

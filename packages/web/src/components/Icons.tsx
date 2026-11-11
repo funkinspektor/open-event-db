@@ -62,6 +62,15 @@ export function FilterIcon() {
   )
 }
 
+/** Interest toggle: outline star, filled when the event is marked. */
+export function StarIcon({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg className="kk-icon" style={filled ? { fill: 'currentColor' } : undefined} viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85L12 3.5z" />
+    </svg>
+  )
+}
+
 export function SearchIcon() {
   return (
     <svg className="kk-icon h-[18px] w-[18px] text-muted" style={{ strokeWidth: 2 }} viewBox="0 0 24 24" aria-hidden>

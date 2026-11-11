@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { categoryLabel } from './categories'
-import { customRangeToDates, filtersToHref, parseFilters, rangeToDates } from './filters'
+import { buildApiQuery, customRangeToDates, filtersToHref, parseFilters, rangeToDates } from './filters'
 
 // October 2026, Berlin is on CEST (UTC+2): Fri 16th 00:00 = 2026-10-15T22:00Z, Mon 19th 00:00 = 2026-10-18T22:00Z
 const FRIDAY = '2026-10-15T22:00:00.000Z'
@@ -83,5 +83,25 @@ describe('categories', () => {
     expect(categoryLabel(['party', 'concert'])).toBe('Concert + Party')
     expect(categoryLabel(['party'])).toBe('Party')
     expect(categoryLabel([])).toBeNull()
+  })
+})
+
+describe('mine filter', () => {
+  const base = parseFilters({})
+
+  it('parses ?mine=1', () => {
+    expect(parseFilters({ mine: '1' }).mine).toBe(true)
+    expect(parseFilters({}).mine).toBeFalsy()
+    expect(parseFilters({ mine: '0' }).mine).toBeFalsy()
+  })
+
+  it('is kept by filtersToHref, only when set', () => {
+    expect(filtersToHref({ ...base, mine: true })).toContain('mine=1')
+    expect(filtersToHref(base)).toBe('/')
+  })
+
+  it('maps to mine=true in the API query, only when set', () => {
+    expect(buildApiQuery({ ...base, mine: true }).get('mine')).toBe('true')
+    expect(buildApiQuery(base).has('mine')).toBe(false)
   })
 })

@@ -21,6 +21,13 @@ interface Props {
   meta?: 'venue' | 'tags'
   showTags?: boolean
   titleSize?: number
+  /**
+   * Interest stars: ids the logged-in account marked, or `null` when logged out (the star opens the login).
+   * Omitted = no stars.
+   */
+  interestedIds?: string[] | null
+  /** Every row is marked (the "Only mine" list), including those loaded later. Needs the session on load more. */
+  allInterested?: boolean
 }
 
 export function EventList({
@@ -32,19 +39,27 @@ export function EventList({
   meta,
   showTags,
   titleSize,
+  interestedIds,
+  allInterested = false,
 }: Props) {
   const [events, setEvents] = useState(initialEvents)
   const [cursor, setCursor] = useState(initialCursor)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const now = new Date()
+  const marked = interestedIds ? new Set(interestedIds) : null
+  const interestedFor = (id: string) =>
+    allInterested ? true : interestedIds === undefined ? undefined : marked ? marked.has(id) : null
 
   async function loadMore() {
     if (!cursor) return
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_URL}/api/v1/events?${apiQuery}&cursor=${encodeURIComponent(cursor)}`)
+      const res = await fetch(
+        `${API_URL}/api/v1/events?${apiQuery}&cursor=${encodeURIComponent(cursor)}`,
+        allInterested ? { credentials: 'include' } : undefined,
+      )
       if (!res.ok) throw new Error(`API ${res.status}`)
       const json = (await res.json()) as { data: EventSlim[]; meta: { cursor: string | null } }
       setEvents((prev) => [...prev, ...json.data])
@@ -68,6 +83,7 @@ export function EventList({
       showTags={showTags}
       titleSize={titleSize}
       now={now}
+      interested={interestedFor(e.id)}
     />
   )
 
