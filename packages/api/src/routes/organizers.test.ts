@@ -24,7 +24,7 @@ describe('organizers', () => {
     const verified = await createOrganizer([account.id])
     const hidden = await createOrganizer([account.id], { verified: false })
 
-    const list = await app.inject({ url: `/api/v1/organizers?q=${encodeURIComponent('Test Organizer')}&limit=100` })
+    const list = await app.inject({ url: `/api/v1/organizers?q=${encodeURIComponent(verified.name)}` })
     expect(list.statusCode).toBe(200)
     const slugs = list.json().data.map((o: { slug: string }) => o.slug)
     expect(slugs).toContain(verified.slug)

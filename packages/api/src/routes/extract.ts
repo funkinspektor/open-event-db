@@ -7,7 +7,7 @@ import {
   EXTRACT_MAX_IMAGES,
 } from '@open-event-db/shared'
 import { ApiError } from '../errors.js'
-import { requireAuth } from '../auth.js'
+import { requireRights } from '../auth.js'
 import { lineupReading } from '../extract/lineup.js'
 import { isEmptyDraft, normalizeExtraction } from '../extract/normalize.js'
 import { sniffImageType } from '../images/sniff.js'
@@ -17,7 +17,7 @@ import { ExtractionError, vision, type ExtractImage, type ExtractionErrorKind } 
 const extractRateLimit = {
   max: EXTRACT_DAILY_LIMIT,
   timeWindow: '1 day',
-  keyGenerator: (req: FastifyRequest) => `extract:${req.publisher?.id ?? req.ip}`,
+  keyGenerator: (req: FastifyRequest) => `extract:${req.account?.id ?? req.ip}`,
 }
 
 const notAnImage = () =>
@@ -52,7 +52,7 @@ async function imagesFromBody(body: unknown): Promise<ExtractImage[]> {
 const lineupRateLimit = {
   max: EXTRACT_DAILY_LIMIT,
   timeWindow: '1 day',
-  keyGenerator: (req: FastifyRequest) => `extract-lineup:${req.publisher?.id ?? req.ip}`,
+  keyGenerator: (req: FastifyRequest) => `extract-lineup:${req.account?.id ?? req.ip}`,
 }
 
 const lineupBodySchema = z.object({ text: z.string().trim().min(1).max(10_000) })
@@ -87,7 +87,7 @@ export async function extractRoutes(app: FastifyInstance) {
 
   app.post(
     '/events/extract',
-    { onRequest: requireAuth, bodyLimit: EXTRACT_MAX_BYTES, config: { rateLimit: extractRateLimit } },
+    { onRequest: requireRights, bodyLimit: EXTRACT_MAX_BYTES, config: { rateLimit: extractRateLimit } },
     async (req) => {
       const images = await imagesFromBody(req.body)
 
@@ -107,7 +107,7 @@ export async function extractRoutes(app: FastifyInstance) {
   )
 
   // The editor's "Read from description": the same checked reading the ingest uses; nothing is stored
-  app.post('/events/extract-lineup', { onRequest: requireAuth, config: { rateLimit: lineupRateLimit } }, async (req) => {
+  app.post('/events/extract-lineup', { onRequest: requireRights, config: { rateLimit: lineupRateLimit } }, async (req) => {
     const { text } = lineupBodySchema.parse(req.body)
     let lineup
     try {

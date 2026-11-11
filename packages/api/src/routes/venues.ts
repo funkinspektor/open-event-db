@@ -6,7 +6,7 @@ import { db } from '../db.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { notFound } from '../errors.js'
 import { serializeCoordinates } from '../serializers.js'
-import { currentPublisher, requireAuth, writeRateLimit } from '../auth.js'
+import { currentPublisher, requireRights, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { serializeSlimEvent, slimEventColumns } from '../queries/events.js'
 
@@ -15,7 +15,7 @@ interface VenueCursor extends Record<string, string> {
   id: string
 }
 
-const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
+const write = { onRequest: requireRights, config: { rateLimit: writeRateLimit } }
 
 interface VenueFeed {
   slug: string

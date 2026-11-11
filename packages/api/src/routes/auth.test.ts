@@ -142,6 +142,15 @@ describe('magic link login', () => {
     expect(res.json().data.organizers).toEqual([])
   })
 
+  it('sends a magic link to an account without any rights', async () => {
+    const { account } = await createAccount({ organizer: false })
+    const before = outbox.length
+    const res = await app.inject({ method: 'POST', url: '/api/v1/auth/magic-link', payload: { email: account.email } })
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(outbox.length).toBe(before + 1))
+    expect(outbox[before]!.to).toBe(account.email)
+  })
+
   it('logout destroys the session', async () => {
     const out = await app.inject({ method: 'POST', url: '/api/v1/auth/logout', headers: { cookie } })
     expect(out.statusCode).toBe(200)

@@ -107,3 +107,12 @@ export const writeRateLimit = {
   timeWindow: '1 minute',
   keyGenerator: (req: FastifyRequest) => req.account?.id ?? req.ip,
 }
+
+/** Writing events or venues needs a right: being a scout or a member of a verified organizer. */
+export async function requireRights(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAuth(req, reply)
+  const a = currentAccount(req)
+  if (!a.isScout && a.organizerIds.length === 0) {
+    throw forbidden('This account has no rights to write events or venues', 'no_rights')
+  }
+}
