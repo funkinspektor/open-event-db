@@ -17,6 +17,7 @@ import {
 export const eventStatus = pgEnum('event_status', ['scheduled', 'cancelled', 'postponed'])
 export const eventCategory = pgEnum('event_category', ['concert', 'party'])
 export const eventOrganizerRole = pgEnum('event_organizer_role', ['creator', 'co_host'])
+export const magicLinkKind = pgEnum('magic_link_kind', ['login', 'signup', 'email_change'])
 export const organizerMemberRole = pgEnum('organizer_member_role', ['owner', 'member'])
 export const editHistoryEntityType = pgEnum('edit_history_entity_type', [
   'event',
@@ -51,6 +52,12 @@ export const accounts = pgTable('accounts', {
   isScout: boolean('is_scout').notNull().default(false),
   /** API keys act with the account's rights. */
   apiKeyHash: text('api_key_hash'),
+  /** Set when the account has finished onboarding (handle and display name chosen); null while it is still pending. */
+  onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+  /** When the person accepted the terms at sign-up; null for accounts created before sign-up existed. */
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+  /** Secret in the personal calendar feed URL. */
+  calendarToken: text('calendar_token').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -158,15 +165,41 @@ export const sessions = pgTable('sessions', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 
-export const magicLinkTokens = pgTable('magic_link_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  accountId: uuid('account_id')
-    .notNull()
-    .references(() => accounts.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  usedAt: timestamp('used_at', { withTimezone: true }),
-})
+export const magicLinkTokens = pgTable(
+  'magic_link_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Null for sign-up tokens: the account is created when the link is used. */
+    accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    kind: magicLinkKind('kind').notNull().default('login'),
+    returnTo: text('return_to'),
+    /** The address an email_change token switches the account to. */
+    newEmail: text('new_email'),
+    /** Set for sign-up tokens, for the per-IP cap. */
+    requestIp: text('request_ip'),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (t) => [index('magic_link_tokens_kind_ip_created_idx').on(t.kind, t.requestIp, t.createdAt)],
+)
+
+/** An account's "I'm interested" mark on an event. */
+export const eventInterests = pgTable(
+  'event_interests',
+  {
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.eventId] }), index('event_interests_event_idx').on(t.eventId)],
+)
 
 export const editHistory = pgTable('edit_history', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -258,6 +291,8 @@ export type Session = typeof sessions.$inferSelect
 export type NewSession = typeof sessions.$inferInsert
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect
 export type NewMagicLinkToken = typeof magicLinkTokens.$inferInsert
+export type EventInterest = typeof eventInterests.$inferSelect
+export type NewEventInterest = typeof eventInterests.$inferInsert
 export type EditHistoryEntry = typeof editHistory.$inferSelect
 export type NewEditHistoryEntry = typeof editHistory.$inferInsert
 export type IngestSource = typeof ingestSources.$inferSelect

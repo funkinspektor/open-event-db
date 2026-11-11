@@ -159,7 +159,8 @@ describe('migration 0022: accounts and organizers', () => {
 
   it('points every former publisher reference at accounts or organizers, with the same onDelete', async () => {
     const { sql, url } = db!
-    await migrateTo(url, null)
+    // Only up to 0022: later migrations add their own foreign keys to accounts
+    await migrateTo(url, 22)
 
     expect(
       await sql`
@@ -222,5 +223,60 @@ describe('migration 0022: accounts and organizers', () => {
     expect(await sql`select to_regclass('publishers') as p, to_regclass('accounts') as a`).toEqual([
       { p: 'publishers', a: null },
     ])
+  })
+})
+
+describe('migration 0023: onboarding, token kinds and event interests', () => {
+  let db: Awaited<ReturnType<typeof scratchDb>> | undefined
+  const ACC = '00000000-0000-4000-8000-0000000000a1'
+
+  beforeEach(async () => {
+    db = await scratchDb()
+    await migrateTo(db.url, 22)
+    const { sql } = db
+    await sql`insert into accounts (id, email, handle, display_name, created_at)
+      values (${ACC}, 'acc@example.com', 'acc', 'Acc', '2026-01-02T03:04:05Z')`
+    await sql`insert into magic_link_tokens (account_id, token_hash, expires_at) values (${ACC}, 'tok', now() + interval '1 hour')`
+    await sql`insert into venues (id, name, address, city) values (${VENUE}, 'Venue', 'Street 1', 'Berlin')`
+    await sql`insert into events (id, title, starts_at, venue_id, city, created_by)
+      values (${EV1}, 'E', '2026-12-01T20:00:00Z', ${VENUE}, 'Berlin', ${ACC})`
+  })
+
+  afterEach(async () => {
+    await db?.drop()
+    db = undefined
+  })
+
+  it('backfills onboarded_at and token email/kind, and allows account-less signup tokens', async () => {
+    const { sql, url } = db!
+    await migrateTo(url, null)
+
+    expect(await sql`select onboarded_at = created_at as same, terms_accepted_at, calendar_token from accounts`).toEqual([
+      { same: true, terms_accepted_at: null, calendar_token: null },
+    ])
+    expect(await sql`select email, kind, account_id from magic_link_tokens`).toEqual([
+      { email: 'acc@example.com', kind: 'login', account_id: ACC },
+    ])
+    await sql`insert into magic_link_tokens (account_id, email, kind, token_hash, expires_at, request_ip)
+      values (null, 'new@example.com', 'signup', 'tok2', now() + interval '1 hour', '203.0.113.1')`
+    expect(await sql`select count(*)::int as n from magic_link_tokens where kind = 'signup'`).toEqual([{ n: 1 }])
+  })
+
+  it('cascades event_interests on event and account deletion', async () => {
+    const { sql, url } = db!
+    await migrateTo(url, null)
+    const EV3 = '00000000-0000-4000-8000-000000000022'
+    await sql`insert into events (id, title, starts_at, venue_id, city, created_by)
+      values (${EV3}, 'E3', '2026-12-03T20:00:00Z', ${VENUE}, 'Berlin', ${ACC})`
+    await sql`insert into event_interests (account_id, event_id) values (${ACC}, ${EV1}), (${ACC}, ${EV3})`
+
+    await sql`delete from events where id = ${EV1}`
+    expect(await sql`select event_id from event_interests`).toEqual([{ event_id: EV3 }])
+
+    const ACC2 = '00000000-0000-4000-8000-0000000000a2'
+    await sql`insert into accounts (id, email, handle, display_name) values (${ACC2}, 'b@example.com', 'b', 'B')`
+    await sql`insert into event_interests (account_id, event_id) values (${ACC2}, ${EV3})`
+    await sql`delete from accounts where id = ${ACC2}`
+    expect(await sql`select account_id from event_interests`).toEqual([{ account_id: ACC }])
   })
 })

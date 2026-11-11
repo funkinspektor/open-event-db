@@ -162,6 +162,13 @@
       "when": 1794424856310,
       "tag": "0022_accounts_organizers",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794435521924,
+      "tag": "0023_registration_interests",
+      "breakpoints": true
     }
   ]
 }
