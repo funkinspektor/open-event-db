@@ -142,7 +142,12 @@ Same rules, new subject. The actor becomes `{ id, is_scout, organizer_ids }` (id
 - `canEdit`: the actor is a member of any of the event's organizers.
 - `canCancel`, `canManageOrganizers`: the actor is a member of the event's **creator** organizer.
 
-Creating an event: an account that belongs to a verified organizer creates it **for that organizer** (creator). The request takes an optional `organizer_id`; it is required when the account belongs to more than one organizer and must be one of them. An account without an organizer creates unclaimed events if it is a scout, and is refused otherwise (until step 3). This is today's behavior expressed in the new model.
+Creating an event: the request takes an optional `organizer_id`.
+- With `organizer_id`: the event is created for that organizer (creator). The account must be a member of it and the organizer verified (403 `not_a_member` otherwise).
+- Without `organizer_id`: a **scout** creates an unclaimed event (a scout who is also an organizer member must not turn every scouted event into their collective's event); a non-scout member of exactly one verified organizer creates it for that organizer; a non-scout member of several gets 400 `organizer_required`; an account with neither right gets 403.
+- The web form shows a "Publish as" select whenever the account has more than one option (its verified organizers, plus "As scout, without organizer" for scouts). Scouts default to the scout option.
+
+This is today's behavior expressed in the new model.
 
 Login: today only verified publishers get a Magic Link, and `requireAuth` refuses writes from unverified ones. After step 1 every existing account may log in (accounts are still only created by the CLI, so this opens nothing), and write rights come only from `is_scout` and membership in a verified organizer. An account without either can log in and change its own settings, nothing else.
 
@@ -170,7 +175,7 @@ Zod schemas move accordingly: `packages/shared/src/publishers.ts` splits into `a
 - `/publishers/[slug]` → `/organizers/[slug]`; the old path answers with a permanent redirect so shared links keep working.
 - `/profile` becomes **account settings** (display name, handle, email read-only, API key) with one section per organizer the account belongs to (name, slug, links) — editing goes to `PUT /organizers/:slug`.
 - Dashboard: members see the events of their organizers; scouts see the events they added (as today). An account that is both sees both, in two sections.
-- Event form: if the account belongs to more than one organizer, a "Publish as" select; otherwise nothing new.
+- Event form: a "Publish as" select whenever the account has more than one option (see 1.3); otherwise nothing new.
 - Co-host editor: picks organizers instead of publishers; label stays "Co-hosts".
 - `lib/session.ts`, header user menu, badges and copy: "publisher" → "organizer" wording where it is user-visible.
 
