@@ -72,7 +72,13 @@ beforeAll(async () => {
   await db.insert(sessions).values({ accountId: victimId, tokenHash: `s-${tag}`, expiresAt })
   await db
     .insert(magicLinkTokens)
-    .values({ accountId: victimId, email: `v-${tag}@example.test`, tokenHash: `m-${tag}`, expiresAt })
+    .values([
+      { accountId: victimId, email: `v-${tag}@example.test`, tokenHash: `m-${tag}`, expiresAt },
+      // sign-up token for the address, not tied to the account; other casing
+      { accountId: null, kind: 'signup', email: `V-${tag}@Example.test`, tokenHash: `ms-${tag}`, expiresAt },
+      { accountId: otherId, kind: 'email_change', email: `v-${tag}@example.test`, newEmail: `v-${tag}@example.test`, tokenHash: `me-${tag}`, expiresAt },
+      { accountId: otherId, email: `o-${tag}@example.test`, tokenHash: `mo-${tag}`, expiresAt },
+    ])
 })
 
 afterAll(async () => {
@@ -103,6 +109,10 @@ describe('accounts', () => {
     expect(a!.termsAcceptedAt).not.toBeNull()
     expect(await db.select().from(sessions).where(eq(sessions.accountId, victimId))).toHaveLength(0)
     expect(await db.select().from(magicLinkTokens).where(eq(magicLinkTokens.accountId, victimId))).toHaveLength(0)
+    const left = await db.select({ h: magicLinkTokens.tokenHash }).from(magicLinkTokens).where(inArray(magicLinkTokens.tokenHash, [`m-${tag}`, `ms-${tag}`, `me-${tag}`, `mo-${tag}`]))
+    expect(left.map((r) => r.h)).toEqual([`mo-${tag}`])
+    const [h] = await db.select().from(editHistory).where(eq(editHistory.entityId, victimId))
+    expect(h!.diff).toEqual({ via: 'cli' })
     expect(await db.select().from(organizerMembers).where(eq(organizerMembers.accountId, victimId))).toHaveLength(0)
     expect(await db.select().from(eventInterests).where(eq(eventInterests.accountId, victimId))).toHaveLength(0)
     const [ev] = await db.select().from(events).where(eq(events.id, ownEventId))

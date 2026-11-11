@@ -6,10 +6,10 @@ import { generateToken, accounts, magicLinkTokens, organizerMembers, organizers,
 import { db } from '../db.js'
 import { email, type MagicLinkKind } from '../email.js'
 import { ApiError, unauthorized } from '../errors.js'
-import { SESSION_COOKIE, SESSION_TTL_MS, authenticate } from '../auth.js'
+import { SESSION_COOKIE, SESSION_TTL_MS, authenticate, type AuthAccount, type AuthMethod } from '../auth.js'
 
 const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
-const API_PUBLIC_URL = process.env.API_PUBLIC_URL ?? 'http://localhost:3001'
+export const API_PUBLIC_URL = process.env.API_PUBLIC_URL ?? 'http://localhost:3001'
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000
 const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000
 const SIGNUP_CAP_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -19,7 +19,7 @@ const SIGNUP_MAILS_PER_IP_PER_DAY = Number(process.env.SIGNUP_MAILS_PER_IP_PER_D
 
 // In production web and API run on sibling subdomains (kellerkompass.de / api.kellerkompass.de), so the
 // cookie needs COOKIE_DOMAIN=kellerkompass.de for the web server to see it. Locally host-only is fine.
-const cookieOptions = {
+export const cookieOptions = {
   path: '/',
   httpOnly: true,
   sameSite: 'lax' as const,
@@ -161,6 +161,37 @@ async function accountForSignup(tx: Tx, address: string): Promise<string> {
   throw new Error('could not create an account for the sign-up link')
 }
 
+/** The /auth/me payload: the account with all its memberships, verified or not (the settings page lists both). */
+export async function accountMe(
+  a: Pick<AuthAccount, 'id' | 'email' | 'handle' | 'displayName' | 'isScout' | 'apiKeyHash' | 'onboardedAt' | 'calendarToken'>,
+  authMethod: AuthMethod,
+): Promise<AccountMe> {
+  const memberships = await db
+    .select({
+      id: organizers.id,
+      name: organizers.name,
+      slug: organizers.slug,
+      role: organizerMembers.role,
+      verified: organizers.verified,
+    })
+    .from(organizerMembers)
+    .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
+    .where(eq(organizerMembers.accountId, a.id))
+    .orderBy(asc(organizers.name), asc(organizers.id))
+  return {
+    id: a.id,
+    email: a.email,
+    handle: a.handle,
+    display_name: a.displayName,
+    is_scout: a.isScout,
+    has_api_key: a.apiKeyHash !== null,
+    auth_method: authMethod,
+    onboarded: a.onboardedAt !== null,
+    has_calendar: a.calendarToken !== null,
+    organizers: memberships,
+  }
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/magic-link', { config: { rateLimit: magicLinkRateLimit } }, async (req, reply) => {
     // Before any DB work, and the same for every address.
@@ -195,7 +226,10 @@ export async function authRoutes(app: FastifyInstance) {
     if (!token) return reply.redirect(`${WEB_URL}/login?error=invalid`)
 
     const now = new Date()
-    const claimed = await db.transaction(async (tx) => {
+    type Claimed =
+      | { type: 'session'; sessionToken: string; returnTo: string | null }
+      | { type: 'email'; outcome: 'changed' | 'taken'; oldEmail: string; newEmail: string }
+    const claimed: Claimed | null = await db.transaction(async (tx) => {
       // Claim the token in one statement so two concurrent clicks can't both use it.
       const [t] = await tx
         .update(magicLinkTokens)
@@ -205,35 +239,78 @@ export async function authRoutes(app: FastifyInstance) {
             eq(magicLinkTokens.tokenHash, sha256(token)),
             isNull(magicLinkTokens.usedAt),
             gt(magicLinkTokens.expiresAt, now),
-            // email_change links are consumed by their own handler
-            inArray(magicLinkTokens.kind, ['login', 'signup']),
           ),
         )
         .returning({
           accountId: magicLinkTokens.accountId,
           kind: magicLinkTokens.kind,
           email: magicLinkTokens.email,
+          newEmail: magicLinkTokens.newEmail,
           returnTo: magicLinkTokens.returnTo,
         })
       if (!t) return null
 
-      const accountId = t.accountId ?? (await accountForSignup(tx, t.email))
+      if (t.kind === 'email_change') {
+        if (!t.accountId || !t.newEmail) return null
+        const [account] = await tx.select().from(accounts).where(eq(accounts.id, t.accountId)).limit(1)
+        if (!account) return null
+        const newEmail = t.newEmail.toLowerCase()
+        const oldEmail = account.email
+        if (oldEmail.toLowerCase() === newEmail) return { type: 'email', outcome: 'changed', oldEmail, newEmail }
+        const [taken] = await tx
+          .select({ id: accounts.id })
+          .from(accounts)
+          .where(sql`lower(${accounts.email}) = ${newEmail}`)
+          .limit(1)
+        if (taken) return { type: 'email', outcome: 'taken', oldEmail, newEmail }
+        try {
+          // A savepoint: losing a race on the unique email must not abort the surrounding transaction.
+          await tx.transaction((sp) =>
+            sp.update(accounts).set({ email: newEmail, updatedAt: now }).where(eq(accounts.id, account.id)),
+          )
+        } catch (err) {
+          if (!isUniqueViolation(err)) throw err
+          return { type: 'email', outcome: 'taken', oldEmail, newEmail }
+        }
+        // Links sent to the old address must not outlive it; other pending changes are void too.
+        await tx
+          .delete(magicLinkTokens)
+          .where(
+            and(
+              eq(magicLinkTokens.accountId, account.id),
+              isNull(magicLinkTokens.usedAt),
+              inArray(magicLinkTokens.kind, ['login', 'email_change']),
+            ),
+          )
+        return { type: 'email', outcome: 'changed', oldEmail, newEmail }
+      }
+
+      let accountId: string
+      if (t.accountId) {
+        // A login link is only good for the address it was sent to.
+        const [a] = await tx.select({ email: accounts.email }).from(accounts).where(eq(accounts.id, t.accountId)).limit(1)
+        if (!a || a.email.toLowerCase() !== t.email.toLowerCase()) return null
+        accountId = t.accountId
+      } else {
+        accountId = await accountForSignup(tx, t.email)
+      }
       const s = generateToken()
       await tx.insert(sessions).values({
         accountId,
         tokenHash: s.hash,
         expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
       })
-      return { sessionToken: s.token, returnTo: safeReturnTo(t.returnTo) }
+      return { type: 'session', sessionToken: s.token, returnTo: safeReturnTo(t.returnTo) }
     })
 
-    if (!claimed) {
-      const [pending] = await db
-        .select({ kind: magicLinkTokens.kind })
-        .from(magicLinkTokens)
-        .where(and(eq(magicLinkTokens.tokenHash, sha256(token)), eq(magicLinkTokens.kind, 'email_change')))
-        .limit(1)
-      return reply.redirect(`${WEB_URL}/login?error=${pending ? 'invalid' : 'expired'}`)
+    if (!claimed) return reply.redirect(`${WEB_URL}/login?error=expired`)
+    if (claimed.type === 'email') {
+      if (claimed.outcome === 'changed' && claimed.oldEmail.toLowerCase() !== claimed.newEmail) {
+        await email.transport
+          .sendEmailChangedNotice({ to: claimed.oldEmail, newEmail: claimed.newEmail })
+          .catch((err) => req.log.error({ err }, 'sending email-change notice failed'))
+      }
+      return reply.redirect(`${WEB_URL}/profile?email=${claimed.outcome}`)
     }
     const { sessionToken, returnTo } = claimed
 
@@ -255,31 +332,6 @@ export async function authRoutes(app: FastifyInstance) {
     await authenticate(req)
     const a = req.account
     if (!a || !req.authMethod) throw unauthorized()
-    // All memberships, verified or not: the settings page lists both
-    const memberships = await db
-      .select({
-        id: organizers.id,
-        name: organizers.name,
-        slug: organizers.slug,
-        role: organizerMembers.role,
-        verified: organizers.verified,
-      })
-      .from(organizerMembers)
-      .innerJoin(organizers, eq(organizers.id, organizerMembers.organizerId))
-      .where(eq(organizerMembers.accountId, a.id))
-      .orderBy(asc(organizers.name), asc(organizers.id))
-    const data: AccountMe = {
-      id: a.id,
-      email: a.email,
-      handle: a.handle,
-      display_name: a.displayName,
-      is_scout: a.isScout,
-      has_api_key: a.apiKeyHash !== null,
-      auth_method: req.authMethod,
-      onboarded: a.onboardedAt !== null,
-      has_calendar: a.calendarToken !== null,
-      organizers: memberships,
-    }
-    return { data }
+    return { data: await accountMe(a, req.authMethod) }
   })
 }

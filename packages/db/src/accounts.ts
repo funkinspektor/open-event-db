@@ -35,6 +35,7 @@ export async function soleMemberships(db: Db, accountId: string): Promise<Organi
 export async function deleteAccount(
   db: Db,
   accountId: string,
+  opts: { via?: 'cli' | 'self' } = {},
 ): Promise<{ orphanedOrganizers: OrganizerRef[]; eventCount: number }> {
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
@@ -45,6 +46,11 @@ export async function deleteAccount(
       .where(eq(events.createdBy, accountId))
     await tx.delete(sessions).where(eq(sessions.accountId, accountId))
     await tx.delete(magicLinkTokens).where(eq(magicLinkTokens.accountId, accountId))
+    // Sign-up and email-change tokens carry the address but may not point at the account
+    const [current] = await tx.select({ email: accounts.email }).from(accounts).where(eq(accounts.id, accountId))
+    if (current) {
+      await tx.delete(magicLinkTokens).where(sql`lower(${magicLinkTokens.email}) = ${current.email.toLowerCase()}`)
+    }
     await tx.delete(organizerMembers).where(eq(organizerMembers.accountId, accountId))
     await tx.delete(eventInterests).where(eq(eventInterests.accountId, accountId))
     // Profile history holds their old names
@@ -67,7 +73,7 @@ export async function deleteAccount(
       entityId: accountId,
       accountId,
       action: 'deleted',
-      diff: { via: 'cli' },
+      diff: { via: opts.via ?? 'cli' },
     })
     return { orphanedOrganizers, eventCount: row?.count ?? 0 }
   })
