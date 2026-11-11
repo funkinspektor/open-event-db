@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises'
 import { and, eq, isNull, or, sql } from 'drizzle-orm'
-import { ingestSourceConfigSchema } from '@open-event-db/shared'
+import { EVENT_TZ, ingestSourceConfigSchema } from '@open-event-db/shared'
 import { createDb } from './index.js'
 import {
   editHistory,
@@ -41,6 +41,9 @@ function usage(): never {
   pnpm db:cli set-email <slug> <email>                  Change a publisher's login email
   pnpm db:cli api-key <slug>                            Generate (or reset) the API key for a publisher
   pnpm db:cli claim-event <event_id> <publisher_slug>   Make a publisher the creator of an unclaimed event
+  pnpm db:cli copy-event <event_id> <YYYY-MM-DD> <title> [<YYYY-MM-DD> <title> ...] [--yes]
+                                                        Copy an event to other days, one copy per date and title: same
+                                                        Berlin times, venue, lineup, links, image and owners
   pnpm db:cli delete-event <event_id> [--yes]           Hard-delete an event (removal requests, moderation)
   pnpm db:cli delete-publisher <slug> [--yes]           Delete an account: personal data goes, its events stay
   pnpm db:cli ingest-add-source <slug> <name> <url> <scout_slug> [--kind ical|dunckerclub|urbanspree|berghain|slaughterhouse|squarespace|schokoladen|festsaal|lido|supamolly|beateuwe|so36|frannz] [--config '<json>'] [--venue <venue_id>] [--unofficial]
@@ -204,6 +207,84 @@ switch (cmd) {
         .where(and(eq(ingestItems.eventId, id), isNull(ingestItems.detachedAt)))
     })
     console.log(`"${event.title}" is now claimed by ${p.name}`)
+    break
+  }
+  case 'copy-event': {
+    const [id, ...pairs] = args
+    if (!isUuid(id) || pairs.length === 0 || pairs.length % 2) usage()
+    const copies: { day: string; title: string }[] = []
+    for (let i = 0; i < pairs.length; i += 2) {
+      const day = pairs[i]!
+      const title = pairs[i + 1]!.trim()
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00Z`))) fail(`Invalid date "${day}" (YYYY-MM-DD)`)
+      if (!title) fail(`Empty title for ${day}`)
+      copies.push({ day, title })
+    }
+    const [source] = await db.select().from(events).where(eq(events.id, id)).limit(1)
+    if (!source) fail(`No event with id "${id}"`)
+    const owners = await db
+      .select({ publisherId: eventOwners.publisherId, role: eventOwners.role, name: publishers.name })
+      .from(eventOwners)
+      .innerJoin(publishers, eq(publishers.id, eventOwners.publisherId))
+      .where(eq(eventOwners.eventId, id))
+    const creator = owners.find((o) => o.role === 'creator')
+
+    console.log(`Copying "${source.title}" (owners: ${owners.map((o) => o.name).join(', ') || 'none, unclaimed'})`)
+    for (const c of copies) console.log(`  ${c.day}  ${c.title}`)
+    if (!flags.has('--yes') && !(await confirm('Create these events?'))) fail('Aborted')
+
+    const tz = sql.raw(`'${EVENT_TZ}'`)
+    // Same Berlin wall-clock times on the new day; an end on a later day keeps that many days' distance
+    const startBerlin = sql`(${events.startsAt} at time zone ${tz})`
+    const endBerlin = sql`(${events.endsAt} at time zone ${tz})`
+    const created = await db.transaction(async (tx) => {
+      const rows: { id: string; title: string; startsAt: string; endsAt: string | null }[] = []
+      for (const c of copies) {
+        const day = sql`${c.day}::date`
+        const [row] = await tx.execute<{
+          id: string
+          title: string
+          starts_at: string
+          ends_at: string | null
+          starts_berlin: string
+          ends_berlin: string | null
+        }>(sql`
+          insert into events (title, description, lineup, starts_at, start_time_known, ends_at, venue_id, location_text,
+            city, categories, tags, links, created_by, status, recurrence, image_key)
+          select ${c.title}, description, lineup,
+            (${day} + ${startBerlin}::time) at time zone ${tz},
+            start_time_known,
+            case when ends_at is null then null
+              else (${day} + (${endBerlin}::date - ${startBerlin}::date) + ${endBerlin}::time) at time zone ${tz} end,
+            venue_id, location_text, city, categories, tags, links, created_by, 'scheduled', recurrence, image_key
+          from events where id = ${id}
+          returning id, title, starts_at::text, ends_at::text,
+            to_char(starts_at at time zone ${tz}, 'Dy DD.MM.YYYY HH24:MI') as starts_berlin,
+            to_char(ends_at at time zone ${tz}, 'Dy DD.MM.YYYY HH24:MI') as ends_berlin`)
+        if (!row) throw new Error('insert returned no row')
+        if (owners.length) {
+          await tx.insert(eventOwners).values(owners.map((o) => ({ eventId: row.id, publisherId: o.publisherId, role: o.role })))
+        }
+        // CLI actions log the affected publisher as actor: the creator, or who added the original
+        await tx.insert(editHistory).values({
+          entityType: 'event',
+          entityId: row.id,
+          publisherId: creator?.publisherId ?? source.createdBy,
+          action: 'created',
+          diff: {
+            title: { before: null, after: row.title },
+            starts_at: { before: null, after: row.starts_at },
+            ends_at: { before: null, after: row.ends_at },
+            copied_from: id,
+            via: 'cli',
+          },
+        })
+        rows.push({ id: row.id, title: row.title, startsAt: row.starts_berlin, endsAt: row.ends_berlin })
+      }
+      return rows
+    })
+    console.log('Created (Berlin time):')
+    for (const e of created) console.log(`  ${e.id}  ${e.title}  ${e.startsAt}${e.endsAt ? ` → ${e.endsAt}` : ''}`)
     break
   }
   case 'delete-event': {

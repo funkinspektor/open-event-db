@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { events, ingestItems } from '@open-event-db/db'
 import { db } from '../db.js'
 import { diff, logEdit } from '../history.js'
@@ -17,6 +17,16 @@ export interface ReplaceImageOptions {
    * image URL the event image now comes from. Logged with `via: 'ingest'`.
    */
   ingestItem?: { id: string; sourceUrl: string | null }
+}
+
+/** Copies of an event (`pnpm db:cli copy-event`) share its image object; it goes only with its last event. */
+async function deleteUnlessShared(store: ImageStore, key: string, eventId: string) {
+  const [other] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.imageKey, key), ne(events.id, eventId)))
+    .limit(1)
+  if (!other) await deleteQuietly(store, key)
 }
 
 async function deleteQuietly(store: ImageStore, key: string) {
@@ -85,6 +95,6 @@ export async function replaceEventImage(
     if (key) await deleteQuietly(store, key)
     return { applied: false, key: null }
   }
-  if (previous) await deleteQuietly(store, previous)
+  if (previous) await deleteUnlessShared(store, previous, eventId)
   return { applied: true, key }
 }

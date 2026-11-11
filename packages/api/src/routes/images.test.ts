@@ -126,6 +126,20 @@ describe('PUT/DELETE /events/:id/image', () => {
     expect(res.json().data.image_url).toMatch(/\.jpg$/)
   })
 
+  it('keeps an object that a copy of the event still shows', async () => {
+    const id = await ownedEvent()
+    await upload(id, PNG)
+    const [original] = await db.select().from(events).where(eq(events.id, id))
+    const copy = await newEvent({ imageKey: original!.imageKey })
+    try {
+      await upload(id, JPEG, ownerKey, 'image/jpeg')
+      expect(store.objects.has(original!.imageKey!)).toBe(true)
+      expect(store.objects.size).toBe(2)
+    } finally {
+      await db.delete(events).where(eq(events.id, copy.id))
+    }
+  })
+
   it('removes the image', async () => {
     const id = await ownedEvent()
     await upload(id, PNG)
