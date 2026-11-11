@@ -19,5 +19,5 @@ Behörden der Mitgliedstaaten, die EU-Kommission, das Europäische Gremium für 
 
 ## Inhalte von Nutzerinnen und Nutzern
 
-Events auf Kellerkompass werden von Publishern und Scouts eingetragen. Rechtswidrige Inhalte kannst du über den Link „Report event“ auf jeder Event-Seite oder per E-Mail an [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}) melden. Wie wir mit Meldungen umgehen, steht in den [Nutzungsbedingungen](/nutzungsbedingungen).
+Events auf Kellerkompass werden von Veranstalter:innen und Scouts eingetragen. Rechtswidrige Inhalte kannst du über den Link „Report event“ auf jeder Event-Seite oder per E-Mail an [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}) melden. Wie wir mit Meldungen umgehen, steht in den [Nutzungsbedingungen](/nutzungsbedingungen).
 `

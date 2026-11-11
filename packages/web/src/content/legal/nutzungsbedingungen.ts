@@ -13,13 +13,13 @@ Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underg
 
 1. Accounts gibt es nur auf Einladung. Ein Anspruch auf einen Account besteht nicht.
 2. Du musst mindestens 18 Jahre alt sein.
-3. Accounts können auch für Kollektive, Reihen oder Venues angelegt werden. Verantwortlich ist dann die Person, die den Account angelegt hat.
+3. Für Kollektive, Reihen oder Venues können Organizer-Profile angelegt werden, die von Accounts verwaltet werden. Verantwortlich ist dann die Person, die das Profil angelegt hat.
 4. Halte dein E-Mail-Postfach und deinen API-Schlüssel geschützt. Was über deinen Account passiert, wird dir zugerechnet.
 
 ## § 4 Rollen
 
-- **Publisher** tragen eigene Events ein und können weitere Personen als Mitverantwortliche hinzufügen. Wer ein Event angelegt hat, kann es absagen und löschen.
-- **Scouts** tragen Events anderer Veranstaltender ein. Diese Events werden als „Scout“ gekennzeichnet, haben keinen Eigentümer und können von allen Scouts bearbeitet werden. Die tatsächlichen Veranstaltenden können sie übernehmen.
+- **Veranstalter:innen** tragen eigene Events ein und können weitere Personen als Mitverantwortliche hinzufügen. Wer ein Event angelegt hat, kann es absagen und löschen.
+- **Scouts** tragen Events anderer Veranstaltender ein. Auf der Event-Seite steht, dass ein Scout sie hinzugefügt hat. Diese Events haben keinen Eigentümer und können von allen Scouts bearbeitet werden. Die tatsächlichen Veranstaltenden können sie übernehmen.
 - Rollen und Verifizierungen vergeben wir nach eigenem Ermessen.
 
 ## § 5 Regeln für Inhalte

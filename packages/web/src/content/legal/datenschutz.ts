@@ -17,7 +17,9 @@ Bei jedem Aufruf entstehen Server-Logs mit IP-Adresse, Zeitpunkt, aufgerufener A
 
 Event-Seiten und Feed sind ohne Account nutzbar. Dabei verarbeiten wir nur die Daten aus Abschnitt 2, 7 und 8.
 
-## 4. Accounts für Publisher und Scouts
+## 4. Accounts und Organizer-Profile
+
+Accounts sind für Personen: Man meldet sich mit seiner E-Mail-Adresse an. Organizer-Profile sind öffentliche Profile von Veranstalter:innen, etwa Kollektiven, Reihen oder Venues, die von ihren Mitgliedern (Accounts) verwaltet werden.
 
 Für einen Account verarbeiten wir deine E-Mail-Adresse, deinen Anzeigenamen, deine Rolle, wer dich eingeladen hat, deine Beiträge mit Änderungshistorie und, falls angefordert, einen API-Schlüssel, den wir nur als Hash speichern. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Nutzungsvertrag). Wir speichern diese Daten, bis du deinen Account löschst.
 
@@ -33,7 +35,7 @@ Login-Links verschicken wir über Scaleway Transactional Email (Region Paris). D
 
 ## 6. Events aus Bildern erfassen
 
-Publisher und Scouts können Flyer oder Screenshots hochladen, um das Formular vorauszufüllen. Das Bild wird an Scaleway Generative APIs (Region Paris) geschickt, dort ausgewertet und von uns nicht gespeichert. Gespeichert wird nur, was du danach im Formular bestätigst. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Bitte lade nur Bilder hoch, die du dafür verwenden darfst.
+Veranstalter:innen und Scouts können Flyer oder Screenshots hochladen, um das Formular vorauszufüllen. Das Bild wird an Scaleway Generative APIs (Region Paris) geschickt, dort ausgewertet und von uns nicht gespeichert. Gespeichert wird nur, was du danach im Formular bestätigst. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Bitte lade nur Bilder hoch, die du dafür verwenden darfst.
 
 ## 7. Karten
 
@@ -53,7 +55,7 @@ Meldest du einen Inhalt, verarbeiten wir die Meldung, deine Kontaktdaten und uns
 
 ## 11. Daten über Dritte in Events
 
-Events enthalten oft Namen von Künstlerinnen und Künstlern, DJs, Kollektiven und Veranstaltenden. Diese Angaben stammen von Publishern, Scouts oder aus öffentlichen Ankündigungen wie Flyern und Event-Seiten. Wir veröffentlichen sie, um über öffentliche Kulturveranstaltungen zu informieren (Art. 6 Abs. 1 lit. f DSGVO). Wer genannt ist und das nicht möchte, kann jederzeit widersprechen, siehe Abschnitt 13.
+Events enthalten oft Namen von Künstlerinnen und Künstlern, DJs, Kollektiven und Veranstaltenden. Diese Angaben stammen von Veranstalter:innen, Scouts oder aus öffentlichen Ankündigungen wie Flyern und Event-Seiten. Wir veröffentlichen sie, um über öffentliche Kulturveranstaltungen zu informieren (Art. 6 Abs. 1 lit. f DSGVO). Wer genannt ist und das nicht möchte, kann jederzeit widersprechen, siehe Abschnitt 13.
 
 ## 12. Offene Daten und API
 

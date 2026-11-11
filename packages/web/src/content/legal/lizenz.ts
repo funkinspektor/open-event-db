@@ -22,7 +22,7 @@ Die Event-Daten von Kellerkompass sind offen. Die Datenbank steht unter der [Ope
 
 ## Bedingungen für die API
 
-1. Lesender Zugriff auf öffentliche Event-Daten ist frei. Schreibender Zugriff erfordert einen API-Schlüssel, den Publisher in ihren Kontoeinstellungen anfordern können.
+1. Lesender Zugriff auf öffentliche Event-Daten ist frei. Schreibender Zugriff erfordert einen API-Schlüssel, den du in deinen Kontoeinstellungen anfordern kannst, und die passenden Rechte als Veranstalter:in oder Scout.
 2. Halte die Rate-Limits ein und frage Daten nicht unnötig oft ab.
 3. Gib in deinen Anfragen einen aussagekräftigen User-Agent mit Kontaktmöglichkeit an.
 4. Die API ist unentgeltlich und ohne Garantie für Verfügbarkeit oder unveränderte Schnittstellen. Größere Änderungen kündigen wir nach Möglichkeit vorher an.
@@ -31,7 +31,7 @@ Die Event-Daten von Kellerkompass sind offen. Die Datenbank steht unter der [Ope
 
 ## Datenschutz für Nachnutzende
 
-Die Daten enthalten Namen von Personen, etwa Künstlerinnen, Künstler und Publisher. Wer sie weiterverarbeitet, ist dafür datenschutzrechtlich selbst verantwortlich. Bitte:
+Die Daten enthalten Namen von Personen, etwa Künstlerinnen, Künstler und Veranstalter:innen. Wer sie weiterverarbeitet, ist dafür datenschutzrechtlich selbst verantwortlich. Bitte:
 
 - gleiche deine Kopie regelmäßig ab, damit gelöschte, korrigierte und abgesagte Events auch bei dir verschwinden
 - nutze die Daten nicht, um Profile einzelner Personen zu erstellen
