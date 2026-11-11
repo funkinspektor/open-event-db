@@ -133,12 +133,12 @@ describe('detach synced events', () => {
     expect(await detachedAt(itemId)).not.toBeNull()
   })
 
-  // The CLI claim-event is not ported yet; re-enable once claim-event hands an event to an organizer
-  it.skip('detaches on CLI claim-event', async () => {
+  it('detaches on CLI claim-event', async () => {
     const { eventId, itemId } = await syncedEvent()
     execFileSync(process.execPath, ['--import', 'tsx', cliPath, 'claim-event', eventId, owner.slug], {
       cwd: dbDir,
       encoding: 'utf8',
+      env: process.env,
     })
     expect(await detachedAt(itemId)).not.toBeNull()
   })

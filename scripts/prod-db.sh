@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # Runs a command against the production database, e.g. migrations or the admin CLI:
 #   scripts/prod-db.sh pnpm db:migrate
-#   scripts/prod-db.sh pnpm db:cli create-publisher "Name" slug someone@example.org
+#   scripts/prod-db.sh pnpm db:cli create-account some-handle someone@example.org --name "Some Name"
 # Host, port, user and database come from PROD_DB_* in the repo-root .env (kept out of the public repo).
 # The password is asked for on every run and only lives in this process' environment.
 set -euo pipefail

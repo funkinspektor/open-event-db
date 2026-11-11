@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { desc, eq, inArray } from 'drizzle-orm'
@@ -53,6 +55,18 @@ afterAll(async () => {
   await db.delete(venues).where(eq(venues.name, `Created Venue ${stamp}`))
   await app.close()
 })
+
+// The CLI subprocess inherits this process's environment, so it talks to the same DATABASE_URL as the tests
+const cliPath = fileURLToPath(new URL('../../../db/src/cli.ts', import.meta.url))
+const dbDir = fileURLToPath(new URL('../../../db', import.meta.url))
+const cli = (...args: (string | { stdio: 'pipe' })[]) => {
+  const opts = args.find((a): a is { stdio: 'pipe' } => typeof a === 'object')
+  return execFileSync(
+    process.execPath,
+    ['--import', 'tsx', cliPath, ...args.filter((a): a is string => typeof a === 'string')],
+    { cwd: dbDir, encoding: 'utf8', env: process.env, ...opts },
+  )
+}
 
 describe('auth middleware', () => {
   it('rejects unauthenticated writes with 401', async () => {
@@ -637,9 +651,8 @@ describe('scouts and unclaimed events', () => {
     expect(unknown.statusCode).toBe(400)
   })
 
-  it('once claimed for an organizer, the event locks scouts out', async () => {
-    // Claiming itself is done by the CLI; here the organizer row is inserted directly
-    await db.insert(eventOrganizers).values({ eventId, organizerId: orgA.id, role: 'creator' })
+  it('claim-event makes the organizer creator and locks scouts out', async () => {
+    cli('claim-event', eventId, orgA.slug)
 
     const detail = await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })
     const e = detail.json().data
@@ -655,6 +668,14 @@ describe('scouts and unclaimed events', () => {
       payload: { title: 'Too late' },
     })
     expect(byScout.statusCode).toBe(403)
+
+    // The CLI logs the organizer's owner as actor
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    const claim = history.find((h) => h.action === 'ownership_changed')
+    expect(claim?.accountId).toBe(alice.id)
+    expect(claim?.diff).toEqual(expect.objectContaining({ via: 'cli' }))
+
+    expect(() => cli('claim-event', eventId, orgB.slug, { stdio: 'pipe' })).toThrow()
   })
 
   it('scouts can cancel unclaimed events via DELETE', async () => {
@@ -671,6 +692,39 @@ describe('scouts and unclaimed events', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.status).toBe('cancelled')
+  })
+
+  it('delete-event hard-deletes and leaves only a content-free "deleted" history row', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/events',
+      headers: auth(keyS),
+      payload: { title: 'Scouted Delete', starts_at: '2030-02-05T22:00:00Z', venue_id: venue.id },
+    })
+    const id = created.json().data.id
+    cli('delete-event', id)
+
+    const gone = await app.inject({ method: 'GET', url: `/api/v1/events/${id}` })
+    expect(gone.statusCode).toBe(404)
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, id))
+    expect(history).toEqual([expect.objectContaining({ action: 'deleted', accountId: scout.id, diff: { via: 'cli' } })])
+  })
+
+  it('delete-event asks before deleting a claimed event', async () => {
+    // eventId was claimed by Alice's organizer above; answering anything but "y" aborts
+    expect(() =>
+      execFileSync(process.execPath, ['--import', 'tsx', cliPath, 'delete-event', eventId], {
+        cwd: dbDir,
+        input: 'n\n',
+        stdio: 'pipe',
+      }),
+    ).toThrow()
+    const orgs = await db.select().from(eventOrganizers).where(eq(eventOrganizers.eventId, eventId))
+    expect(orgs).toHaveLength(1)
+
+    cli('delete-event', eventId, '--yes')
+    const history = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    expect(history).toEqual([expect.objectContaining({ action: 'deleted', accountId: alice.id })])
   })
 })
 

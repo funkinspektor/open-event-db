@@ -1,5 +1,5 @@
 import { createDb } from './index.js'
-import { events, eventOwners, publishers, venues } from './schema.js'
+import { accounts, editHistory, events, eventOrganizers, organizerMembers, organizers, venues } from './schema.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
 const db = createDb(url)
@@ -15,17 +15,38 @@ function at(daysAhead: number, utcHour: number, minute = 0): Date {
 // days until the next Friday (1–7), so recurring "Friday" seed events land on a real Friday
 const toFriday = ((5 - new Date().getUTCDay() + 7) % 7) || 7
 
-await db.delete(eventOwners)
+await db.delete(editHistory)
+await db.delete(eventOrganizers)
 await db.delete(events)
 await db.delete(venues)
-await db.delete(publishers)
+await db.delete(organizerMembers)
+await db.delete(organizers)
+await db.delete(accounts)
 
 const [alice] = await db
-  .insert(publishers)
+  .insert(accounts)
+  .values({ handle: 'letzte-welle', displayName: 'Letzte Welle', email: 'letzte.welle@example.com' })
+  .returning()
+if (!alice) throw new Error('failed to insert seed account')
+
+const [bob] = await db
+  .insert(accounts)
+  .values({ handle: 'nachtagentur', displayName: 'Nachtagentur', email: 'crew@nachtagentur.example' })
+  .returning()
+if (!bob) throw new Error('failed to insert seed account')
+
+// Scouts add events for organizers who aren't on the platform yet; those events stay unclaimed
+const [scout] = await db
+  .insert(accounts)
+  .values({ handle: 'sebastian', displayName: 'Sebastian', email: 'scout@example.com', isScout: true })
+  .returning()
+if (!scout) throw new Error('failed to insert seed scout')
+
+const [orgAlice] = await db
+  .insert(organizers)
   .values({
     name: 'Letzte Welle',
     slug: 'letzte-welle',
-    email: 'letzte.welle@example.com',
     verified: true,
     links: {
       website: 'https://letztewelle.example',
@@ -33,34 +54,18 @@ const [alice] = await db
     },
   })
   .returning()
-if (!alice) throw new Error('failed to insert seed publisher')
+if (!orgAlice) throw new Error('failed to insert seed organizer')
 
-const [bob] = await db
-  .insert(publishers)
-  .values({
-    name: 'Nachtagentur',
-    slug: 'nachtagentur',
-    email: 'crew@nachtagentur.example',
-    verified: true,
-    invitedBy: alice.id,
-    links: { telegram: 'https://t.me/nachtagentur' },
-  })
+const [orgBob] = await db
+  .insert(organizers)
+  .values({ name: 'Nachtagentur', slug: 'nachtagentur', verified: true, links: { telegram: 'https://t.me/nachtagentur' } })
   .returning()
-if (!bob) throw new Error('failed to insert seed publisher')
+if (!orgBob) throw new Error('failed to insert seed organizer')
 
-// Scouts add events for organizers who aren't on the platform yet; those events stay unclaimed
-const [scout] = await db
-  .insert(publishers)
-  .values({
-    name: 'Sebastian',
-    slug: 'sebastian',
-    email: 'scout@example.com',
-    verified: true,
-    isPublisher: false,
-    isScout: true,
-  })
-  .returning()
-if (!scout) throw new Error('failed to insert seed scout')
+await db.insert(organizerMembers).values([
+  { organizerId: orgAlice.id, accountId: alice.id, role: 'owner' },
+  { organizerId: orgBob.id, accountId: bob.id, role: 'owner' },
+])
 
 const [rso] = await db
   .insert(venues)
@@ -98,8 +103,9 @@ type Seed = {
   links?: Record<string, string>
   status?: 'scheduled' | 'postponed' | 'cancelled'
   recurrence?: string
+  /** Account that added the event; the event belongs to that account's own organizer. */
   creator: string
-  coOwners?: string[]
+  coHosts?: string[]
 }
 
 const seeds: Seed[] = [
@@ -170,7 +176,7 @@ const seeds: Seed[] = [
     tags: ['live', 'electronic', 'modular'],
     status: 'cancelled',
     creator: bob.id,
-    coOwners: [alice.id],
+    coHosts: [orgAlice.id],
   },
   {
     title: 'Letzte Welle x Nachtagentur',
@@ -183,7 +189,7 @@ const seeds: Seed[] = [
     tags: ['techno', 'warehouse'],
     links: { ra: 'https://ra.co/events/example' },
     creator: alice.id,
-    coOwners: [bob.id],
+    coHosts: [orgBob.id],
   },
   {
     title: 'Day Party: Garden Edition',
@@ -208,7 +214,7 @@ const seeds: Seed[] = [
       facebook: 'https://facebook.com/events/example',
     },
     creator: alice.id,
-    coOwners: [bob.id],
+    coHosts: [orgBob.id],
   },
   {
     title: 'Listening Session: New Releases',
@@ -244,18 +250,15 @@ for (const s of seeds) {
   if (!event) throw new Error(`failed to insert seed event ${s.title}`)
 
   if (s.creator === scout.id) continue
-  await db.insert(eventOwners).values([
-    { eventId: event.id, publisherId: s.creator, role: 'creator' },
-    ...(s.coOwners ?? []).map((id) => ({
-      eventId: event.id,
-      publisherId: id,
-      role: 'co_owner' as const,
-    })),
+  await db.insert(eventOrganizers).values([
+    { eventId: event.id, organizerId: s.creator === alice.id ? orgAlice.id : orgBob.id, role: 'creator' },
+    ...(s.coHosts ?? []).map((organizerId) => ({ eventId: event.id, organizerId, role: 'co_host' as const })),
   ])
 }
 
 console.log('Seed complete:')
-console.log(`  publishers: ${alice.slug}, ${bob.slug} (scout: ${scout.slug})`)
+console.log(`  accounts: ${alice.handle}, ${bob.handle} (scout: ${scout.handle})`)
+console.log(`  organizers: ${orgAlice.slug}, ${orgBob.slug}`)
 console.log(`  venues: ${rso.name}, ${blank.name}`)
 console.log(`  events: ${seeds.length}`)
 
