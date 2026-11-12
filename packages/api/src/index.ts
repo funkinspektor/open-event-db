@@ -15,7 +15,9 @@ app.listen({ port, host }).catch((err) => {
 async function cleanup() {
   try {
     const removed = await cleanupExpiredAuth()
-    if (removed.tokens || removed.sessions) app.log.info(removed, 'removed expired auth tokens and sessions')
+    if (removed.tokens || removed.sessions || removed.accounts) {
+      app.log.info(removed, 'removed expired auth tokens, sessions and unonboarded accounts')
+    }
   } catch (err) {
     app.log.error({ err }, 'auth cleanup failed')
   }
