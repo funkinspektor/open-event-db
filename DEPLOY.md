@@ -61,7 +61,7 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 | `API_PUBLIC_URL` | `https://api.kellerkompass.de` |
 | `CORS_ORIGIN` | `https://kellerkompass.de` |
 | `COOKIE_DOMAIN` | `kellerkompass.de` |
-| `TRUST_PROXY` | `true` |
+| `TRUST_PROXY` | `loopback,linklocal,uniquelocal,100.64.0.0/10` — internal hops are trusted, the right-most untrusted address is the client. `true` would trust a client-sent `X-Forwarded-For` and let anyone pick their own rate-limit bucket |
 | `API_INTERNAL_TOKEN` 🔒 | `openssl rand -hex 32` — same value as on the web container |
 | `EMAIL_PROVIDER` | `scaleway` |
 | `SCALEWAY_SECRET_KEY` 🔒, `SCALEWAY_PROJECT_ID` | as in the local `.env` (TEM + Generative APIs key, not the deploy key) |
@@ -394,7 +394,12 @@ New optional API environment variables (the defaults are fine, set them only to 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SIGNUP_MAILS_PER_IP_PER_DAY` | `10` | sign-up mails per IP address per day (further requests get the same answer but no mail) |
+| `SIGNUP_MAILS_PER_DAY` | `500` | sign-up mails over all addresses per day; backstop if the per-IP cap is evaded (logged as `signupBackstop`, the person sees the same answer) |
 | `MAGIC_LINK_IP_LIMIT` | `20` | magic-link requests per IP address per window |
+| `CONTACT_EMAIL` | `kontakt@kellerkompass.de` | named in the "your email was changed" notice, which is also sent with it as Reply-To |
+
+IPv6 clients are limited per /64, not per address. The limiters are in memory, so the API container must run at
+**API max scale = 1** (scale to zero resets them, more instances multiply them).
 
 `WEB_URL` and `API_PUBLIC_URL` (see section 2) must be set: the sign-up, email-change and calendar links are built from them.
 
@@ -405,6 +410,10 @@ After the deploy, on production:
 3. Subscribe to the calendar link in a calendar app.
 4. Change the email address and confirm it while logged in.
 5. Delete the test account.
+6. Two requests to `https://api.kellerkompass.de/health` with different fake `X-Forwarded-For` headers
+   (`curl -si -H 'X-Forwarded-For: 1.2.3.4' …`, then `5.6.7.8`) must share one bucket: `x-ratelimit-remaining`
+   keeps counting down instead of resetting. If it resets, `TRUST_PROXY` is wrong.
+7. Subscribe to the calendar link in a real Apple Calendar and a real Google Calendar (not just a sample file).
 
 ## Going public
 
