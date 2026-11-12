@@ -413,6 +413,11 @@ After the deploy, on production:
 6. Two requests to `https://api.kellerkompass.de/health` with different fake `X-Forwarded-For` headers
    (`curl -si -H 'X-Forwarded-For: 1.2.3.4' …`, then `5.6.7.8`) must share one bucket: `x-ratelimit-remaining`
    keeps counting down instead of resetting. If it resets, `TRUST_PROXY` is wrong.
+   Measured on 2026-11-12, Scaleway delivers `X-Forwarded-For: <client>, 100.96.x.x, 100.96.x.x` over a
+   127.0.0.1 socket, and the two 100.96 hops change per request. A hop count of `1` or `2` therefore keys
+   the limits on Scaleway nodes (counters jump between a few shared buckets); `3` would match today, but
+   the trust list survives Scaleway adding or removing a hop. Comparing IPv4 against IPv6 from one machine
+   proves nothing if that machine leaves through a single egress address.
 7. Subscribe to the calendar link in a real Apple Calendar and a real Google Calendar (not just a sample file).
 
 ## Going public
