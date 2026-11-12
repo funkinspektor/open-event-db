@@ -6,6 +6,7 @@ describe('trustProxy', () => {
   it('trusts nothing when unset or empty', () => {
     expect(trustProxy('')).toBe(false)
     expect(trustProxy(undefined)).toBe(false)
+    expect(trustProxy('false')).toBe(false)
   })
 
   it('keeps `true` and integer hop counts', () => {

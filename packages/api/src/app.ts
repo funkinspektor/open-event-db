@@ -36,7 +36,7 @@ export interface AppOptions {
 //    internal hops are skipped and the right-most untrusted address is the client
 export function trustProxy(value = process.env.TRUST_PROXY): boolean | number | string {
   const v = value?.trim()
-  if (!v) return false
+  if (!v || v === 'false') return false
   if (v === 'true') return true
   const hops = Number(v)
   if (Number.isInteger(hops)) return hops > 0 ? hops : false
