@@ -26,7 +26,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Sear
         <Headline text="Welcome to Kellerkompass" narrow />
         <p className="kk-lede">Pick a name and a handle, then you’re in.</p>
       </section>
-      <WelcomeForm initialName={me.display_name} returnTo={returnTo ?? undefined} />
+      <WelcomeForm initialName={me.display_name} handle={me.handle} returnTo={returnTo ?? undefined} />
     </div>
   )
 }

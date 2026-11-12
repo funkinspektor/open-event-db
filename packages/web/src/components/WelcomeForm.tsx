@@ -28,7 +28,16 @@ const ERROR_COPY: Record<string, string> = {
 }
 
 /** Finishes sign-up: display name, handle and acceptance of the terms. */
-export function WelcomeForm({ initialName, returnTo }: { initialName: string; returnTo?: string }) {
+export function WelcomeForm({
+  initialName,
+  handle: currentHandle,
+  returnTo,
+}: {
+  initialName: string
+  /** The provisional handle the account has until this form is saved; deleting needs it as confirmation. */
+  handle: string
+  returnTo?: string
+}) {
   const router = useRouter()
   const [displayName, setDisplayName] = useState(initialName)
   const [handle, setHandle] = useState(() => handleFromName(initialName))
@@ -83,6 +92,32 @@ export function WelcomeForm({ initialName, returnTo }: { initialName: string; re
       const code = json.error?.code
       if (code === 'already_onboarded') return done()
       setError((code && ERROR_COPY[code]) ?? json.error?.message ?? `Request failed (${res.status})`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // The account already exists (it was created when the sign-up link was opened), so leaving means deleting it.
+  async function discard() {
+    if (!window.confirm('Delete this account? Your email address will be removed and you will be logged out.')) return
+    setError(null)
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_URL}/api/v1/accounts/me`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirm_handle: currentHandle }),
+      })
+      if (res.ok) {
+        // Full reload so the header drops the account menu.
+        window.location.assign('/goodbye')
+        return
+      }
+      const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
+      setError(json.error?.message ?? `Request failed (${res.status})`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
     } finally {
@@ -150,7 +185,7 @@ export function WelcomeForm({ initialName, returnTo }: { initialName: string; re
             <Link href="/datenschutz" target="_blank" className="underline">
               Privacy Policy
             </Link>
-            .
+            , and I’m 18 or older.
           </label>
         </div>
       </div>
@@ -163,6 +198,9 @@ export function WelcomeForm({ initialName, returnTo }: { initialName: string; re
 
       <button type="submit" disabled={busy || blocked || !accepted} className="kk-btn kk-btn--primary kk-btn--lg">
         {busy ? 'Saving…' : 'Continue'}
+      </button>
+      <button type="button" onClick={discard} disabled={busy} className="kk-btn kk-btn--text self-center">
+        Don’t create an account
       </button>
     </form>
   )
