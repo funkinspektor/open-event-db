@@ -5,7 +5,7 @@ export const OPERATOR_NAME = 'Sebastian Lellinger'
 // show name and email only.
 export const OPERATOR_ADDRESS = ''
 export const CONTACT_EMAIL = 'kontakt@kellerkompass.de'
-export const LEGAL_UPDATED = 'Oktober 2026'
+export const LEGAL_UPDATED = '12. November 2026'
 
 /** Joins lines with Markdown hard breaks (a trailing backslash; trailing spaces would get trimmed by editors). */
 export const lines = (...parts: string[]) =>

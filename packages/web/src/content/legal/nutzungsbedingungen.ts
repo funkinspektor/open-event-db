@@ -7,12 +7,12 @@ Kellerkompass (kellerkompass.de) ist ein unentgeltliches, nicht-kommerzielles Pr
 
 ## § 2 Was Kellerkompass ist
 
-Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underground- und Community-Szene. Events lesen kann jede Person ohne Account. Events eintragen kann, wer eingeladen wurde. Es gibt keinen Anspruch auf eine bestimmte Verfügbarkeit oder bestimmte Funktionen. Wir können den Dienst ändern oder einstellen.
+Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underground- und Community-Szene. Events lesen kann jede Person ohne Account. Mit einem Account kannst du Events als „Interessiert“ markieren. Events eintragen kann, wer als Scout oder Veranstalter:in freigeschaltet ist. Es gibt keinen Anspruch auf eine bestimmte Verfügbarkeit oder bestimmte Funktionen. Wir können den Dienst ändern oder einstellen.
 
 ## § 3 Account und Mindestalter
 
-1. Accounts gibt es nur auf Einladung. Ein Anspruch auf einen Account besteht nicht.
-2. Du musst mindestens 18 Jahre alt sein.
+1. Einen Account kann jede Person anlegen, die mindestens 18 Jahre alt ist. Ein Anspruch auf einen Account besteht nicht.
+2. Pro Person gibt es einen Account. Mit dem Häkchen beim ersten Login stimmst du diesen Bedingungen zu und bestätigst, dass du mindestens 18 bist.
 3. Für Kollektive, Reihen oder Venues können Organizer-Profile angelegt werden, die von Accounts verwaltet werden. Verantwortlich ist dann die Person, die das Profil angelegt hat.
 4. Halte dein E-Mail-Postfach und deinen API-Schlüssel geschützt. Was über deinen Account passiert, wird dir zugerechnet.
 
@@ -59,7 +59,7 @@ Für die Nutzung der API gelten zusätzlich die Bedingungen auf der Seite [Daten
 
 ## § 9 Account löschen und Beendigung
 
-Du kannst deinen Account jederzeit per E-Mail an [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}) löschen lassen. Deine Events bleiben bestehen, die Zuordnung zu dir wird anonymisiert. Wir können Accounts bei Verstößen sperren oder löschen und den Dienst mit angemessener Ankündigung einstellen.
+Du kannst deinen Account jederzeit selbst in deinem Profil löschen oder per E-Mail an [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}) löschen lassen. Deine Events bleiben bestehen und werden danach als „Deleted account“ angezeigt. Wir können Accounts bei Verstößen sperren oder löschen und den Dienst mit angemessener Ankündigung einstellen.
 
 ## § 10 Haftung
 

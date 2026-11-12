@@ -19,19 +19,27 @@ Event-Seiten und Feed sind ohne Account nutzbar. Dabei verarbeiten wir nur die D
 
 ## 4. Accounts und Organizer-Profile
 
-Accounts sind für Personen: Man meldet sich mit seiner E-Mail-Adresse an. Organizer-Profile sind öffentliche Profile von Veranstalter:innen, etwa Kollektiven, Reihen oder Venues, die von ihren Mitgliedern (Accounts) verwaltet werden.
+Accounts sind für Personen und für alle offen: Man meldet sich mit seiner E-Mail-Adresse an und legt beim ersten Login einen Account an. Organizer-Profile sind öffentliche Profile von Veranstalter:innen, etwa Kollektiven, Reihen oder Venues, die von ihren Mitgliedern (Accounts) verwaltet werden.
 
-Für einen Account verarbeiten wir deine E-Mail-Adresse, deinen Anzeigenamen, deine Rolle, wer dich eingeladen hat, deine Beiträge mit Änderungshistorie und, falls angefordert, einen API-Schlüssel, den wir nur als Hash speichern. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Nutzungsvertrag). Wir speichern diese Daten, bis du deinen Account löschst.
+Für einen Account verarbeiten wir deine E-Mail-Adresse, deinen Anzeigenamen, deinen Handle, den Zeitpunkt deiner Zustimmung zu den Nutzungsbedingungen und den Abschluss der Einrichtung, deine Sessions, deine Rolle, deine Beiträge mit Änderungshistorie und, falls angefordert, einen API-Schlüssel, den wir nur als Hash speichern. Rechtsgrundlage für die Account-Funktionen ist Art. 6 Abs. 1 lit. b DSGVO (Nutzungsvertrag). Wir speichern diese Daten, bis du deinen Account löschst.
 
 **Öffentlich sichtbar** sind nur dein Anzeigename an den Events, die du einträgst, und deine Profilseite mit Anzeigename und den Links, die du dort angibst. Deine E-Mail-Adresse wird nie veröffentlicht.
 
-**Login:** Du meldest dich über einen einmal verwendbaren Link mit begrenzter Gültigkeit an, den wir an deine E-Mail-Adresse schicken. Der Link gilt 15 Minuten. Danach setzen wir ein Session-Cookie, das 30 Tage nach deiner letzten Nutzung abläuft. Es ist für den Login technisch notwendig und braucht daher keine Einwilligung (§ 25 Abs. 2 Nr. 2 TDDDG). Weitere Cookies setzen wir nicht.
+**Login:** Du meldest dich über einen einmal verwendbaren Link mit begrenzter Gültigkeit an, den wir an deine E-Mail-Adresse schicken. Der Link gilt 15 Minuten. Fordert jemand mit einer noch unbekannten Adresse einen Link an, speichern wir die Anfrage bis zu 24 Stunden zusammen mit der IP-Adresse, um pro IP-Adresse nur eine begrenzte Zahl an Anmelde-Mails zu verschicken und Missbrauch zu verhindern (Art. 6 Abs. 1 lit. f DSGVO, berechtigtes Interesse an der Missbrauchsabwehr). Danach setzen wir ein Session-Cookie, das 30 Tage nach deiner letzten Nutzung abläuft. Es ist für den Login technisch notwendig und braucht daher keine Einwilligung (§ 25 Abs. 2 Nr. 2 TDDDG). Weitere Cookies setzen wir nicht.
 
-**Löschung:** Wenn du deinen Account löschst, löschen wir deine Account-Daten. Deine Events bleiben bestehen, die Zuordnung zu dir wird anonymisiert, auch in der Änderungshistorie. In Datenbank-Backups können Daten noch bis zu 7 Tage vorhanden sein.
+**E-Mail-Adresse ändern:** Der Bestätigungslink an die neue Adresse gilt 24 Stunden. Erst nach der Bestätigung ersetzt die neue Adresse die alte.
+
+**Löschung:** Du kannst deinen Account jederzeit selbst in deinem Profil löschen. Dann löschen wir deine Account-Daten, deine Sessions, deine gemerkten Events und deinen Kalender-Link. Events, die du eingetragen hast, bleiben bestehen und werden danach als „Deleted account“ angezeigt, auch in der Änderungshistorie. In Datenbank-Backups können Daten noch bis zu 7 Tage vorhanden sein.
+
+## 4a. Gemerkte Events und Kalender-Link
+
+Mit einem Account kannst du Events als „Interessiert“ markieren. Wir speichern dafür, welcher Account welches Event markiert hat und wann. Die Markierungen sind nur für dich sichtbar und werden nicht veröffentlicht. Intern werten wir nur Summen pro Event aus, nicht einzelne Personen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung der Funktion).
+
+Aus deinen Markierungen kannst du einen privaten Kalender-Link erzeugen. Er enthält ein geheimes Token: Wer den Link kennt, sieht deine gemerkten Events. Gib ihn deshalb nicht weiter. Du kannst ihn jederzeit neu erzeugen, der alte Link funktioniert dann nicht mehr. Markierungen und Kalender-Link speichern wir, bis du sie entfernst oder deinen Account löschst.
 
 ## 5. E-Mail-Versand
 
-Login-Links verschicken wir über Scaleway Transactional Email (Region Paris). Dabei werden Empfängeradresse, Inhalt und Zustellstatus verarbeitet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
+Login-, Anmelde- und Bestätigungslinks verschicken wir über Scaleway Transactional Email (Region Paris). Dabei werden Empfängeradresse, Inhalt und Zustellstatus verarbeitet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
 
 ## 6. Events aus Bildern erfassen
 
