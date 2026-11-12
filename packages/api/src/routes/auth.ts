@@ -1,9 +1,10 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
 import { randomInt } from 'node:crypto'
 import { and, asc, count, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { magicLinkRequestSchema, safeReturnTo, type AccountMe } from '@open-event-db/shared'
 import { generateToken, accounts, magicLinkTokens, organizerMembers, organizers, sessions, sha256 } from '@open-event-db/db'
 import { db } from '../db.js'
+import { ipKey } from '../ip-key.js'
 import { email, type MagicLinkKind } from '../email.js'
 import { ApiError, unauthorized } from '../errors.js'
 import { SESSION_COOKIE, SESSION_TTL_MS, authenticate, type AuthAccount, type AuthMethod } from '../auth.js'
@@ -16,6 +17,8 @@ const SIGNUP_CAP_WINDOW_MS = 24 * 60 * 60 * 1000
 const MAGIC_LINK_IP_LIMIT = Number(process.env.MAGIC_LINK_IP_LIMIT) || 20
 const MAGIC_LINK_IP_WINDOW_MS = 60 * 60 * 1000
 const SIGNUP_MAILS_PER_IP_PER_DAY = Number(process.env.SIGNUP_MAILS_PER_IP_PER_DAY) || 10
+// Backstop over all addresses: even if per-IP keying is evaded, the sender reputation is bounded.
+const signupMailsPerDay = () => Number(process.env.SIGNUP_MAILS_PER_DAY) || 500
 
 // In production web and API run on sibling subdomains (kellerkompass.de / api.kellerkompass.de), so the
 // cookie needs COOKIE_DOMAIN=kellerkompass.de for the web server to see it. Locally host-only is fine.
@@ -32,7 +35,7 @@ const magicLinkRateLimit = {
   timeWindow: '1 hour',
   keyGenerator: (req: FastifyRequest) => {
     const body = req.body as { email?: unknown } | undefined
-    return typeof body?.email === 'string' ? `magic:${body.email.trim().toLowerCase()}` : req.ip
+    return typeof body?.email === 'string' ? `magic:${body.email.trim().toLowerCase()}` : ipKey(req.ip)
   },
 }
 
@@ -104,9 +107,12 @@ export function allowMagicLinkRequest(ip: string, now = Date.now()): boolean {
   return true
 }
 
-async function sendSignupLink(address: string, returnTo: string | null, ip: string): Promise<void> {
+async function sendSignupLink(address: string, returnTo: string | null, ip: string, log: FastifyBaseLogger): Promise<void> {
   const url = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'signup-cap:' + ip}))`)
+    // The backstop counts across IPs, so it needs one lock of its own (always taken after the IP lock, so
+    // no deadlock). The critical section is one count, one count and one insert.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('signup-backstop'))`)
     const [row] = await tx
       .select({ n: count() })
       .from(magicLinkTokens)
@@ -117,7 +123,19 @@ async function sendSignupLink(address: string, returnTo: string | null, ip: stri
           gt(magicLinkTokens.createdAt, new Date(Date.now() - SIGNUP_CAP_WINDOW_MS)),
         ),
       )
-    if ((row?.n ?? 0) >= SIGNUP_MAILS_PER_IP_PER_DAY) return null
+    if ((row?.n ?? 0) >= SIGNUP_MAILS_PER_IP_PER_DAY) {
+      // Neither address nor IP: only whether real people hit the cap (CGNAT)
+      log.info({ signupCapped: true }, 'sign-up mail capped')
+      return null
+    }
+    const [total] = await tx
+      .select({ n: count() })
+      .from(magicLinkTokens)
+      .where(and(eq(magicLinkTokens.kind, 'signup'), gt(magicLinkTokens.createdAt, new Date(Date.now() - SIGNUP_CAP_WINDOW_MS))))
+    if ((total?.n ?? 0) >= signupMailsPerDay()) {
+      log.warn({ signupBackstop: true }, 'sign-up mail backstop reached')
+      return null
+    }
     return insertToken({ kind: 'signup', to: address, accountId: null, returnTo, requestIp: ip }, tx)
   })
   if (url) await email.transport.sendMagicLink({ to: address, url, kind: 'signup' })
@@ -200,14 +218,14 @@ export async function accountMe(
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/magic-link', { config: { rateLimit: magicLinkRateLimit } }, async (req, reply) => {
     // Before any DB work, and the same for every address.
-    if (!allowMagicLinkRequest(req.ip)) {
+    if (!allowMagicLinkRequest(ipKey(req.ip))) {
       void reply.header('retry-after', String(MAGIC_LINK_IP_WINDOW_MS / 1000))
       throw new ApiError(429, 'rate_limited', 'Rate limit exceeded, retry later')
     }
     const { email: address, return_to } = magicLinkRequestSchema.parse(req.body)
     const normalized = address.toLowerCase()
     const returnTo = safeReturnTo(return_to)
-    const ip = req.ip
+    const ip = ipKey(req.ip)
 
     const [account] = await db
       .select()
@@ -220,7 +238,7 @@ export async function authRoutes(app: FastifyInstance) {
     // registered, and a capped IP is indistinguishable from an uncapped one.
     void (account
       ? sendMagicLink({ kind: 'login', to: account.email, accountId: account.id, returnTo })
-      : sendSignupLink(normalized, returnTo, ip)
+      : sendSignupLink(normalized, returnTo, ip, req.log)
     ).catch((err) => req.log.error({ err }, 'sending magic link failed'))
 
     return { data: { message: "If this email is registered, you'll receive a login link." } }

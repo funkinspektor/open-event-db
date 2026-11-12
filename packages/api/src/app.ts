@@ -1,7 +1,8 @@
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import { ipKey } from './ip-key.js'
 import { errorHandler } from './error-handler.js'
 import { notFound } from './errors.js'
 import { healthRoutes } from './routes/health.js'
@@ -23,23 +24,55 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export interface AppOptions {
   logger?: boolean
+  /** Where log lines go (tests capture them); default stdout. */
+  logStream?: { write(line: string): void }
 }
 
 // Behind a load balancer every request arrives from the proxy, so per-IP rate limits would be shared by
-// everyone. TRUST_PROXY=true (or a hop count) takes the client address from X-Forwarded-For instead.
-function trustProxy(): boolean | number {
-  const v = process.env.TRUST_PROXY
+// everyone. TRUST_PROXY takes the client address from X-Forwarded-For instead:
+//  - `true` trusts every hop, so the client picks its own address whenever the proxy appends to the header
+//  - an integer is a hop count
+//  - anything else is a comma-separated trust list (IPs, CIDRs, `loopback`, `linklocal`, `uniquelocal`):
+//    internal hops are skipped and the right-most untrusted address is the client
+export function trustProxy(value = process.env.TRUST_PROXY): boolean | number | string {
+  const v = value?.trim()
+  if (!v) return false
   if (v === 'true') return true
   const hops = Number(v)
-  return Number.isInteger(hops) && hops > 0 ? hops : false
+  if (Number.isInteger(hops)) return hops > 0 ? hops : false
+  return v
+}
+
+/**
+ * The request as the logger records it. The default serializer logs the URL, which would put the calendar
+ * subscription token (a long-lived credential, polled hourly) and login tokens into the logs.
+ */
+export function redactUrl(url: string): string {
+  return url
+    .replace(/(\/cal\/)[^/?#]+(\.ics)/, '$1[redacted]$2')
+    .replace(/([?&]token=)[^&#]*/g, '$1[redacted]')
+}
+
+export function serializeReq(req: FastifyRequest) {
+  return {
+    method: req.method,
+    url: redactUrl(req.url),
+    version: req.headers?.['accept-version'] as string | undefined,
+    host: req.host,
+    remoteAddress: req.ip,
+    remotePort: req.socket?.remotePort,
+  }
 }
 
 // The web server renders pages for all visitors from a single IP. It sends this shared secret and is
 // exempt from the global per-IP limit (per-route write limits still apply).
 const INTERNAL_TOKEN = process.env.API_INTERNAL_TOKEN
 
-export async function buildApp({ logger = true }: AppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger, trustProxy: trustProxy() })
+export async function buildApp({ logger = true, logStream }: AppOptions = {}): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: logger ? { serializers: { req: serializeReq }, ...(logStream ? { stream: logStream } : {}) } : false,
+    trustProxy: trustProxy(),
+  })
 
   app.setErrorHandler(errorHandler)
   app.setNotFoundHandler((req, reply) => {
@@ -60,6 +93,8 @@ export async function buildApp({ logger = true }: AppOptions = {}): Promise<Fast
     max: 100,
     timeWindow: '1 minute',
     hook: 'preHandler',
+    // IPv6 clients get a whole /64, so bucket by prefix
+    keyGenerator: (req) => ipKey(req.ip),
     // The cron call is exempt too, but only with the right secret, so guessing it stays rate limited
     allowList: (req) =>
       (!!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN) ||
