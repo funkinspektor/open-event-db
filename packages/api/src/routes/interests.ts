@@ -3,6 +3,7 @@ import { and, eq, gte, lt } from 'drizzle-orm'
 import { z } from 'zod'
 import { eventInterests, events } from '@open-event-db/db'
 import { db } from '../db.js'
+import { markPrivate } from '../headers.js'
 import { currentAccount, requireAuth, requireOnboarded, writeRateLimit } from '../auth.js'
 import { notFound } from '../errors.js'
 
@@ -44,7 +45,8 @@ export async function interestRoutes(app: FastifyInstance) {
     return reply.code(204).send()
   })
 
-  app.get('/accounts/me/interests', { onRequest: requireAuth }, async (req) => {
+  app.get('/accounts/me/interests', { onRequest: requireAuth }, async (req, reply) => {
+    markPrivate(reply)
     const me = currentAccount(req)
     const { from, to } = rangeSchema.parse(req.query)
     const conditions = [eq(eventInterests.accountId, me.id)]

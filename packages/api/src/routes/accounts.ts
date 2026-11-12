@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { and, eq, gt, isNull, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm'
 import {
   accountUpdateSchema,
   checkHandleQuerySchema,
@@ -14,11 +14,13 @@ import {
   generateApiKey,
   generateToken,
   magicLinkTokens,
+  sessions,
   sha256,
   soleMemberships,
   type Account,
 } from '@open-event-db/db'
 import { db } from '../db.js'
+import { markPrivate } from '../headers.js'
 import { ApiError, badRequest, forbidden } from '../errors.js'
 import { email as mail } from '../email.js'
 import { accountMe, API_PUBLIC_URL, cookieOptions, sendMagicLink } from './auth.js'
@@ -275,6 +277,13 @@ export async function accountRoutes(app: FastifyInstance) {
         if (!isUniqueViolation(err)) throw err
         return { result: 'taken' as const, oldEmail, newEmail }
       }
+      // Whoever else holds a session of this account (or the calendar link) must not keep access to the new
+      // address: keep only the session that confirmed the change.
+      const keep = req.cookies?.[SESSION_COOKIE]
+      await tx
+        .delete(sessions)
+        .where(and(eq(sessions.accountId, me.id), keep ? ne(sessions.tokenHash, sha256(keep)) : undefined))
+      await tx.update(accounts).set({ calendarToken: null }).where(eq(accounts.id, me.id))
       // Links sent to the old address must not outlive it; other pending changes are void too.
       await tx
         .delete(magicLinkTokens)
@@ -319,7 +328,8 @@ export async function accountRoutes(app: FastifyInstance) {
     return { data: { url: calendarUrl(token) } }
   })
 
-  app.get('/accounts/me/calendar', { onRequest: requireSession }, async (req) => {
+  app.get('/accounts/me/calendar', { onRequest: requireSession }, async (req, reply) => {
+    markPrivate(reply)
     const me = currentAccount(req)
     return { data: { url: me.calendarToken ? calendarUrl(me.calendarToken) : null } }
   })

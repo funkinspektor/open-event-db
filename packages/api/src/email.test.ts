@@ -90,6 +90,23 @@ describe('scaleway transport subjects', () => {
     expect(body.to).toEqual([{ email: 'old@letzte-welle.de' }])
     expect(body.text).toContain('new@letzte-welle.de')
   })
+
+  it('email-changed notice says how to reach us, sets Reply-To and mentions the logout and calendar reset', async () => {
+    const body = await sent((t) => t.sendEmailChangedNotice({ to: 'old@letzte-welle.de', newEmail: 'new@letzte-welle.de' }))
+    expect(body.text).toContain('kontakt@kellerkompass.de')
+    expect(body.html).toContain('kontakt@kellerkompass.de')
+    expect(body.text).toMatch(/other devices were logged out/)
+    expect(body.text).toMatch(/calendar link was reset/)
+    expect(body.additional_headers).toEqual([{ key: 'Reply-To', value: 'kontakt@kellerkompass.de' }])
+  })
+
+  it('the contact address comes from CONTACT_EMAIL', async () => {
+    vi.stubEnv('CONTACT_EMAIL', 'help@example.org')
+    const body = await sent((t) => t.sendEmailChangedNotice({ to: 'old@letzte-welle.de', newEmail: 'new@letzte-welle.de' }))
+    vi.unstubAllEnvs()
+    expect(body.text).toContain('help@example.org')
+    expect(body.additional_headers).toEqual([{ key: 'Reply-To', value: 'help@example.org' }])
+  })
 })
 
 describe('isDeliverable', () => {

@@ -23,6 +23,19 @@ const escapeHtml = (v: string) =>
   v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
 const isProduction = process.env.NODE_ENV === 'production'
+
+/** Where people reach us (the operator's address on the legal pages). Named in mails that say "contact us". */
+export const contactEmail = () => process.env.CONTACT_EMAIL?.trim() || 'kontakt@kellerkompass.de'
+
+/** The mail text for the old address when the email of an account changed. */
+export function emailChangedNoticeText(brand: string, newEmail: string, contact = contactEmail()): string[] {
+  return [
+    `The email address of your ${brand} account was changed to ${newEmail}.`,
+    '',
+    `Logins now go to the new address. For safety, all other devices were logged out and the calendar link was reset.`,
+    `If this wasn't you, please contact us right away: ${contact} (you can also reply to this mail).`,
+  ]
+}
 const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
 
 // Reserved TLDs (RFC 2606/6761) can never receive mail. Sending to them would only produce
@@ -69,7 +82,7 @@ const consoleTransport: EmailTransport = {
     console.log(`\n[email → ${to}] ${MAGIC_LINK_COPY[kind].subject('Kellerkompass')} (valid ${validity}):\n  ${url}\n`)
   },
   async sendEmailChangedNotice({ to, newEmail }) {
-    console.log(`\n[email → ${to}] Your Kellerkompass email was changed to ${newEmail}.\n`)
+    console.log(`\n[email → ${to}]\n${emailChangedNoticeText('Kellerkompass', newEmail).join('\n')}\n`)
   },
 }
 
@@ -85,7 +98,7 @@ export interface ScalewayConfig {
 export function scalewayTransport(config: ScalewayConfig): EmailTransport {
   const endpoint = `https://api.scaleway.com/transactional-email/v1alpha1/regions/${config.region}/emails`
 
-  async function post(to: string, subject: string, text: string, html: string): Promise<void> {
+  async function post(to: string, subject: string, text: string, html: string, replyTo?: string): Promise<void> {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-auth-token': config.secretKey },
@@ -96,6 +109,7 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
         subject,
         text,
         html,
+        ...(replyTo ? { additional_headers: [{ key: 'Reply-To', value: replyTo }] } : {}),
       }),
     })
     if (!res.ok) {
@@ -138,18 +152,18 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
       if (!isDeliverable(to)) return
 
       const brand = config.fromName
+      const contact = contactEmail()
+      const text = emailChangedNoticeText(brand, newEmail, contact)
       await post(
         to,
         `Your ${brand} email was changed`,
-        [
-          `The email address of your ${brand} account was changed to ${newEmail}.`,
-          '',
-          `Logins now go to the new address. If this wasn't you, please contact us right away.`,
-        ].join('\n'),
+        text.join('\n'),
         [
           `<p>The email address of your ${brand} account was changed to ${escapeHtml(newEmail)}.</p>`,
-          `<p>Logins now go to the new address. If this wasn't you, please contact us right away.</p>`,
+          `<p>${escapeHtml(text[2]!)}<br>`,
+          `${escapeHtml(text[3]!)}</p>`,
         ].join('\n'),
+        contact,
       )
     },
   }

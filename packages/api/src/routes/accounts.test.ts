@@ -201,7 +201,35 @@ describe('email change', () => {
     expect(t!.expiresAt.getTime() - Date.now()).toBeGreaterThan(23.5 * 3_600_000)
   })
 
-  it('applies a free address, notifies the old one, keeps sessions and uses the link once', async () => {
+  it('logs out other sessions and resets the calendar link, keeping the confirming session', async () => {
+    const { account, cookie } = await sessionAccount()
+    const other = generateToken()
+    await db.insert(sessions).values({ accountId: account.id, tokenHash: other.hash, expiresAt: new Date(Date.now() + 3_600_000) })
+    await call('POST', '/accounts/me/calendar-token', cookie)
+    expect((await db.select().from(accounts).where(eq(accounts.id, account.id)))[0]!.calendarToken).not.toBeNull()
+    const mail = await requestChange(cookie, `hardened-${u()}@test.local`)
+    expect((await confirm(cookie, tokenOf(mail.url))).json()).toEqual({ data: { result: 'changed' } })
+    expect((await call('GET', '/auth/me', cookie)).statusCode).toBe(200)
+    expect((await call('GET', '/auth/me', `oedb_session=${other.token}`)).statusCode).toBe(401)
+    const left = await db.select().from(sessions).where(eq(sessions.accountId, account.id))
+    expect(left).toHaveLength(1)
+    const [row] = await db.select().from(accounts).where(eq(accounts.id, account.id))
+    expect(row!.calendarToken).toBeNull()
+  })
+
+  it('a refused change (address taken) keeps other sessions and the calendar link', async () => {
+    const { account, cookie } = await sessionAccount()
+    const { account: taker } = await sessionAccount()
+    const other = generateToken()
+    await db.insert(sessions).values({ accountId: account.id, tokenHash: other.hash, expiresAt: new Date(Date.now() + 3_600_000) })
+    await call('POST', '/accounts/me/calendar-token', cookie)
+    const mail = await requestChange(cookie, taker.email)
+    expect((await confirm(cookie, tokenOf(mail.url))).json()).toEqual({ data: { result: 'taken' } })
+    expect((await call('GET', '/auth/me', `oedb_session=${other.token}`)).statusCode).toBe(200)
+    expect((await db.select().from(accounts).where(eq(accounts.id, account.id)))[0]!.calendarToken).not.toBeNull()
+  })
+
+  it('applies a free address, notifies the old one, keeps the session and uses the link once', async () => {
     const { account, cookie } = await sessionAccount()
     const fresh = `changed-${u()}@test.local`
     notices.length = 0
@@ -433,6 +461,8 @@ describe('calendar token', () => {
     const { account, cookie } = await sessionAccount()
     expect((await call('GET', '/accounts/me/calendar', cookie)).json()).toEqual({ data: { url: null } })
     expect((await call('GET', '/auth/me', cookie)).json().data.has_calendar).toBe(false)
+
+    expect((await call('GET', '/accounts/me/calendar', cookie)).headers['cache-control']).toBe('private, no-store')
 
     const a = await call('POST', '/accounts/me/calendar-token', cookie)
     expect(a.statusCode).toBe(200)

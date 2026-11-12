@@ -29,6 +29,7 @@ import {
 } from '@open-event-db/shared'
 import { eventInterests, eventOrganizers, events, organizers, venues } from '@open-event-db/db'
 import { db } from '../db.js'
+import { appendVary, markPrivate } from '../headers.js'
 import { encodeCursor, decodeCursor } from '../cursor.js'
 import { ApiError, badRequest, forbidden, notFound } from '../errors.js'
 import { actorOf, authenticate, currentAccount, requireAuth, requireRights, writeRateLimit, type AuthAccount } from '../auth.js'
@@ -107,7 +108,7 @@ export async function eventRoutes(app: FastifyInstance) {
     (_req, body, done) => done(null, body),
   )
 
-  app.get('/events', async (req) => {
+  app.get('/events', async (req, reply) => {
     const query = eventListQuerySchema.parse(req.query)
     const { limit, cursor, city, from, to, tags, categories, venue_id, organizer_id, added_by, provenance, q, order } = query
     const status: EventStatus[] = query.status?.length
@@ -118,6 +119,9 @@ export async function eventRoutes(app: FastifyInstance) {
     const conditions = [inArray(events.status, status)]
 
     if (query.mine) {
+      // A person's own marks: never for a shared cache, and the response varies by credential
+      markPrivate(reply)
+      appendVary(reply, 'Cookie', 'Authorization')
       await authenticateOptional(req)
       const me = currentAccount(req)
       conditions.push(
@@ -196,7 +200,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>('/events/:id', async (req, reply) => {
     // The body varies by credential (`interested`)
-    reply.header('Vary', 'Cookie, Authorization')
+    appendVary(reply, 'Cookie', 'Authorization')
     const detail = await getEventDetail(req.params.id)
     if (!detail) throw notFound('Event not found')
     await authenticateOptional(req)

@@ -115,6 +115,30 @@ describe('interests', () => {
     expect(Object.keys(list.json().data[0]).sort()).toEqual(slimKeys.sort())
   })
 
+  it('personal lists are private and not cacheable; the public list is untouched', async () => {
+    const { auth, mk } = await setup()
+    const e = await mk('Private list headers', 3)
+    await call('PUT', `/events/${e.id}/interest`, auth)
+    const mine = await call('GET', '/events?mine=true', auth)
+    expect(mine.headers['cache-control']).toBe('private, no-store')
+    expect(mine.headers.vary).toMatch(/Cookie/)
+    expect(mine.headers.vary).toMatch(/Authorization/)
+    const ids = await call('GET', '/accounts/me/interests', auth)
+    expect(ids.headers['cache-control']).toBe('private, no-store')
+    const pub = await call('GET', '/events?q=Private%20list%20headers', auth)
+    expect(pub.headers['cache-control'] ?? '').not.toMatch(/no-store/)
+  })
+
+  it('keeps an existing Vary value when it adds its own', async () => {
+    const { mk } = await setup()
+    const e = await mk('Vary append', 3)
+    // CORS with a reflected origin sets `Vary: Origin` before the route runs
+    const res = await call('GET', `/events/${e.id}`, { origin: 'http://localhost:3000' })
+    expect(res.headers.vary).toMatch(/Origin/)
+    expect(res.headers.vary).toMatch(/Cookie/)
+    expect(res.headers.vary).toMatch(/Authorization/)
+  })
+
   it('invalid session cookie on public reads is treated as anonymous', async () => {
     const { mk } = await setup()
     const e = await mk('Bad cookie', 3)
