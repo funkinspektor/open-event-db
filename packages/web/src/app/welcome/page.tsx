@@ -23,7 +23,8 @@ export default async function WelcomePage({ searchParams }: { searchParams: Sear
   return (
     <div className="kk-container w-full" style={{ maxWidth: 480, paddingTop: 80, gap: 28 }}>
       <section className="kk-intro" style={{ gap: 14 }}>
-        <Headline text="Welcome to Kellerkompass" narrow />
+        {/* "Kellerkompass" is ~5.7em wide in Germania; keep it on one line in the 432px column */}
+        <Headline text="Welcome to Kellerkompass" narrow style={{ fontSize: 'clamp(48px, 9vw, 72px)' }} />
         <p className="kk-lede">Pick a name and a handle, then you’re in.</p>
       </section>
       <WelcomeForm initialName={me.display_name} handle={me.handle} returnTo={returnTo ?? undefined} />
