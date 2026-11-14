@@ -437,9 +437,10 @@ export async function ingestRoutes(app: FastifyInstance) {
           const [venue] = await tx.select({ city: venues.city }).from(venues).where(eq(venues.id, venueId))
           if (venue) city = venue.city
           else {
-            // The mapped venue was deleted since the run: keep a readable place.
+            // The mapped venue was deleted since the run: keep a readable place. A suggestion's source name is no
+            // place, so it keeps only its own place text (or none) and its city.
             venueId = null
-            locationText = draft.location_text ?? source.name
+            locationText = draft.location_text ?? (suggestion ? null : source.name)
           }
         }
         values = {
@@ -536,14 +537,15 @@ export async function ingestRoutes(app: FastifyInstance) {
       if (merging && !canEdit({ organizers: await getOrganizers(event_id) }, actorOf(me))) {
         throw forbidden('Only members of the event\'s organizers can edit it')
       }
-      // An item the event was synced from (re-posted under a new id) must not later offer it as gone
-      await detachIngest(tx, event_id)
       const [source] = await tx
         .select({ name: ingestSources.name, kind: ingestSources.kind })
         .from(ingestItems)
         .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
         .where(eq(ingestItems.id, req.params.id))
       const suggestion = source?.kind === 'suggestion'
+      // An item the event was synced from (re-posted under a new id) must not later offer it as gone. A suggestion
+      // linked as a duplicate is no re-post: unless fields are taken (a human edit), the event's feed keeps syncing it.
+      if (!suggestion || merging) await detachIngest(tx, event_id)
       // Detached unless the scout hands the event to the feed: otherwise it stays a human's, never overwritten.
       // A suggestion has no feed, so it is always detached.
       const [item] = await tx

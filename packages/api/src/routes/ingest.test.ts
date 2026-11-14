@@ -1533,4 +1533,47 @@ describe('suggestions in the inbox', () => {
     await vi.waitFor(() => expect(attempts).toBe(3), { timeout: 2000 })
     await settle()
   })
+
+  it('a plain link of a suggestion leaves the feed item of the event attached; taking fields detaches it', async () => {
+    // The venue feed delivered the event; a person suggested it as well
+    const feedItem = await newItem()
+    const accepted = await post(`/items/${feedItem.id}/accept`, keyReviewer)
+    const eventId = accepted.json().data.event_id as string
+    eventIds.push(eventId)
+    expect((await itemRow(feedItem.id)).detachedAt).toBeNull()
+
+    const duplicate = await suggestion(submitter)
+    expect((await post(`/items/${duplicate.id}/link`, keyReviewer, { event_id: eventId })).statusCode).toBe(200)
+    expect((await itemRow(feedItem.id)).detachedAt).toBeNull()
+    expect((await itemRow(duplicate.id)).detachedAt).not.toBeNull()
+    const page = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
+    expect(page.synced_from?.source_name).toBe(sourceName)
+
+    // Taking the suggestion's title is a human edit: the feed stops syncing the event
+    const taking = await suggestion(submitter, {}, { title: `Taken title ${stamp}` })
+    const res = await post(`/items/${taking.id}/link`, keyReviewer, { event_id: eventId, fields: ['title'] })
+    expect(res.statusCode).toBe(200)
+    expect((await eventRow(eventId)).title).toBe(`Taken title ${stamp}`)
+    expect((await itemRow(feedItem.id)).detachedAt).not.toBeNull()
+  })
+
+  it('accept falls back to the draft place, never the source name, when the suggested venue was deleted', async () => {
+    const [gone] = await db.insert(venues).values({ name: `Gone Sugg Venue ${stamp}`, address: 'x', city: 'Goneville' }).returning()
+    const picked = await suggestion(submitter, {}, { venue_id: gone!.id, location_text: null, city: 'Goneville' })
+    const typed = await suggestion(submitter, {}, { venue_id: gone!.id, location_text: 'Hinterhof', city: 'Goneville' })
+    await db.delete(venues).where(eq(venues.id, gone!.id))
+
+    const res = await post(`/items/${picked.id}/accept`, keyReviewer)
+    expect(res.statusCode).toBe(200)
+    const event = await eventRow(res.json().data.event_id)
+    eventIds.push(event.id)
+    expect(event.venueId).toBeNull()
+    expect(event.locationText).toBeNull()
+    expect(event.city).toBe('Goneville')
+
+    const res2 = await post(`/items/${typed.id}/accept`, keyReviewer)
+    const event2 = await eventRow(res2.json().data.event_id)
+    eventIds.push(event2.id)
+    expect(event2.locationText).toBe('Hinterhof')
+  })
 })
