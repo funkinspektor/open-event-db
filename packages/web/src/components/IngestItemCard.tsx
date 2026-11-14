@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import type { DuplicateCandidate, IngestItemView, IngestView } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
+import { isDayOnly } from '@/lib/draft-start'
 import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
 import { submitterLine } from '@/lib/ingest-submitter'
 import { Markdown } from './Markdown'
@@ -76,7 +77,10 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
       )}
       <div className="kk-event__when">
         <span className="kk-event__date">{formatDate(draft.starts_at)}</span>
-        <span className="kk-event__time">{formatTimeRange(draft.starts_at, draft.ends_at)}</span>
+        {/* A suggestion sent with a day only has no time to show */}
+        {!isDayOnly(draft, item.source.kind) && (
+          <span className="kk-event__time">{formatTimeRange(draft.starts_at, draft.ends_at)}</span>
+        )}
       </div>
       <div className="kk-event__main flex flex-col gap-3">
         <div>

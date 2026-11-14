@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { EventDetail, IngestItemDetail } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
+import { isDayOnly } from '@/lib/draft-start'
 import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
 import { ingestAction } from '@/lib/ingest-actions'
 import { linkBody, mergeRows, sideOf, type MergeKey, type MergeRow, type MergeSide } from '@/lib/merge'
@@ -50,6 +51,7 @@ function Value({ row, side, item, event }: { row: MergeRow; side: MergeSide; ite
     }
     case 'times': {
       if (feed) {
+        if (isDayOnly(draft, item.source.kind)) return <span>{formatDate(draft.starts_at)}</span>
         const when = `${formatDate(draft.starts_at)} ${formatTimeRange(draft.starts_at, draft.ends_at)}`
         return <span>{draft.times_unverified ? `${when} (unverified)` : when}</span>
       }
@@ -100,7 +102,9 @@ export function IngestMergePanel({ item, event, editable }: Props) {
   const [sync, setSync] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const source = item.source.name
+  // A person's suggestion has no feed to keep the event up to date: it is "the suggestion", never "Suggestions"
+  const suggestion = item.source.kind === 'suggestion'
+  const source = suggestion ? 'the suggestion' : item.source.name
   const body = linkBody(event.id, rows, choice, sync)
   const taking = body.fields.length + body.links.length
 
@@ -126,7 +130,7 @@ export function IngestMergePanel({ item, event, editable }: Props) {
         </h2>
         <p className="m-0 text-[15px] text-muted">
           {!editable
-            ? 'Its organisers claimed this event, so it stays as they wrote it. Linking only settles the feed item.'
+            ? `Its organisers claimed this event, so it stays as they wrote it. Linking only settles ${suggestion ? 'the suggestion' : 'the feed item'}.`
             : rows.length
               ? `Pick which version the event keeps. Fields that match ${source} are not shown.`
               : `The event already matches ${source}.`}
@@ -146,7 +150,7 @@ export function IngestMergePanel({ item, event, editable }: Props) {
                   <Option name={row.key} label="Event" checked={side === 'event'} disabled={busy || locked} onPick={() => pick('event')}>
                     <Value row={row} side="event" item={item} event={event} />
                   </Option>
-                  <Option name={row.key} label={source} checked={side === 'feed'} disabled={busy || locked} onPick={() => pick('feed')}>
+                  <Option name={row.key} label={suggestion ? 'Suggestion' : source} checked={side === 'feed'} disabled={busy || locked} onPick={() => pick('feed')}>
                     <Value row={row} side="feed" item={item} event={event} />
                   </Option>
                 </div>
@@ -156,7 +160,7 @@ export function IngestMergePanel({ item, event, editable }: Props) {
         </ul>
       )}
 
-      {editable && (
+      {editable && !suggestion && (
         <label className="flex cursor-pointer items-start gap-3 text-[15px]">
           <input
             type="checkbox"

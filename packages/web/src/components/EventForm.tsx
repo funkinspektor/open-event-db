@@ -83,7 +83,7 @@ export function EventForm({ mode, event, item, canCancel = false, knownTags, pub
   const [publishAsValue, setPublishAsValue] = useState(publishAs[0]?.value ?? '')
   const [title, setTitle] = useState(event?.title ?? draft?.title ?? pre?.title ?? '')
   // Date and time are separate fields: flyers nearly always have the date, often not the time
-  const start = event ? startFields(event) : draft ? draftStartFields(draft) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
+  const start = event ? startFields(event) : draft && item ? draftStartFields(draft, item.source.kind) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
   const [startDate, setStartDate] = useState(start.date)
   const [startTime, setStartTime] = useState(start.time)
   const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : draft ? toLocalInput(draft.ends_at) : (pre?.endsAt ?? ''))

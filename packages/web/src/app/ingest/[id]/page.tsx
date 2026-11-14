@@ -5,6 +5,7 @@ import { canEdit } from '@open-event-db/shared'
 import { getEvent, getIngestItem, isUuid } from '@/lib/api'
 import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
 import { permissionActor, permissionEvent } from '@/lib/permissions'
+import { isDayOnly } from '@/lib/draft-start'
 import { EventDetailBody } from '@/components/EventDetailBody'
 import { IngestDecisionBar } from '@/components/IngestDecisionBar'
 import { IngestMergePanel } from '@/components/IngestMergePanel'
@@ -46,6 +47,7 @@ export default async function IngestItemPage({ params, searchParams }: { params:
         <EventDetailBody
           title={draft.title}
           startsAt={draft.starts_at}
+          startTimeKnown={!isDayOnly(draft, item.source.kind)}
           endsAt={draft.ends_at}
           status="scheduled"
           recurrence={null}
