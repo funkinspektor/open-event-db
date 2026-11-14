@@ -23,7 +23,8 @@ export function toSuggestionDraft(input: SuggestionCreateInput, venueCity: strin
     categories: input.categories ?? [],
     links: input.links ?? {},
     image_url: null,
-    source_url: null,
+    // The first link stands in for a feed item's page ("Original" in the inbox)
+    source_url: Object.values(input.links ?? {})[0] ?? null,
     times_unverified: !startTimeKnown,
     lineup_from_text: false,
   }

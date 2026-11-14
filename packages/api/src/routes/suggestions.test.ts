@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq } from 'drizzle-orm'
 import { mySuggestionSchema, type MySuggestion } from '@open-event-db/shared'
@@ -91,7 +91,11 @@ describe('POST /suggestions', () => {
       description: 'Laut',
       links: { instagram: 'https://www.instagram.com/keller' },
       image_url: null,
+      // The first link stands in for the "Original" of a feed item
+      source_url: 'https://www.instagram.com/keller',
     })
+    expect(item.contentHash).toBeNull()
+    expect((await row(await created('plain'))).draft).toMatchObject({ source_url: null })
   })
 
   it('needs a city without a venue, and a known venue', async () => {
@@ -108,6 +112,21 @@ describe('POST /suggestions', () => {
     )
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe('event_over')
+  })
+
+  it('refuses what the inbox would hide: a night that started yesterday, sent after midnight', async () => {
+    // 01:00 Berlin on 2 March; the night started at 23:00 on 1 March and has no end
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2031-03-02T00:00:00Z'))
+      const res = await post('plain', body({ starts_at: '2031-03-01T22:00:00Z', categories: ['party'] }))
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe('event_over')
+      // A day-only suggestion for today is still open
+      expect((await post('plain', body({ starts_at: '2031-03-02' }))).statusCode).toBe(201)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('limit: the sixth suggestion of the day is refused', async () => {
@@ -287,5 +306,31 @@ describe('GET /accounts/me/suggestions', () => {
       ['Linked one', 'live', e2.id, null],
     ])
     expect(data.some((d) => d.id === withdrawn)).toBe(false)
+  })
+
+  it('an undecided suggestion whose event is over is expired', async () => {
+    const { account, key } = await createAccount({ label: 'sugg-expirer', organizer: false })
+    const auth = { authorization: `Bearer ${key}` }
+    const send = async (title: string) =>
+      (await app.inject({ method: 'POST', url: '/api/v1/suggestions', headers: auth, payload: body({ title }) })).json().data.id as string
+    const over = await send('Missed one')
+    const open = await send('Open one')
+    const rejected = await send('Rejected late')
+    const past = { ...(await row(over)).draft, starts_at: new Date(Date.now() - 3 * DAY).toISOString(), ends_at: null }
+    await db.update(ingestItems).set({ draft: past }).where(eq(ingestItems.id, over))
+    await db.update(ingestItems).set({ draft: past, status: 'rejected' }).where(eq(ingestItems.id, rejected))
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/accounts/me/suggestions', headers: auth })
+    const data = res.json().data as MySuggestion[]
+    data.forEach((d) => mySuggestionSchema.parse(d))
+    const status = Object.fromEntries(data.map((d) => [d.id, d.status]))
+    expect(status).toEqual({ [over]: 'expired', [open]: 'in_review', [rejected]: 'not_accepted' })
+    await db.delete(ingestItems).where(eq(ingestItems.submittedBy, account.id))
+  })
+
+  it('reads with the normal read limit, not the write limit', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/accounts/me/suggestions', headers: people.other.auth, remoteAddress: '203.0.113.77' })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['x-ratelimit-limit']).toBe('100')
   })
 })

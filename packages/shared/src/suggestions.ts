@@ -6,7 +6,8 @@ export const suggestionCreateSchema = eventFieldsSchema.omit({ tags: true, recur
 
 export type SuggestionCreateInput = z.infer<typeof suggestionCreateSchema>
 
-export const mySuggestionStatusSchema = z.enum(['in_review', 'live', 'not_accepted'])
+/** `expired`: never decided, and its event is over (it left the inbox). */
+export const mySuggestionStatusSchema = z.enum(['in_review', 'live', 'not_accepted', 'expired'])
 
 /** One of the account's own suggestions, as it sees it. */
 export const mySuggestionSchema = z.object({

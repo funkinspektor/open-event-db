@@ -4,7 +4,6 @@ import { and, count, desc, eq, gt, ne, sql } from 'drizzle-orm'
 import {
   EVENT_IMAGE_MAX_BYTES,
   EXTRACT_IMAGE_TYPES,
-  effectiveEnd,
   suggestionCreateSchema,
   type MySuggestion,
 } from '@open-event-db/shared'
@@ -17,8 +16,11 @@ import { sniffImageType } from '../images/sniff.js'
 import { imageStore, suggestionImageKey } from '../images/store.js'
 import { suggestionStart, toSuggestionDraft } from '../suggestions/draft.js'
 import { deleteSuggestionImage } from '../ingest/image.js'
+import { draftIsOver } from '../ingest/open.js'
 
 const guard = { onRequest: [requireAuth, requireOnboarded], config: { rateLimit: writeRateLimit } }
+/** Reading the own list falls under the global read limit, not the write limit. */
+const readGuard = { onRequest: [requireAuth, requireOnboarded] }
 
 const DEFAULT_PER_DAY = 5
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -37,14 +39,21 @@ async function suggestionsSourceId(): Promise<string> {
 
 const imagesUnavailable = () => new ApiError(503, 'images_unavailable', 'Event images are not available right now')
 
+function myStatus(item: IngestItem, draft: { starts_at?: string; ends_at?: string | null }): MySuggestion['status'] {
+  if (item.status === 'rejected') return 'not_accepted'
+  if (item.status === 'accepted') return 'live'
+  // Undecided and over: it left the inbox (the same rule), so nobody will review it any more
+  return draft.starts_at && draftIsOver({ starts_at: draft.starts_at, ends_at: draft.ends_at ?? null }) ? 'expired' : 'in_review'
+}
+
 function toMySuggestion(item: IngestItem): MySuggestion {
-  const draft = item.draft as { title?: string; starts_at?: string }
+  const draft = item.draft as { title?: string; starts_at?: string; ends_at?: string | null }
   const store = imageStore.store
   return {
     id: item.id,
     title: draft.title ?? '',
     starts_at: draft.starts_at ?? item.firstSeenAt.toISOString(),
-    status: item.status === 'rejected' ? 'not_accepted' : item.status === 'accepted' ? 'live' : 'in_review',
+    status: myStatus(item, draft),
     event_id: item.status === 'accepted' ? item.eventId : null,
     reason: item.status === 'rejected' ? item.rejectReason : null,
     image_url: item.imageKey && store ? store.url(item.imageKey) : null,
@@ -98,16 +107,12 @@ export async function suggestionRoutes(app: FastifyInstance) {
       throw badRequest('Send a city, or pick a venue', 'city_required')
     }
 
-    const { startsAt, startTimeKnown } = suggestionStart(input.starts_at)
+    const { startsAt } = suggestionStart(input.starts_at)
     const endsAt = input.ends_at ? new Date(input.ends_at) : null
     if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
-    const end = effectiveEnd({
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt?.toISOString() ?? null,
-      start_time_known: startTimeKnown,
-      categories: input.categories ?? [],
-    })
-    if (end.getTime() <= Date.now()) throw badRequest('This event is already over', 'event_over')
+    const draft = toSuggestionDraft(input, venueCity)
+    // Exactly what the inbox hides as over: a suggestion is never taken in and then invisible to the team
+    if (draftIsOver(draft)) throw badRequest('This event is already over', 'event_over')
 
     const source = await suggestionsSourceId()
     const limit = perDay()
@@ -133,7 +138,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
           sourceId: source,
           externalId: id,
           status: 'pending',
-          draft: toSuggestionDraft(input, venueCity),
+          draft,
           raw: JSON.stringify(input),
           submittedBy: me.id,
         })
@@ -199,7 +204,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
     return reply.code(204).send()
   })
 
-  app.get('/accounts/me/suggestions', guard, async (req, reply) => {
+  app.get('/accounts/me/suggestions', readGuard, async (req, reply) => {
     markPrivate(reply)
     const me = currentAccount(req)
     const rows = await db
