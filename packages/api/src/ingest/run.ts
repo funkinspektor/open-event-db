@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, notInArray, sql, type SQL } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, ne, notInArray, sql, type SQL } from 'drizzle-orm'
 import {
   events,
   ingestItems,
@@ -169,11 +169,17 @@ async function syncEvent(tx: DbOrTx, source: IngestSource, eventId: string, draf
   await logEdit(tx, {
     entityType: 'event',
     entityId: eventId,
-    accountId: source.accountId,
+    accountId: feedAccountId(source),
     action: 'updated',
     diff: { ...changes, via: 'ingest' },
   })
   return true
+}
+
+/** The scout account a feed source's edits are attributed to; only the suggestions source has none. */
+export function feedAccountId(source: IngestSource): string {
+  if (!source.accountId) throw new Error(`feed source ${source.slug} without account`)
+  return source.accountId
 }
 
 /** Clears a gone mark when the item is back in the feed, including an earlier "keep" decision. */
@@ -206,7 +212,7 @@ async function ingestEvent(
       .where(eq(ingestItems.id, item.id))
     // An unchanged feed still retries an image that could not be fetched before
     const stored = ingestDraftSchema.safeParse(item.draft)
-    if (stored.success) await syncItemImage(item, stored.data, source.accountId)
+    if (stored.success) await syncItemImage(item, stored.data, feedAccountId(source))
     return
   }
 
@@ -262,7 +268,7 @@ async function ingestEvent(
     return current
   })
   // Outside the transaction: fetching the image must not hold the event and item locks
-  if (updated) await syncItemImage(updated, draft, source.accountId)
+  if (updated) await syncItemImage(updated, draft, feedAccountId(source))
   result.updated++
 }
 
@@ -303,6 +309,8 @@ async function readFeed(
 
     case 'frannz':
       return parseFrannz(text, config, { pageUrl: url, now })
+    case 'suggestion':
+      throw new Error('the suggestions source has no feed')
   }
 }
 
@@ -412,7 +420,12 @@ export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestRunR
     const sources = await db
       .select()
       .from(ingestSources)
-      .where(only ? inArray(ingestSources.slug, only) : eq(ingestSources.enabled, true))
+      .where(
+        and(
+          ne(ingestSources.kind, 'suggestion'),
+          only ? inArray(ingestSources.slug, only) : eq(ingestSources.enabled, true),
+        ),
+      )
       .orderBy(asc(ingestSources.slug))
     const results: SourceRunResult[] = []
     for (const source of sources) results.push(await runSource(source, now, fetchText))

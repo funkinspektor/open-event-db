@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -33,8 +34,8 @@ export const editHistoryAction = pgEnum('edit_history_action', [
   'deleted',
 ])
 
-export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical', 'dunckerclub', 'urbanspree', 'berghain', 'slaughterhouse', 'squarespace', 'schokoladen', 'festsaal', 'lido', 'supamolly', 'beateuwe', 'so36', 'frannz'])
-export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accepted', 'rejected'])
+export const ingestSourceKind = pgEnum('ingest_source_kind', ['ical', 'dunckerclub', 'urbanspree', 'berghain', 'slaughterhouse', 'squarespace', 'schokoladen', 'festsaal', 'lido', 'supamolly', 'beateuwe', 'so36', 'frannz', 'suggestion'])
+export const ingestItemStatus = pgEnum('ingest_item_status', ['pending', 'accepted', 'rejected', 'withdrawn'])
 export const ingestFitVerdict = pgEnum('ingest_fit_verdict', ['fit', 'maybe', 'no'])
 
 type Links = Record<string, string>
@@ -214,28 +215,30 @@ export const editHistory = pgTable('edit_history', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const ingestSources = pgTable('ingest_sources', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  slug: text('slug').notNull().unique(),
-  name: text('name').notNull(),
-  kind: ingestSourceKind('kind').notNull(),
-  url: text('url').notNull(),
-  /** Scout account that sync edits are attributed to. */
-  accountId: uuid('account_id')
-    .notNull()
-    .references(() => accounts.id, { onDelete: 'restrict' }),
-  config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
-  /** The venue whose program this feed carries; null for aggregators and organizers that play many venues. */
-  venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
-  /** The venue's or organizer's own site: an event it lists counts as confirmed by the venue. False for aggregators. */
-  official: boolean('official').notNull().default(true),
-  enabled: boolean('enabled').notNull().default(true),
-  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
-  lastError: text('last_error'),
-  lastItemCount: integer('last_item_count'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const ingestSources = pgTable(
+  'ingest_sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    kind: ingestSourceKind('kind').notNull(),
+    url: text('url').notNull(),
+    /** Scout account that sync edits are attributed to; null only for the built-in suggestions source. */
+    accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'restrict' }),
+    config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+    /** The venue whose program this feed carries; null for aggregators and organizers that play many venues. */
+    venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
+    /** The venue's or organizer's own site: an event it lists counts as confirmed by the venue. False for aggregators. */
+    official: boolean('official').notNull().default(true),
+    enabled: boolean('enabled').notNull().default(true),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    lastItemCount: integer('last_item_count'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('ingest_sources_account_required', sql`${t.kind}::text = 'suggestion' OR ${t.accountId} IS NOT NULL`)],
+)
 
 export const ingestItems = pgTable(
   'ingest_items',
@@ -268,8 +271,15 @@ export const ingestItems = pgTable(
     fitFingerprint: text('fit_fingerprint'),
     /** Set when a scout rejected the item while the inbox showed duplicate candidates for it. */
     hadDuplicates: boolean('had_duplicates').notNull().default(false),
+    /** The account that suggested the event; only set on items of the suggestions source. */
+    submittedBy: uuid('submitted_by').references(() => accounts.id, { onDelete: 'cascade' }),
+    /** The scout's note to the suggester when rejecting. */
+    rejectReason: text('reject_reason'),
+    /** Storage key of the image the suggester uploaded. */
+    imageKey: text('image_key'),
   },
   (t) => [
+    index('ingest_items_submitted_idx').on(t.submittedBy, t.firstSeenAt),
     uniqueIndex('ingest_items_source_external').on(t.sourceId, t.externalId),
     index('ingest_items_event_idx').on(t.eventId),
   ],

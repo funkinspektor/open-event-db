@@ -7,6 +7,8 @@ import {
   editHistory,
   eventInterests,
   events,
+  ingestItems,
+  ingestSources,
   magicLinkTokens,
   organizerMembers,
   organizers,
@@ -20,6 +22,7 @@ let victimId = ''
 let otherId = ''
 let soleOrgId = ''
 let sharedOrgId = ''
+let suggestionSourceId = ''
 let ownEventId = ''
 let otherEventId = ''
 
@@ -68,6 +71,16 @@ beforeAll(async () => {
     { accountId: victimId, eventId: otherEventId },
     { accountId: otherId, eventId: ownEventId },
   ])
+  const [src] = await db
+    .insert(ingestSources)
+    .values({ slug: `acct-sugg-${tag}`, name: 'Suggestions test', kind: 'suggestion', url: 'https://example.test/', official: false })
+    .returning({ id: ingestSources.id })
+  suggestionSourceId = src!.id
+  await db.insert(ingestItems).values([
+    { sourceId: suggestionSourceId, externalId: `p-${tag}`, status: 'pending', draft: {}, raw: '', submittedBy: victimId },
+    { sourceId: suggestionSourceId, externalId: `r-${tag}`, status: 'rejected', draft: {}, raw: '', submittedBy: victimId },
+    { sourceId: suggestionSourceId, externalId: `o-${tag}`, status: 'pending', draft: {}, raw: '', submittedBy: otherId },
+  ])
   const expiresAt = new Date(Date.now() + 1e6)
   await db.insert(sessions).values({ accountId: victimId, tokenHash: `s-${tag}`, expiresAt })
   await db
@@ -82,6 +95,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await db.delete(ingestSources).where(eq(ingestSources.id, suggestionSourceId))
   await db.delete(events).where(inArray(events.id, [ownEventId, otherEventId]))
   await db.delete(organizers).where(inArray(organizers.id, [soleOrgId, sharedOrgId]))
   await db.delete(editHistory).where(inArray(editHistory.accountId, [victimId, otherId]))
@@ -119,5 +133,15 @@ describe('accounts', () => {
     expect(ev!.createdBy).toBe(victimId)
     // other accounts' interests are untouched
     expect(await db.select().from(eventInterests).where(eq(eventInterests.accountId, otherId))).toHaveLength(1)
+  })
+
+  it('deleteAccount withdraws pending suggestions and keeps decided ones', async () => {
+    await deleteAccount(db, victimId)
+    const rows = await db
+      .select({ externalId: ingestItems.externalId, status: ingestItems.status })
+      .from(ingestItems)
+      .where(eq(ingestItems.sourceId, suggestionSourceId))
+    const byId = Object.fromEntries(rows.map((r) => [r.externalId.split('-')[0], r.status]))
+    expect(byId).toEqual({ p: 'withdrawn', r: 'rejected', o: 'pending' })
   })
 })

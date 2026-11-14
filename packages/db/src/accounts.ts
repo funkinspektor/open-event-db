@@ -5,6 +5,7 @@ import {
   editHistory,
   eventInterests,
   events,
+  ingestItems,
   magicLinkTokens,
   organizerMembers,
   organizers,
@@ -53,6 +54,11 @@ export async function deleteAccount(
     }
     await tx.delete(organizerMembers).where(eq(organizerMembers.accountId, accountId))
     await tx.delete(eventInterests).where(eq(eventInterests.accountId, accountId))
+    // Pending suggestions leave the inbox; decided ones stay as the record of what the scouts did
+    await tx
+      .update(ingestItems)
+      .set({ status: 'withdrawn' })
+      .where(and(eq(ingestItems.submittedBy, accountId), eq(ingestItems.status, 'pending')))
     // Profile history holds their old names
     await tx.delete(editHistory).where(and(eq(editHistory.entityType, 'account'), eq(editHistory.entityId, accountId)))
     await tx

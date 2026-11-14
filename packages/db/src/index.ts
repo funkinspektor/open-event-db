@@ -11,3 +11,4 @@ export type Db = ReturnType<typeof createDb>
 export * from './schema.js'
 export * from './tokens.js'
 export * from './accounts.js'
+export * from './suggestions.js'

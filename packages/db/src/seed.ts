@@ -1,4 +1,5 @@
 import { createDb } from './index.js'
+import { ensureSuggestionsSource } from './suggestions.js'
 import { accounts, editHistory, events, eventOrganizers, organizerMembers, organizers, venues } from './schema.js'
 
 const url = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
@@ -22,6 +23,7 @@ await db.delete(venues)
 await db.delete(organizerMembers)
 await db.delete(organizers)
 await db.delete(accounts)
+await ensureSuggestionsSource(db)
 
 const [alice] = await db
   .insert(accounts)

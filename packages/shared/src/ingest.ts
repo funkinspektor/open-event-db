@@ -85,7 +85,7 @@ export const duplicateCandidateSchema = z.object({
 
 export type DuplicateCandidate = z.infer<typeof duplicateCandidateSchema>
 
-export const ingestItemStatusSchema = z.enum(['pending', 'accepted', 'rejected'])
+export const ingestItemStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'withdrawn'])
 
 export const ingestFitVerdictSchema = z.enum(['fit', 'maybe', 'no'])
 export type IngestFitVerdict = z.infer<typeof ingestFitVerdictSchema>

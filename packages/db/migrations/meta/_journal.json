@@ -169,6 +169,13 @@
       "when": 1794435521924,
       "tag": "0023_registration_interests",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794658753863,
+      "tag": "0024_suggestions",
+      "breakpoints": true
     }
   ]
 }

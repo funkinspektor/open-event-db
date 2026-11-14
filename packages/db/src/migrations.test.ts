@@ -9,6 +9,9 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { drizzle as drizzleOrm } from 'drizzle-orm/postgres-js'
+import { ensureSuggestionsSource } from './suggestions.js'
+import * as schema from './schema.js'
 
 const ADMIN_URL = process.env.DATABASE_URL ?? 'postgres://oedb:oedb@localhost:5432/oedb'
 const MIGRATIONS = fileURLToPath(new URL('../migrations', import.meta.url))
@@ -278,5 +281,47 @@ describe('migration 0023: onboarding, token kinds and event interests', () => {
     await sql`insert into event_interests (account_id, event_id) values (${ACC2}, ${EV3})`
     await sql`delete from accounts where id = ${ACC2}`
     expect(await sql`select account_id from event_interests`).toEqual([{ account_id: ACC }])
+  })
+})
+
+describe('migration 0024: suggestions', () => {
+  let db: Awaited<ReturnType<typeof scratchDb>> | undefined
+
+  beforeEach(async () => {
+    db = await scratchDb()
+    await migrateTo(db.url, null)
+  })
+
+  afterEach(async () => {
+    await db?.drop()
+    db = undefined
+  })
+
+  it('ensureSuggestionsSource is idempotent and creates one suggestion source without an account', async () => {
+    const { sql } = db!
+    const orm = drizzleOrm(sql, { schema }) as unknown as Parameters<typeof ensureSuggestionsSource>[0]
+    const first = await ensureSuggestionsSource(orm)
+    const second = await ensureSuggestionsSource(orm)
+    expect(second).toBe(first)
+    expect(await sql`select id, slug, name, kind, url, official, enabled, account_id, venue_id from ingest_sources`).toEqual([
+      {
+        id: first,
+        slug: 'suggestions',
+        name: 'Suggestions',
+        kind: 'suggestion',
+        url: 'https://kellerkompass.de/',
+        official: false,
+        enabled: true,
+        account_id: null,
+        venue_id: null,
+      },
+    ])
+  })
+
+  it('a feed source still needs an account', async () => {
+    const { sql } = db!
+    await expect(
+      sql`insert into ingest_sources (slug, name, kind, url, account_id) values ('feed', 'Feed', 'ical', 'https://feed.example/e.ics', null)`,
+    ).rejects.toMatchObject({ constraint_name: 'ingest_sources_account_required' })
   })
 })

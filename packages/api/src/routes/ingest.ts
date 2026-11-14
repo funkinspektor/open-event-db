@@ -29,6 +29,7 @@ import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
 import { copyItemImage, syncItemImage } from '../ingest/image.js'
 import { mergePatch } from '../ingest/merge.js'
+import { feedAccountId } from '../ingest/run.js'
 import { draftStartsAt, isOpen, notOver } from '../ingest/open.js'
 import { serializeCoordinates } from '../serializers.js'
 
@@ -177,6 +178,8 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
     return null
   }
 
+  // A withdrawn suggestion is gone from the inbox
+  if (row.item.status === 'withdrawn') return null
   let state: IngestItemState
   if (row.isNew) state = 'new'
   else if (row.isGone) state = 'gone'
@@ -341,7 +344,7 @@ export async function ingestRoutes(app: FastifyInstance) {
           categories: draft.categories,
           tags: [],
           links: draft.links,
-          createdBy: source.accountId,
+          createdBy: feedAccountId(source),
         })
         .returning()
       if (!event) throw new Error('insert returned no row')
