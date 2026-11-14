@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq } from 'drizzle-orm'
-import { mySuggestionSchema, type MySuggestion } from '@open-event-db/shared'
+import { mySuggestionSchema, suggestionPreviewSchema, type MySuggestion } from '@open-event-db/shared'
 import { events, ingestItems, venues } from '@open-event-db/db'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
@@ -332,5 +332,71 @@ describe('GET /accounts/me/suggestions', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/accounts/me/suggestions', headers: people.other.auth, remoteAddress: '203.0.113.77' })
     expect(res.statusCode).toBe(200)
     expect(res.headers['x-ratelimit-limit']).toBe('100')
+  })
+})
+
+describe('GET /suggestions/:id', () => {
+  const get = (who: Who | null, id: string) =>
+    app.inject({ method: 'GET', url: `/api/v1/suggestions/${id}`, headers: who ? people[who].auth : {} })
+
+  it('shows an own pending suggestion as the event it would become', async () => {
+    const id = await created('plain', {
+      title: 'Preview Night',
+      starts_at: '2099-05-01',
+      description: 'Laut',
+      lineup: [{ name: null, acts: [{ name: 'DJ Keller' }] }],
+      venue_id: venueId,
+      city: undefined,
+      links: { tickets: 'https://example.org/t' },
+      categories: ['party'],
+    })
+    expect((await put('plain', id)).statusCode).toBe(200)
+
+    const res = await get('plain', id)
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['cache-control']).toBe('private, no-store')
+    const { suggestion, preview } = suggestionPreviewSchema.parse(res.json().data)
+    expect(suggestion).toMatchObject({ id, status: 'in_review', title: 'Preview Night' })
+    expect(preview).toMatchObject({
+      id,
+      title: 'Preview Night',
+      description: 'Laut',
+      start_time_known: false,
+      status: 'scheduled',
+      city: 'Leipzig',
+      categories: ['party'],
+      links: { tickets: 'https://example.org/t' },
+      organizers: [],
+      venue: { id: venueId, name: 'Sugg Venue', address: 'Weg 1', city: 'Leipzig', coordinates: null },
+      added_by: { id: people.plain.id, is_scout: false },
+    })
+    expect(preview.lineup).toHaveLength(1)
+    expect(preview.image_url).toBe(suggestion.image_url)
+    expect(preview.image_url).toMatch(/^https?:\/\//)
+    expect('interested' in preview).toBe(false)
+  })
+
+  it('keeps start_time_known true for a suggestion with a time, and falls back to the location text', async () => {
+    const id = await created('plain', { location_text: 'Hinterhof' })
+    const { preview } = (await get('plain', id)).json().data
+    expect(preview).toMatchObject({ start_time_known: true, venue: null, location_text: 'Hinterhof', city: 'Berlin', image_url: null })
+  })
+
+  it('is not found for another account, a withdrawn suggestion, an unknown id and a non-uuid', async () => {
+    const id = await created('plain')
+    const other = await get('other', id)
+    expect(other.statusCode).toBe(404)
+    expect(other.json().error.code).toBe('not_found')
+    expect((await get('plain', 'not-a-uuid')).statusCode).toBe(404)
+    expect((await get('plain', '00000000-0000-0000-0000-000000000000')).statusCode).toBe(404)
+    expect((await del('plain', id)).statusCode).toBe(204)
+    expect((await get('plain', id)).statusCode).toBe(404)
+  })
+
+  it('needs a session or key, and an onboarded account', async () => {
+    // Another account sends it: 'plain' is close to the write limit by now
+    const id = await created('other')
+    expect((await get(null, id)).statusCode).toBe(401)
+    expect((await get('fresh', id)).statusCode).toBe(403)
   })
 })

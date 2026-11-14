@@ -5,13 +5,17 @@ import {
   EVENT_IMAGE_MAX_BYTES,
   EXTRACT_IMAGE_TYPES,
   suggestionCreateSchema,
+  type EventDetail,
+  type IngestDraft,
   type MySuggestion,
+  type SuggestionPreview,
 } from '@open-event-db/shared'
 import { ensureSuggestionsSource, ingestItems, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
 import { currentAccount, requireAuth, requireOnboarded, writeRateLimit } from '../auth.js'
 import { ApiError, badRequest, conflict, notFound } from '../errors.js'
 import { markPrivate } from '../headers.js'
+import { serializeCoordinates } from '../serializers.js'
 import { sniffImageType } from '../images/sniff.js'
 import { imageStore, suggestionImageKey } from '../images/store.js'
 import { suggestionStart, toSuggestionDraft } from '../suggestions/draft.js'
@@ -202,6 +206,59 @@ export async function suggestionRoutes(app: FastifyInstance) {
     })
     if (item.imageKey) await deleteSuggestionImage(item.id, item.imageKey)
     return reply.code(204).send()
+  })
+
+  app.get<{ Params: { id: string } }>('/suggestions/:id', readGuard, async (req, reply) => {
+    markPrivate(reply)
+    const me = currentAccount(req)
+    const item = await ownItem(req.params.id, me.id)
+    const draft = item.draft as IngestDraft
+    const venue = draft.venue_id
+      ? ((await db.select().from(venues).where(eq(venues.id, draft.venue_id)).limit(1))[0] ?? null)
+      : null
+    // Ids and timestamps are the suggestion's own: the preview is never stored as an event
+    const preview: EventDetail = {
+      id: item.id,
+      title: draft.title,
+      description: draft.description,
+      starts_at: draft.starts_at,
+      start_time_known: !draft.times_unverified,
+      ends_at: draft.ends_at,
+      status: 'scheduled',
+      categories: draft.categories,
+      tags: [],
+      links: draft.links,
+      lineup: draft.lineup,
+      recurrence: null,
+      location_text: draft.location_text,
+      city: venue?.city ?? draft.city,
+      image_url: draft.image_url,
+      added_by: {
+        id: me.id,
+        handle: me.handle,
+        display_name: me.displayName,
+        is_scout: me.isScout,
+        is_organizer_member: false,
+      },
+      claimed: false,
+      provenance: 'scout',
+      created_at: item.firstSeenAt.toISOString(),
+      updated_at: item.firstSeenAt.toISOString(),
+      venue: venue
+        ? {
+            id: venue.id,
+            name: venue.name,
+            address: venue.address,
+            city: venue.city,
+            coordinates: serializeCoordinates(venue.coordinates),
+          }
+        : null,
+      organizers: [],
+      synced_from: null,
+      venue_listing: null,
+    }
+    const data: SuggestionPreview = { suggestion: toMySuggestion(item), preview }
+    return { data }
   })
 
   app.get('/accounts/me/suggestions', readGuard, async (req, reply) => {

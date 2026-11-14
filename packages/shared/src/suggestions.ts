@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { eventFieldsSchema } from './events.js'
+import { eventDetailSchema, eventFieldsSchema } from './events.js'
 
 /** What a person may suggest: event fields without organizer, tags and recurrence (a scout adds those on accept). */
 export const suggestionCreateSchema = eventFieldsSchema.omit({ tags: true, recurrence: true })
@@ -22,3 +22,14 @@ export const mySuggestionSchema = z.object({
 })
 
 export type MySuggestion = z.infer<typeof mySuggestionSchema>
+
+/**
+ * `GET /suggestions/:id`: the suggestion plus the event it would become, in the event detail shape so the
+ * event page can show it. Ids and timestamps of the preview are the suggestion's own; there are no organizers.
+ */
+export const suggestionPreviewSchema = z.object({
+  suggestion: mySuggestionSchema,
+  preview: eventDetailSchema,
+})
+
+export type SuggestionPreview = z.infer<typeof suggestionPreviewSchema>
