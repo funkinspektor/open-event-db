@@ -194,20 +194,14 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
 }
 
 /**
- * Where a page of a view ends: the rank, the draft start as an ISO instant, then the id (the list order).
- * A cursor without a rank (from before fit scoring) does not parse and starts from the top.
+ * Where a page of a view ends: the draft start as an ISO instant, then the id (the list order: soonest first,
+ * whatever the fit verdict, so events that start soon get decided first). A cursor from the old fit-first
+ * order still carries a `rank`; it is ignored and paging continues by date.
  */
 const itemCursorSchema = z.object({
-  rank: z.number().int().min(0).max(2),
   starts_at: z.string().datetime({ offset: true }),
   id: z.string().uuid(),
 })
-
-/** Fits first, then maybes, then the rest, in New; the other views have no rank. One expression for select, keyset and order. */
-const rankOf = (view: IngestView) =>
-  view === 'new'
-    ? sql<number>`(case ${ingestItems.fitVerdict} when 'fit' then 0 when 'maybe' then 1 else 2 end)::int`
-    : sql<number>`0::int` // cast: a bare 0 in ORDER BY would be a column position
 
 interface ListQuery {
   view: IngestView
@@ -222,12 +216,11 @@ async function listItems(
 ): Promise<{ items: IngestItemView[]; cursor: string | null; hasMore: boolean }> {
   const conditions: (SQL | undefined)[] = [view === 'new' ? isNew() : view === 'filtered' ? isFiltered() : isGone]
   if (source) conditions.push(eq(ingestSources.slug, source))
-  const rank = rankOf(view)
   // An unreadable cursor starts from the top, as on GET /events
   const after = itemCursorSchema.safeParse(cursor ? decodeCursor(cursor) : null)
   if (after.success) {
     conditions.push(
-      sql`(${rank}, ${draftStartsAt}, ${ingestItems.id}) > (${after.data.rank}::int, ${after.data.starts_at}::timestamptz, ${after.data.id}::uuid)`,
+      sql`(${draftStartsAt}, ${ingestItems.id}) > (${after.data.starts_at}::timestamptz, ${after.data.id}::uuid)`,
     )
   }
 
@@ -236,7 +229,6 @@ async function listItems(
       item: ingestItems,
       source: { slug: ingestSources.slug, name: ingestSources.name },
       venueName: venues.name,
-      rank: sql<number>`${rank}`.as('rank'),
       // Read from the row, not the parsed draft: a page may end on a broken one
       startsAt: sql<string>`to_json(${draftStartsAt}) #>> '{}'`,
     })
@@ -247,13 +239,13 @@ async function listItems(
   const query = view === 'gone' ? base.innerJoin(events, eq(events.id, ingestItems.eventId)) : base
   const rows = await query
     .where(and(...conditions))
-    .orderBy(asc(rank), asc(draftStartsAt), asc(ingestItems.id))
+    .orderBy(asc(draftStartsAt), asc(ingestItems.id))
     .limit(limit + 1)
 
   const hasMore = rows.length > limit
   const page = hasMore ? rows.slice(0, limit) : rows
   const last = page[page.length - 1]
-  const nextCursor = hasMore && last ? encodeCursor({ rank: last.rank, starts_at: last.startsAt, id: last.item.id }) : null
+  const nextCursor = hasMore && last ? encodeCursor({ starts_at: last.startsAt, id: last.item.id }) : null
 
   // A broken stored draft must not take the inbox down for every scout: skip it and log it
   const valid = page.flatMap(({ item, source, venueName }) => {

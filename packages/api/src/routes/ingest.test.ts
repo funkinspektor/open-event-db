@@ -372,9 +372,10 @@ describe('GET /ingest/items and /ingest/count', () => {
       await db.delete(ingestSources).where(eq(ingestSources.slug, fitSource)) // cascades items
     })
 
-    const newOrder = () => [items.fitD2.id, items.fitD3.id, items.maybeD1.id, items.unscoredD2.id]
+    // Soonest first, whatever the verdict; same start: by id
+    const newOrder = () => [items.maybeD1.id, ...[items.fitD2.id, items.unscoredD2.id].sort(), items.fitD3.id]
 
-    it('sorts fits first and moves misfits to the filtered view', async () => {
+    it('sorts by start date regardless of the verdict and moves misfits to the filtered view', async () => {
       const res = await page('view=new&limit=100')
       expect(idsOf(res)).toEqual(newOrder())
       expect(res.json().meta.counts).toEqual({ new: 4, filtered: 1, gone: 0 })
@@ -423,19 +424,21 @@ describe('GET /ingest/items and /ingest/count', () => {
       }
     })
 
-    it('pages across the boundary between fits and maybes', async () => {
+    it('pages through the date order, including items with the same start', async () => {
+      const order = newOrder()
       const first = await page('view=new&limit=2')
-      expect(idsOf(first)).toEqual([items.fitD2.id, items.fitD3.id])
+      expect(idsOf(first)).toEqual(order.slice(0, 2))
       expect(first.json().meta.has_more).toBe(true)
       const second = await page(`view=new&limit=2&cursor=${first.json().meta.cursor}`)
-      expect(idsOf(second)).toEqual([items.maybeD1.id, items.unscoredD2.id])
+      expect(idsOf(second)).toEqual(order.slice(2))
       expect(second.json().meta).toMatchObject({ has_more: false, cursor: null })
     })
 
-    it('a cursor without a rank starts from the top', async () => {
-      const old = encodeCursor({ starts_at: day(2), id: items.fitD2.id })
-      const res = await page(`view=new&limit=2&cursor=${old}`)
-      expect(idsOf(res)).toEqual([items.fitD2.id, items.fitD3.id])
+    it('a cursor from the old fit order keeps paging by date', async () => {
+      const order = newOrder()
+      const old = encodeCursor({ rank: 0, starts_at: day(1), id: items.maybeD1.id })
+      const res = await page(`view=new&limit=10&cursor=${old}`)
+      expect(idsOf(res)).toEqual(order.slice(1))
     })
   })
 
