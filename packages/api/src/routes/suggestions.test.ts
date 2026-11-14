@@ -7,6 +7,7 @@ import { db } from '../db.js'
 import { buildApp } from '../app.js'
 import { imageStore, memoryImageStore } from '../images/store.js'
 import { cleanup, createAccount } from '../test/fixtures.js'
+import { cleanupSuggestionImages } from '../cleanup.js'
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)])
 const DAY = 86_400_000
@@ -213,6 +214,31 @@ describe('suggestion images and withdrawal', () => {
     expect((await del('plain', rejected)).statusCode).toBe(409)
     expect((await put('plain', rejected)).statusCode).toBe(409)
     expect((await row(rejected)).status).toBe('rejected')
+  })
+
+  it('withdraw: a failed image delete keeps the key, so the cleanup deletes it', async () => {
+    const id = await created('plain')
+    await put('plain', id)
+    const key = (await row(id)).imageKey!
+    const realDelete = store.delete
+    store.delete = async () => {
+      throw new Error('store down')
+    }
+    try {
+      expect((await del('plain', id)).statusCode).toBe(204)
+    } finally {
+      store.delete = realDelete
+    }
+    const item = await row(id)
+    expect(item.status).toBe('withdrawn')
+    expect(item.imageKey).toBe(key)
+    expect(store.objects.has(key)).toBe(true)
+
+    await cleanupSuggestionImages()
+    expect(store.objects.has(key)).toBe(false)
+    const after = await row(id)
+    expect(after.imageKey).toBeNull()
+    expect((after.draft as { image_url: unknown }).image_url).toBeNull()
   })
 })
 

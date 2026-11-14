@@ -16,6 +16,7 @@ import { markPrivate } from '../headers.js'
 import { sniffImageType } from '../images/sniff.js'
 import { imageStore, suggestionImageKey } from '../images/store.js'
 import { suggestionStart, toSuggestionDraft } from '../suggestions/draft.js'
+import { deleteSuggestionImage } from '../ingest/image.js'
 
 const guard = { onRequest: [requireAuth, requireOnboarded], config: { rateLimit: writeRateLimit } }
 
@@ -182,18 +183,19 @@ export async function suggestionRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>('/suggestions/:id', guard, async (req, reply) => {
     const me = currentAccount(req)
-    const previous = await db.transaction(async (tx) => {
-      const [item] = await tx
+    const item = await db.transaction(async (tx) => {
+      const [found] = await tx
         .select()
         .from(ingestItems)
         .where(and(eq(ingestItems.id, uuidOrNil(req.params.id)), eq(ingestItems.submittedBy, me.id), ne(ingestItems.status, 'withdrawn')))
         .for('update')
-      if (!item) throw notFound('Suggestion not found')
-      if (item.status !== 'pending') throw conflict('Only a suggestion that is still in review can be withdrawn')
-      await tx.update(ingestItems).set({ status: 'withdrawn', imageKey: null, draft: { ...item.draft, image_url: null } }).where(eq(ingestItems.id, item.id))
-      return item.imageKey
+      if (!found) throw notFound('Suggestion not found')
+      if (found.status !== 'pending') throw conflict('Only a suggestion that is still in review can be withdrawn')
+      // The image key stays until its object is deleted: if that fails, the cleanup deletes withdrawn images at once
+      await tx.update(ingestItems).set({ status: 'withdrawn' }).where(eq(ingestItems.id, found.id))
+      return found
     })
-    await deleteQuietly(previous)
+    if (item.imageKey) await deleteSuggestionImage(item.id, item.imageKey)
     return reply.code(204).send()
   })
 

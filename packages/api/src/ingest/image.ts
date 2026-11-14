@@ -63,19 +63,28 @@ export async function moveSuggestionImage(eventId: string, item: IngestItem, dra
   }
 }
 
-/** Forgets a decided suggestion's own image and deletes its object. Never throws. */
+/** Deletes a decided suggestion's own image object, then forgets its key. Never throws. */
 export async function dropSuggestionImage(item: IngestItem): Promise<void> {
+  if (item.imageKey) await deleteSuggestionImage(item.id, item.imageKey)
+}
+
+/**
+ * Deletes a suggestion's own image object first and clears its key and the draft's image URL only after that
+ * succeeded, so a failed delete leaves the key for the cleanup to retry. Never throws; returns whether it is gone.
+ */
+export async function deleteSuggestionImage(itemId: string, key: string): Promise<boolean> {
   const store = imageStore.store
-  const key = item.imageKey
-  if (!key || !store) return
+  if (!store) return false
   try {
+    await store.delete(key)
     await db
       .update(ingestItems)
       .set({ imageKey: null, draft: sql`jsonb_set(${ingestItems.draft}, '{image_url}', 'null'::jsonb)` })
-      .where(and(eq(ingestItems.id, item.id), eq(ingestItems.imageKey, key)))
-    await store.delete(key)
+      .where(and(eq(ingestItems.id, itemId), eq(ingestItems.imageKey, key)))
+    return true
   } catch (err) {
-    console.warn(`Could not delete the image ${key} of suggestion ${item.id}:`, err instanceof Error ? err.message : err)
+    console.warn(`Could not delete the image ${key} of suggestion ${itemId}:`, err instanceof Error ? err.message : err)
+    return false
   }
 }
 

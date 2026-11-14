@@ -1557,6 +1557,29 @@ describe('suggestions in the inbox', () => {
     expect((await itemRow(feedItem.id)).detachedAt).not.toBeNull()
   })
 
+  it('a link that does not take the image keeps its key when the delete fails', async () => {
+    const store = memoryImageStore()
+    imageStore.setStore(store)
+    const id = randomUUID()
+    const key = `suggestions/${id}/${randomUUID()}.png`
+    await store.put(key, PNG, 'image/png')
+    const item = await suggestion(submitter, { id, imageKey: key }, { image_url: store.url(key) })
+    const [target] = await db
+      .insert(events)
+      .values({ title: 'Delete fails', startsAt: new Date('2033-01-05T20:00:00Z'), city: 'Linktown', createdBy: alice.id })
+      .returning()
+    eventIds.push(target!.id)
+    store.delete = async () => {
+      throw new Error('store down')
+    }
+    expect((await post(`/items/${item.id}/link`, keyReviewer, { event_id: target!.id })).statusCode).toBe(200)
+    // The cleanup still finds it and retries
+    const stored = await itemRow(item.id)
+    expect(stored.status).toBe('accepted')
+    expect(stored.imageKey).toBe(key)
+    expect(store.objects.has(key)).toBe(true)
+  })
+
   it('accept falls back to the draft place, never the source name, when the suggested venue was deleted', async () => {
     const [gone] = await db.insert(venues).values({ name: `Gone Sugg Venue ${stamp}`, address: 'x', city: 'Goneville' }).returning()
     const picked = await suggestion(submitter, {}, { venue_id: gone!.id, location_text: null, city: 'Goneville' })

@@ -2,6 +2,7 @@ import { and, inArray, isNotNull, isNull, lt, ne, or, eq, sql } from 'drizzle-or
 import { accounts, editHistory, events, ingestItems, ingestSources, magicLinkTokens, organizerMembers, sessions } from '@open-event-db/db'
 import { db } from './db.js'
 import { imageStore } from './images/store.js'
+import { deleteSuggestionImage } from './ingest/image.js'
 
 export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 
@@ -85,16 +86,7 @@ export async function cleanupSuggestionImages(now = new Date()): Promise<number>
   for (const row of rows) {
     const key = row.imageKey
     if (!key) continue
-    try {
-      await store.delete(key)
-      await db
-        .update(ingestItems)
-        .set({ imageKey: null, draft: sql`jsonb_set(${ingestItems.draft}, '{image_url}', 'null'::jsonb)` })
-        .where(and(eq(ingestItems.id, row.id), eq(ingestItems.imageKey, key)))
-      deleted++
-    } catch (err) {
-      console.warn(`Could not delete the image ${key} of suggestion ${row.id}:`, err instanceof Error ? err.message : err)
-    }
+    if (await deleteSuggestionImage(row.id, key)) deleted++
   }
   return deleted
 }
