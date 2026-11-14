@@ -422,9 +422,11 @@ After the deploy, on production:
 
 ## Release: suggestions
 
-Migration `0024` is additive (new table and columns, nothing dropped), so no snapshot is needed; the API
-container applies it and runs `ensureSuggestionsSource` (creates the internal source for accepted suggestions)
-on start. Before deploying, the owner approves the changed texts in `packages/web/src/content/legal/` (privacy
+Migration `0024` is additive (new enum values, columns, an index and a check constraint; no new table, nothing
+dropped), so no snapshot is needed; the API container applies it and runs `ensureSuggestionsSource` (creates the
+internal source for accepted suggestions) on start. That step refuses to start the API if a source with the slug
+`suggestions` already exists with another kind: check first that
+`select slug, kind from ingest_sources where slug = 'suggestions'` returns no row. Before deploying, the owner approves the changed texts in `packages/web/src/content/legal/` (privacy
 policy section 4b and the flyer import in section 6, terms section 4a).
 
 New optional API environment variables (the defaults are fine, set them only to change the limits):
@@ -441,7 +443,8 @@ After the deploy, on production:
 3. Edit and accept it (`/ingest/<id>/edit`): the event is live with "Added by <name>", the image is on the event.
 4. The submitter receives the "your suggestion is live" mail.
 5. Suggest another one and reject it with a reason: the reason shows in "My suggestions" on `/dashboard`.
-6. Suggest a third one and withdraw it; its image disappears at the next hourly cleanup.
+6. Suggest a third one and withdraw it; its image is deleted at once (only if that delete fails does the next
+   hourly cleanup retry it).
 7. Delete the test account(s) and the test event.
 
 ## Going public
