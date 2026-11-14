@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { z } from 'zod'
 import type { EventCategory, EventStatus, Lineup, venueDetailEmbedSchema } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
+import { responsiveImageProps } from '@/lib/image-src'
 import { formatEndDayMark, formatShortDate, formatTimeRange, relativeDayLabel } from '@/lib/format'
 import { describeRecurrence } from '@/lib/recurrence'
 import { BackIcon, NextIcon } from './Icons'
@@ -75,7 +76,8 @@ export function EventDetailBody({
   const image = imageUrl && (
     <a href={imageUrl} target="_blank" rel="noopener noreferrer" className="kk-event-image">
       {/* No referrer: the inbox preview shows feed images straight from their host */}
-      <img src={imageUrl} alt={`Image for ${title}`} referrerPolicy="no-referrer" />
+      {/* At most 420px wide (mobile) or 380px (sidebar); the link still opens the original */}
+      <img {...responsiveImageProps(imageUrl, '420px')} alt={`Image for ${title}`} referrerPolicy="no-referrer" />
     </a>
   )
   const map = venue?.coordinates && <Map lat={venue.coordinates.lat} lng={venue.coordinates.lng} title={venue.name} />

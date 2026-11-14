@@ -13,6 +13,7 @@ import type {
   SuggestionPreview,
   Venue,
 } from '@open-event-db/shared'
+import { cookies } from 'next/headers'
 
 export const API_URL =
   process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
@@ -22,14 +23,54 @@ const INTERNAL_HEADERS: Record<string, string> = process.env.API_INTERNAL_TOKEN
   ? { 'x-internal-token': process.env.API_INTERNAL_TOKEN }
   : {}
 
-export const ALL_STATUSES = 'scheduled,postponed,cancelled'
+export { ALL_STATUSES } from './filters'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUuid = (s: string) => UUID_RE.test(s)
 
+/** How long a visitor without a session may see a public API answer before it is fetched again. */
+const PUBLIC_REVALIDATE_S = 30
+/** A cold API container needs a few seconds to start; past this an attempt is given up and retried once. */
+const ATTEMPT_TIMEOUT_MS = 10_000
+const RETRY_DELAY_MS = 300
+
+/**
+ * fetch with a timeout and one retry when the API can't be reached or answers 5xx (a cold start, a
+ * deploy rolling out). Only for GETs: they are safe to repeat.
+ */
+async function apiFetch(url: string, init: RequestInit & { next?: { revalidate: number } }): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS) })
+      if (res.status < 500 || attempt === 2) return res
+    } catch (err) {
+      if (attempt === 2) throw err
+    }
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+  }
+}
+
+/**
+ * True for a visitor without a session (cookie name as in session.ts). Their pages show public data only,
+ * so the answers can be cached for a short while. Logged-in people always get fresh data: they are the
+ * ones editing, and expect to see their change right away.
+ */
+async function isAnonymousVisitor(): Promise<boolean> {
+  try {
+    return !(await cookies()).has('oedb_session')
+  } catch {
+    return false // outside a request: don't cache
+  }
+}
+
 async function get<T>(path: string, cookieHeader?: string): Promise<T | null> {
   const headers = cookieHeader ? { ...INTERNAL_HEADERS, cookie: cookieHeader } : INTERNAL_HEADERS
-  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store', headers })
+  // A cached answer also keeps the page up while the API restarts: the stale entry is served until a refetch succeeds.
+  const caching =
+    !cookieHeader && (await isAnonymousVisitor())
+      ? { next: { revalidate: PUBLIC_REVALIDATE_S } }
+      : { cache: 'no-store' as const }
+  const res = await apiFetch(`${API_URL}${path}`, { ...caching, headers })
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`API ${res.status} for ${path}`)
   return (await res.json()) as T
@@ -82,7 +123,7 @@ export async function getTags(): Promise<string[]> {
 }
 
 export async function getMe(cookieHeader: string): Promise<AccountMe | null> {
-  const res = await fetch(`${API_URL}/api/v1/auth/me`, {
+  const res = await apiFetch(`${API_URL}/api/v1/auth/me`, {
     headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
     cache: 'no-store',
   })
@@ -91,7 +132,7 @@ export async function getMe(cookieHeader: string): Promise<AccountMe | null> {
 }
 
 async function getScout<T>(path: string, cookieHeader: string): Promise<T> {
-  const res = await fetch(`${API_URL}/api/v1${path}`, {
+  const res = await apiFetch(`${API_URL}/api/v1${path}`, {
     headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
     cache: 'no-store',
   })
@@ -135,7 +176,7 @@ export async function getIngestAccuracy(cookieHeader: string): Promise<IngestAcc
 
 /** One inbox item with its state; null for an unknown item. */
 export async function getIngestItem(id: string, cookieHeader: string): Promise<IngestItemDetail | null> {
-  const res = await fetch(`${API_URL}/api/v1/ingest/items/${id}`, {
+  const res = await apiFetch(`${API_URL}/api/v1/ingest/items/${id}`, {
     headers: { ...INTERNAL_HEADERS, cookie: cookieHeader },
     cache: 'no-store',
   })

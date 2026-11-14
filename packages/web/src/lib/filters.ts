@@ -1,7 +1,9 @@
 import type { EventCategory } from '@open-event-db/shared'
-import { ALL_STATUSES } from './api'
 import { parseCategories } from './categories'
 import { TZ } from './format'
+
+// Lives here, not in api.ts: this module is also bundled for the browser, and api.ts is server-only.
+export const ALL_STATUSES = 'scheduled,postponed,cancelled'
 
 export type Range = 'upcoming' | 'today' | 'weekend' | 'week' | 'custom'
 export const RANGES: { key: Range; label: string }[] = [

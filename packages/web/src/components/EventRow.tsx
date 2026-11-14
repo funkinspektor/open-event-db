@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { EventSlim } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
+import { thumbnailProps } from '@/lib/image-src'
 import { dayKey, formatDay, formatRowDate, formatTime, formatTimeRange, isHappeningNow, knownStart } from '@/lib/format'
 import { InterestToggle } from './InterestToggle'
 import { StatusBadge } from './StatusBadge'
@@ -83,7 +84,8 @@ export function EventRow({
         </div>
         {event.image_url && (
           <span className="kk-thumb kk-thumb--row" aria-hidden="true">
-            <img src={event.image_url} alt="" loading="lazy" />
+            {/* 48×64 CSS px, cropped from the top: the 1x–3x variants stay sharp for portrait and landscape images */}
+            <img {...thumbnailProps(event.image_url, [128, 256, 384])} alt="" loading="lazy" decoding="async" />
           </span>
         )}
       </div>

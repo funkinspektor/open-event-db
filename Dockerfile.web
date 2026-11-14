@@ -28,6 +28,8 @@ ENV NODE_ENV=production \
 COPY --from=build /repo/packages/web/.next/standalone ./
 COPY --from=build /repo/packages/web/.next/static ./packages/web/.next/static
 COPY --from=build /repo/packages/web/public ./packages/web/public
+# Resized images and cached API responses are written here at runtime; the server runs as `node`.
+RUN mkdir -p packages/web/.next/cache && chown -R node:node packages/web/.next/cache
 USER node
 EXPOSE 3000
 CMD ["node", "packages/web/server.js"]
