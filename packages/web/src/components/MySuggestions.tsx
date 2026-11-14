@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MySuggestion } from '@open-event-db/shared'
@@ -15,15 +15,27 @@ const IMAGE_NOTICES: Record<string, string> = {
   image_unavailable: 'Your suggestion was sent, but images can’t be uploaded right now.',
 }
 
-/** "My suggestions": what the account suggested and where each one stands. `justSent` is the `?suggested=` value after sending. */
-export function MySuggestions({ suggestions, justSent }: { suggestions: MySuggestion[]; justSent?: string }) {
+const LOAD_FAILED = 'Your suggestions couldn’t be loaded. Try again later.'
+
+/**
+ * "My suggestions": what the account suggested and where each one stands; `suggestions` is null when loading them
+ * failed. `justSent` is the `?suggested=` value after sending: the thanks show once, then the URL drops it.
+ */
+export function MySuggestions({ suggestions, justSent }: { suggestions: MySuggestion[] | null; justSent?: string }) {
   const router = useRouter()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [thanks, setThanks] = useState(justSent)
+
+  // Kept in state, so the thanks stay while the URL loses the parameter: a reload or a withdraw doesn't repeat them
+  useEffect(() => {
+    if (justSent) router.replace('/dashboard', { scroll: false })
+  }, [justSent, router])
 
   async function withdraw(s: MySuggestion) {
     if (!window.confirm(`Withdraw “${s.title}”? The team won’t see it any more.`)) return
     setError(null)
+    setThanks(undefined)
     setBusyId(s.id)
     try {
       const res = await fetch(`${API_URL}/api/v1/suggestions/${s.id}`, { method: 'DELETE', credentials: 'include' })
@@ -41,10 +53,10 @@ export function MySuggestions({ suggestions, justSent }: { suggestions: MySugges
 
   return (
     <section aria-labelledby="my-suggestions">
-      {justSent && (
+      {thanks && (
         <div className="kk-notice mb-6" role="status">
           {THANKS}
-          {IMAGE_NOTICES[justSent] && <> {IMAGE_NOTICES[justSent]}</>}
+          {IMAGE_NOTICES[thanks] && <> {IMAGE_NOTICES[thanks]}</>}
         </div>
       )}
       <h2 id="my-suggestions" className="kk-section-title">
@@ -56,7 +68,11 @@ export function MySuggestions({ suggestions, justSent }: { suggestions: MySugges
           {error}
         </div>
       )}
-      {suggestions.length === 0 ? (
+      {suggestions === null ? (
+        <div className="kk-alert mt-4" role="alert">
+          {LOAD_FAILED}
+        </div>
+      ) : suggestions.length === 0 ? (
         <p className="kk-empty">
           No suggestions yet.{' '}
           <Link href="/events/new" className="underline underline-offset-2">
@@ -97,6 +113,7 @@ export function MySuggestions({ suggestions, justSent }: { suggestions: MySugges
                   </>
                 )}
                 {s.status === 'not_accepted' && <span className="kk-badge kk-badge--cancelled">Not accepted</span>}
+                {s.status === 'expired' && <span className="kk-badge kk-badge--postponed">Not reviewed in time</span>}
               </div>
             </li>
           ))}

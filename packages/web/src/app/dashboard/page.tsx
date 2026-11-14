@@ -46,8 +46,9 @@ export default async function DashboardPage({
 
   // Suggestions: for every account that can suggest, and for anyone who still has some (e.g. after becoming a scout)
   const cookie = await getSessionCookieHeader()
-  const suggestions = cookie ? await getMySuggestions(cookie).catch(() => []) : []
-  const showSuggestions = canSuggestEvents(me) || suggestions.length > 0
+  // null: loading failed, which My suggestions says instead of claiming there are none
+  const suggestions = cookie ? await getMySuggestions(cookie).catch(() => null) : []
+  const showSuggestions = canSuggestEvents(me) || (suggestions?.length ?? 0) > 0
 
   // Members see the events of their verified organizers; scouts also see the events they added (claimed or not)
   const verified = me.organizers.filter((o) => o.verified)
