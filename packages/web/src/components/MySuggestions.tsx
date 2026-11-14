@@ -84,7 +84,9 @@ export function MySuggestions({ suggestions, justSent }: { suggestions: MySugges
           {suggestions.map((s) => (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-line py-4">
               <div className="min-w-0">
-                <div className="text-[18px] font-bold">{s.title}</div>
+                <div className="text-[18px] font-bold">
+                  <Link href={s.status === 'live' && s.event_id ? `/events/${s.event_id}` : `/suggestions/${s.id}`}>{s.title}</Link>
+                </div>
                 <div className="text-body text-muted">{formatDate(s.starts_at)}</div>
                 {s.status === 'not_accepted' && s.reason && <div className="text-body text-muted">{s.reason}</div>}
               </div>

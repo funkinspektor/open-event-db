@@ -10,6 +10,7 @@ import type {
   Meta,
   MySuggestion,
   OrganizerDetail,
+  SuggestionPreview,
   Venue,
 } from '@open-event-db/shared'
 
@@ -147,4 +148,10 @@ export async function getIngestItem(id: string, cookieHeader: string): Promise<I
 export async function getMySuggestions(cookieHeader: string): Promise<MySuggestion[]> {
   const res = await get<{ data: MySuggestion[] }>('/api/v1/accounts/me/suggestions', cookieHeader)
   return res?.data ?? []
+}
+
+/** One of the account's own suggestions with the event it would become; null when it isn't theirs or is gone. */
+export async function getSuggestionPreview(id: string, cookieHeader: string): Promise<SuggestionPreview | null> {
+  const res = await get<{ data: SuggestionPreview }>(`/api/v1/suggestions/${id}`, cookieHeader)
+  return res?.data ?? null
 }
