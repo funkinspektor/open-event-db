@@ -21,14 +21,14 @@ export function ListToolbar({
   filters,
   allTags,
   loggedIn = false,
-  canCreate = true,
+  entry = 'create',
 }: {
   filters: Filters
   allTags: string[]
   /** Shows the "Only mine" toggle. */
   loggedIn?: boolean
-  /** Hides Create event for accounts that can't create events. */
-  canCreate?: boolean
+  /** The add-event button: create for scouts and organizer members, suggest for other accounts (logged out: via login), none while not onboarded. */
+  entry?: 'create' | 'suggest' | 'suggest-login' | null
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -367,10 +367,13 @@ export function ListToolbar({
             )}
           </div>
           {/* Shown logged out too: /events/new sends visitors to log in. */}
-          {canCreate && (
-            <Link href="/events/new" className="kk-btn kk-btn--outline">
+          {entry && (
+            <Link
+              href={entry === 'suggest-login' ? '/login?return_to=/events/new' : '/events/new'}
+              className="kk-btn kk-btn--outline"
+            >
               <PlusIcon />
-              Create event
+              {entry === 'create' ? 'Create event' : 'Suggest event'}
             </Link>
           )}
         </>

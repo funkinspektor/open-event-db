@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { imageSaveOutcome, savedParam } from './image-save'
+import { imageSaveOutcome, savedParam, suggestedParam } from './image-save'
 
 describe('imageSaveOutcome', () => {
   it('tells a server without image storage from a failed upload', () => {
@@ -16,5 +16,13 @@ describe('savedParam', () => {
     expect(savedParam('edit', 'saved')).toBe('updated')
     expect(savedParam('edit', 'failed')).toBe('updated_image_failed')
     expect(savedParam('create', 'unavailable')).toBe('created_image_unavailable')
+  })
+})
+
+describe('suggestedParam', () => {
+  it('names the message the dashboard shows after a suggestion', () => {
+    expect(suggestedParam('saved')).toBe('1')
+    expect(suggestedParam('failed')).toBe('image_failed')
+    expect(suggestedParam('unavailable')).toBe('image_unavailable')
   })
 })

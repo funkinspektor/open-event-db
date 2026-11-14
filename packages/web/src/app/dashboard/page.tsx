@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { canEdit, type EventSlim } from '@open-event-db/shared'
-import { ALL_STATUSES, getEvent, getEvents } from '@/lib/api'
-import { getCurrentAccount } from '@/lib/session'
-import { permissionActor, permissionEvent } from '@/lib/permissions'
+import { ALL_STATUSES, getEvent, getEvents, getMySuggestions } from '@/lib/api'
+import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
+import { canSuggestEvents, permissionActor, permissionEvent } from '@/lib/permissions'
 import { isHappeningNow, isUpcoming } from '@/lib/format'
+import { MySuggestions } from '@/components/MySuggestions'
 import { EventRow } from '@/components/EventRow'
 import { Headline } from '@/components/Headline'
 import { NextIcon } from '@/components/Icons'
@@ -33,9 +34,20 @@ const editLink = (id: string) => (
 const listQuery = (key: 'organizer_id' | 'added_by', id: string) =>
   new URLSearchParams({ [key]: id, status: ALL_STATUSES, from: '2000-01-01T00:00:00Z', limit: '100' })
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const me = await getCurrentAccount()
   if (!me) redirect('/login')
+  const sp = await searchParams
+  const justSent = typeof sp.suggested === 'string' && sp.suggested ? sp.suggested : undefined
+
+  // Suggestions: for every account that can suggest, and for anyone who still has some (e.g. after becoming a scout)
+  const cookie = await getSessionCookieHeader()
+  const suggestions = cookie ? await getMySuggestions(cookie).catch(() => []) : []
+  const showSuggestions = canSuggestEvents(me) || suggestions.length > 0
 
   // Members see the events of their verified organizers; scouts also see the events they added (claimed or not)
   const verified = me.organizers.filter((o) => o.verified)
@@ -136,9 +148,16 @@ export default async function DashboardPage() {
             + Create event
           </Link>
         )}
+        {!canCreate && canSuggestEvents(me) && (
+          <Link href="/events/new" className="kk-btn kk-btn--primary kk-btn--lg">
+            + Suggest event
+          </Link>
+        )}
       </section>
 
-      {!canCreate && (
+      {showSuggestions && <MySuggestions suggestions={suggestions} justSent={justSent} />}
+
+      {!canCreate && !showSuggestions && (
         <section>
           <h2 className="kk-section-title">No events yet</h2>
           <hr className="kk-rule" />

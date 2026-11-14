@@ -15,3 +15,10 @@ export function permissionActor(me: Pick<AccountMe, 'id' | 'is_scout' | 'organiz
 export function canCreateEvents(me: Pick<AccountMe, 'is_scout' | 'organizers'> | null): boolean {
   return !!me && (me.is_scout || me.organizers.some((o) => o.verified))
 }
+
+/** Everyone else who finished onboarding may suggest events; the team reviews them. */
+export function canSuggestEvents(
+  me: Pick<AccountMe, 'onboarded' | 'is_scout' | 'organizers'> | null,
+): boolean {
+  return !!me && me.onboarded && !canCreateEvents(me)
+}

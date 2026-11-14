@@ -24,14 +24,16 @@ interface Props {
   }
   /** Marks the empty search field after an import. */
   missing?: boolean
+  /** Whether the dropdown offers "Create new venue" (default true). Suggesting people pick an existing venue or type the place. */
+  allowCreate?: boolean
 }
 
-export function VenuePicker({ value, onChange, onCreatingChange, fromImage, missing }: Props) {
+export function VenuePicker({ value, onChange, onCreatingChange, fromImage, missing, allowCreate = true }: Props) {
   const create = fromImage?.create ?? null
   const [query, setQuery] = useState(create?.name ?? '')
   const [results, setResults] = useState<VenueOption[]>([])
   const [open, setOpen] = useState(false)
-  const [creating, setCreatingState] = useState(!!create)
+  const [creating, setCreatingState] = useState(!!create && allowCreate)
   const setCreating = (next: boolean) => {
     setCreatingState(next)
     onCreatingChange?.(next)
@@ -172,18 +174,20 @@ export function VenuePicker({ value, onChange, onCreatingChange, fromImage, miss
             {results.length === 0 && query.trim() && (
               <li className="px-3 py-2.5 text-[15px] font-normal text-muted">No venue matches “{query.trim()}”.</li>
             )}
-            <li role="option" aria-selected={false} className="mt-1 border-t border-line pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setCreating(true)
-                  setOpen(false)
-                }}
-                className="kk-option font-bold"
-              >
-                + Create new venue{query.trim() ? ` “${query.trim()}”` : ''}
-              </button>
-            </li>
+            {allowCreate && (
+              <li role="option" aria-selected={false} className="mt-1 border-t border-line pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreating(true)
+                    setOpen(false)
+                  }}
+                  className="kk-option font-bold"
+                >
+                  + Create new venue{query.trim() ? ` “${query.trim()}”` : ''}
+                </button>
+              </li>
+            )}
           </ul>
         )}
       </div>

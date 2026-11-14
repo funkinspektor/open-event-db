@@ -7,7 +7,7 @@ import { CATEGORY_LABELS } from '@/lib/categories'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import { dayKey } from '@/lib/format'
 import type { DuplicateDraft } from '@/lib/duplicates'
-import { imageSaveOutcome, savedParam, type ImageSaveOutcome } from '@/lib/image-save'
+import { imageSaveOutcome, savedParam, suggestedParam, type ImageSaveOutcome } from '@/lib/image-save'
 import { fromLineupRows, toLineupRows, type LineupGroupRow } from '@/lib/lineup'
 import { EventImageInput, type ImageChange } from './EventImageInput'
 import { LineupEditor } from './LineupEditor'
@@ -26,7 +26,8 @@ export interface PublishAsOption {
 }
 
 interface Props {
-  mode: 'create' | 'edit'
+  /** `suggest`: a plain account proposes an event for review; `accept` (scout edits a suggestion) is added in a later task. */
+  mode: 'create' | 'edit' | 'suggest' | 'accept'
   event?: EventDetail
   /** Edit mode: whether the current account may set `cancelled` (creator, or a scout on an unclaimed event). */
   canCancel?: boolean
@@ -39,11 +40,11 @@ interface Props {
   onDraftChange?: (d: DuplicateDraft) => void
 }
 
-/** Sends the image change for a saved event. */
-async function saveImage(eventId: string, change: ImageChange): Promise<ImageSaveOutcome> {
+/** Sends the image change for a saved event, or for a suggestion (`base` = `suggestions`). */
+async function saveImage(base: 'events' | 'suggestions', id: string, change: ImageChange): Promise<ImageSaveOutcome> {
   if (change.kind === 'keep') return 'saved'
   try {
-    const res = await fetch(`${API_URL}/api/v1/events/${eventId}/image`, {
+    const res = await fetch(`${API_URL}/api/v1/${base}/${id}/image`, {
       method: change.kind === 'replace' ? 'PUT' : 'DELETE',
       credentials: 'include',
       ...(change.kind === 'replace' ? { headers: { 'content-type': change.blob.type || 'image/jpeg' }, body: change.blob } : {}),
@@ -72,6 +73,7 @@ function startFields(e: EventDetail): { date: string; time: string } {
 }
 
 export function EventForm({ mode, event, canCancel = false, knownTags, publishAs = [], imported, onDraftChange }: Props) {
+  if (mode === 'accept') throw new Error('EventForm mode accept is not implemented yet')
   const router = useRouter()
   const pre = imported?.prefill
   const [publishAsValue, setPublishAsValue] = useState(publishAs[0]?.value ?? '')
@@ -101,7 +103,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
   const startsAt = startDate ? `${startDate}T${startTime || '00:00'}` : ''
   const venueId = venue?.id ?? null
   useEffect(() => {
-    if (mode !== 'create') return
+    if (mode !== 'create' && mode !== 'suggest') return
     onDraftChange?.({
       venueId,
       locationText: venueId ? null : locationText.trim() || null,
@@ -141,9 +143,12 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
       venue_id: venue?.id ?? null,
       location_text: venue ? null : locationText || null,
       categories,
-      tags,
       links: fromLinkRows(links),
-      recurrence: recurrence || null,
+    }
+    // Suggestions carry neither tags nor a recurrence: a scout adds those on accept
+    if (mode !== 'suggest') {
+      payload.tags = tags
+      payload.recurrence = recurrence || null
     }
     if (!venue) payload.city = city
     // With one option the API picks the organizer itself; the scout option sends none
@@ -154,6 +159,23 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
 
     setBusy(true)
     try {
+      if (mode === 'suggest') {
+        const res = await fetch(`${API_URL}/api/v1/suggestions`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const json = (await res.json().catch(() => ({}))) as { data?: { id: string }; error?: { message: string } }
+        if (!res.ok || !json.data) {
+          setError(json.error?.message ?? `Request failed (${res.status})`)
+          return
+        }
+        // The suggestion is saved either way; a failed image only adds a notice on the dashboard
+        router.push(`/dashboard?suggested=${suggestedParam(await saveImage('suggestions', json.data.id, image))}`)
+        router.refresh()
+        return
+      }
       const res = await fetch(
         mode === 'create' ? `${API_URL}/api/v1/events` : `${API_URL}/api/v1/events/${event!.id}`,
         {
@@ -169,7 +191,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
         return
       }
       // The event is saved either way; a failed image only changes the message on the event page
-      router.push(`/events/${json.data.id}?saved=${savedParam(mode, await saveImage(json.data.id, image))}`)
+      router.push(`/events/${json.data.id}?saved=${savedParam(mode as 'create' | 'edit', await saveImage('events', json.data.id, image))}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
@@ -239,6 +261,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
         </div>
 
         <VenuePicker
+          allowCreate={mode !== 'suggest'}
           value={venue}
           onChange={setVenue}
           onCreatingChange={setCreatingVenue}
@@ -329,8 +352,8 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
           </div>
         </div>
 
-        <TagInput value={tags} onChange={setTags} knownTags={knownTags} />
-        {suggestedTags.length > 0 && (
+        {mode !== 'suggest' && <TagInput value={tags} onChange={setTags} knownTags={knownTags} />}
+        {mode !== 'suggest' && suggestedTags.length > 0 && (
           <div className="-mt-2 flex flex-wrap items-center gap-2">
             <span className="kk-hint">New tags from the image:</span>
             {suggestedTags.map((t) => (
@@ -348,7 +371,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
           <LinksEditor rows={links} onChange={setLinks} suggestedKeys={LINK_KEYS} />
         </div>
 
-        <RecurrenceInput value={recurrence} onChange={setRecurrence} startsAt={startsAt} />
+        {mode !== 'suggest' && <RecurrenceInput value={recurrence} onChange={setRecurrence} startsAt={startsAt} />}
 
         {mode === 'edit' && (
           <label className="kk-field">
@@ -371,6 +394,13 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
         </div>
       )}
 
+      {mode === 'suggest' && (
+        <p className="kk-hint m-0">
+          The Kellerkompass team reviews your suggestion before it goes live. If it’s accepted, your display name is shown as
+          ‘Added by’.
+        </p>
+      )}
+
       <div className="flex items-center gap-5">
         <button
           type="submit"
@@ -378,7 +408,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
           title={creatingVenue ? 'Save or cancel the new venue first' : undefined}
           className="kk-btn kk-btn--primary kk-btn--lg"
         >
-          {busy ? 'Saving…' : mode === 'create' ? 'Create event' : 'Save changes'}
+          {busy ? (mode === 'suggest' ? 'Sending…' : 'Saving…') : mode === 'create' ? 'Create event' : mode === 'suggest' ? 'Send suggestion' : 'Save changes'}
         </button>
         <button type="button" onClick={() => router.back()} className="kk-btn kk-btn--text">
           Cancel

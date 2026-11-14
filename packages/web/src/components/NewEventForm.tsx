@@ -37,7 +37,7 @@ const sameDraft = (a: DuplicateDraft, b: DuplicateDraft) =>
   a.title === b.title
 
 /** The create page: optional image import on top, then the regular form — pre-filled after an import. */
-export function NewEventForm({ knownTags, publishAs }: { knownTags: string[]; publishAs: PublishAsOption[] }) {
+export function NewEventForm({ knownTags, publishAs, suggest = false }: { knownTags: string[]; publishAs: PublishAsOption[]; suggest?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [imports, setImports] = useState(0)
@@ -53,20 +53,26 @@ export function NewEventForm({ knownTags, publishAs }: { knownTags: string[]; pu
         const found = await searchVenues(draft.venue_name).catch(() => [])
         ;({ venue, candidates } = pickVenue(draft.venue_name, found))
       }
+      const prefill = draftToPrefill(draft, knownTags)
+      // Suggesting people can't create a venue: an unmatched venue name becomes the location text
+      if (suggest && draft.venue_name && !venue) {
+        prefill.locationText = [draft.venue_name, draft.address].filter(Boolean).join(', ')
+      }
       setResult({
-        prefill: draftToPrefill(draft, knownTags),
+        prefill,
         venue,
         candidates,
         venueName: draft.venue_name,
+        // Suggesting people can't create venues; the place name stays as location text
         newVenue:
-          draft.venue_name && !venue && candidates.length === 0
+          !suggest && draft.venue_name && !venue && candidates.length === 0
             ? { name: draft.venue_name, address: draft.address ?? '', city: draft.city }
             : null,
       })
       setImports((n) => n + 1)
       setImageCount(count)
     },
-    [knownTags],
+    [knownTags, suggest],
   )
 
   // The form reports its fields on mount and on change — after an import it remounts pre-filled, which covers that path too.
@@ -97,7 +103,7 @@ export function NewEventForm({ knownTags, publishAs }: { knownTags: string[]; pu
 
       {result && !busy && (
         <div className="kk-notice" role="status">
-          Extracted from your {imageCount > 1 ? 'images' : 'image'} — please check every field before publishing. Fields marked in yellow
+          Extracted from your {imageCount > 1 ? 'images' : 'image'} — please check every field before {suggest ? 'sending' : 'publishing'}. Fields marked in yellow
           couldn’t be read.
         </div>
       )}
@@ -116,7 +122,7 @@ export function NewEventForm({ knownTags, publishAs }: { knownTags: string[]; pu
       {busy && <FormSkeleton />}
       {/* Kept mounted while an import runs, so a failed import doesn't lose what was typed */}
       <div hidden={busy}>
-        <EventForm key={imports} mode="create" knownTags={knownTags} publishAs={publishAs} imported={result ?? undefined} onDraftChange={onDraftChange} />
+        <EventForm key={imports} mode={suggest ? 'suggest' : 'create'} knownTags={knownTags} publishAs={publishAs} imported={result ?? undefined} onDraftChange={onDraftChange} />
       </div>
     </div>
   )

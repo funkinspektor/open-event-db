@@ -6,6 +6,11 @@ export function imageSaveOutcome(status: number, code: string | undefined): Imag
   return status === 503 && code === 'images_unavailable' ? 'unavailable' : 'failed'
 }
 
+/** The `?suggested=` value the dashboard turns into its thanks message (and a notice when the image didn't make it). */
+export function suggestedParam(outcome: ImageSaveOutcome): string {
+  return outcome === 'saved' ? '1' : `image_${outcome}`
+}
+
 /** The `?saved=` value the event page turns into its message after a save. */
 export function savedParam(mode: 'create' | 'edit', outcome: ImageSaveOutcome): string {
   const saved = mode === 'create' ? 'created' : 'updated'

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getIngestCount } from '@/lib/api'
-import { canCreateEvents } from '@/lib/permissions'
+import { canCreateEvents, canSuggestEvents } from '@/lib/permissions'
 import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
 import { Logo } from './Logo'
 import { LogoutButton } from './LogoutButton'
@@ -45,6 +45,11 @@ export async function Header() {
               {canCreateEvents(me) && (
                 <Link href="/events/new" className="kk-menu__item">
                   Create event
+                </Link>
+              )}
+              {canSuggestEvents(me) && (
+                <Link href="/events/new" className="kk-menu__item">
+                  Suggest event
                 </Link>
               )}
               <Link href="/?mine=1" className="kk-menu__item">

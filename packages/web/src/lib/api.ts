@@ -8,6 +8,7 @@ import type {
   IngestSourceCount,
   IngestView,
   Meta,
+  MySuggestion,
   OrganizerDetail,
   Venue,
 } from '@open-event-db/shared'
@@ -140,4 +141,10 @@ export async function getIngestItem(id: string, cookieHeader: string): Promise<I
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`API ${res.status} for /ingest/items/${id}`)
   return ((await res.json()) as { data: IngestItemDetail }).data
+}
+
+/** The account's own suggestions, newest first. Needs the session cookie. */
+export async function getMySuggestions(cookieHeader: string): Promise<MySuggestion[]> {
+  const res = await get<{ data: MySuggestion[] }>('/api/v1/accounts/me/suggestions', cookieHeader)
+  return res?.data ?? []
 }

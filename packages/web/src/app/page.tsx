@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getEvents, getInterestIds, getTags } from '@/lib/api'
 import { getCurrentAccount, getSessionCookieHeader } from '@/lib/session'
-import { canCreateEvents } from '@/lib/permissions'
+import { canCreateEvents, canSuggestEvents } from '@/lib/permissions'
 import { CalendarPanel } from '@/components/CalendarPanel'
 import { buildApiQuery, filtersToHref, parseFilters } from '@/lib/filters'
 import { ListToolbar } from '@/components/ListToolbar'
@@ -68,7 +68,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
       <section aria-label="Event list">
         <hr className="kk-rule" />
-        <ListToolbar filters={filters} allTags={tags} loggedIn={loggedIn} canCreate={!me || canCreateEvents(me)} />
+        <ListToolbar filters={filters} allTags={tags} loggedIn={loggedIn} entry={!me ? 'suggest-login' : canCreateEvents(me) ? 'create' : canSuggestEvents(me) ? 'suggest' : null} />
         {filters.mine && <CalendarPanel />}
         {filters.q && (
           <SearchInfo filters={{ ...filters, q: filters.q }} count={events.data.length} more={events.meta.has_more} />
