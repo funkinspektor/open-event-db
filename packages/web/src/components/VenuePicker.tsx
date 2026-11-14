@@ -172,7 +172,11 @@ export function VenuePicker({ value, onChange, onCreatingChange, fromImage, miss
               </li>
             ))}
             {results.length === 0 && query.trim() && (
-              <li className="px-3 py-2.5 text-[15px] font-normal text-muted">No venue matches “{query.trim()}”.</li>
+              <li className="px-3 py-2.5 text-[15px] font-normal text-muted">
+                No venue matches “{query.trim()}”.
+                {/* Suggest mode can't create venues: point to the free-text place below instead */}
+                {!allowCreate && ' Not listed? Leave this empty and enter the venue under Location text below.'}
+              </li>
             )}
             {allowCreate && (
               <li role="option" aria-selected={false} className="mt-1 border-t border-line pt-1">
