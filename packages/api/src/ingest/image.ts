@@ -1,8 +1,10 @@
-import type { IngestItem } from '@open-event-db/db'
+import { and, eq, sql } from 'drizzle-orm'
+import { ingestItems, type IngestItem } from '@open-event-db/db'
 import type { IngestDraft } from '@open-event-db/shared'
+import { db } from '../db.js'
 import { replaceEventImage } from '../images/events.js'
 import { fetchRemoteImage } from '../images/fetch.js'
-import { imageStore } from '../images/store.js'
+import { imageStore, isLocalStore } from '../images/store.js'
 
 let fetchImpl: typeof fetch = fetch
 
@@ -34,6 +36,46 @@ export async function syncItemImage(item: IngestItem, draft: IngestDraft, accoun
     })
   } catch (err) {
     console.warn(`Could not sync the image of ingest item ${item.id}:`, err instanceof Error ? err.message : err)
+  }
+}
+
+/**
+ * Moves the image a person uploaded with a suggestion onto its event (accept, or link taking the image): copies it
+ * as the scout's edit, then deletes the suggestion's own object and forgets its key. When the copy fails the object
+ * is kept, so the upload is not lost. Never throws.
+ */
+export async function moveSuggestionImage(eventId: string, item: IngestItem, draft: IngestDraft, accountId: string): Promise<void> {
+  const store = imageStore.store
+  const key = item.imageKey
+  if (!key || !store) return
+  try {
+    // A local development store serves from localhost, which fetchRemoteImage refuses: read the file instead
+    let copied: boolean
+    if (isLocalStore(store)) {
+      const image = await store.read(key)
+      copied = !!image && (await replaceEventImage(eventId, image, { accountId })).applied
+    } else {
+      copied = await copyItemImage(eventId, draft, accountId)
+    }
+    if (copied) await dropSuggestionImage(item)
+  } catch (err) {
+    console.warn(`Could not move the image of suggestion ${item.id}:`, err instanceof Error ? err.message : err)
+  }
+}
+
+/** Forgets a decided suggestion's own image and deletes its object. Never throws. */
+export async function dropSuggestionImage(item: IngestItem): Promise<void> {
+  const store = imageStore.store
+  const key = item.imageKey
+  if (!key || !store) return
+  try {
+    await db
+      .update(ingestItems)
+      .set({ imageKey: null, draft: sql`jsonb_set(${ingestItems.draft}, '{image_url}', 'null'::jsonb)` })
+      .where(and(eq(ingestItems.id, item.id), eq(ingestItems.imageKey, key)))
+    await store.delete(key)
+  } catch (err) {
+    console.warn(`Could not delete the image ${key} of suggestion ${item.id}:`, err instanceof Error ? err.message : err)
   }
 }
 

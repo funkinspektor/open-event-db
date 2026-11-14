@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   editHistory,
+  ensureSuggestionsSource,
   events,
+  SUGGESTIONS_SOURCE_SLUG,
   ingestItems,
   ingestSources,
   type Account,
@@ -160,6 +162,24 @@ describe('feedUrl', () => {
 })
 
 describe('runIngest', () => {
+  it('the runner never fetches the suggestions source', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    fitScoring.setScorer({
+      async score() {
+        throw new ExtractionError('provider', 'not in this test')
+      },
+    })
+    await ensureSuggestionsSource(db)
+    const fetched: string[] = []
+    const fetchText = async (url: string) => {
+      fetched.push(url)
+      return EMPTY_FEED
+    }
+    const asked = await runIngest({ only: [SUGGESTIONS_SOURCE_SLUG], now: NOW, fetchText })
+    expect(asked.sources).toEqual([])
+    expect(fetched).toEqual([])
+  })
+
   it('a scoring failure does not fail the run', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     fitScoring.setScorer({

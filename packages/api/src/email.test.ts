@@ -100,12 +100,60 @@ describe('scaleway transport subjects', () => {
     expect(body.additional_headers).toEqual([{ key: 'Reply-To', value: 'kontakt@kellerkompass.de' }])
   })
 
+  it('live mail names the event, its date and its link', async () => {
+    const body = await sent((t) =>
+      t.sendEventLive({
+        to: 'fan@letzte-welle.de',
+        title: 'Keller <Nacht>',
+        startsAt: '2031-07-04T19:30:00.000Z',
+        url: 'http://web.test/events/abc',
+      }),
+    )
+    expect(body.subject).toBe('Your event is live on Kellerkompass')
+    expect(body.to).toEqual([{ email: 'fan@letzte-welle.de' }])
+    expect(body.text).toContain('Keller <Nacht>')
+    expect(body.text).toMatch(/Friday,? 4 July 2031/)
+    expect(body.text).toContain('21:30') // Berlin time
+    expect(body.text).toContain('http://web.test/events/abc')
+    expect(body.text).not.toMatch(/scout/i)
+    expect(body.html).toContain('Keller &lt;Nacht&gt;')
+    expect(body.html).toContain('href="http://web.test/events/abc"')
+  })
+
+  it('live mail without a start time names the day only', async () => {
+    const body = await sent((t) =>
+      t.sendEventLive({
+        to: 'fan@letzte-welle.de',
+        title: 'Flohmarkt',
+        startsAt: '2031-07-03T22:00:00.000Z',
+        startTimeKnown: false,
+        url: 'http://web.test/events/def',
+      }),
+    )
+    expect(body.text).toMatch(/Friday,? 4 July 2031/)
+    expect(body.text).not.toContain('00:00')
+  })
+
   it('the contact address comes from CONTACT_EMAIL', async () => {
     vi.stubEnv('CONTACT_EMAIL', 'help@example.org')
     const body = await sent((t) => t.sendEmailChangedNotice({ to: 'old@letzte-welle.de', newEmail: 'new@letzte-welle.de' }))
     vi.unstubAllEnvs()
     expect(body.text).toContain('help@example.org')
     expect(body.additional_headers).toEqual([{ key: 'Reply-To', value: 'help@example.org' }])
+  })
+})
+
+describe('console transport', () => {
+  it('logs the live mail', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await email.transport.sendEventLive({
+      to: 'fan@letzte-welle.de',
+      title: 'Keller Nacht',
+      startsAt: '2031-07-04T19:30:00.000Z',
+      url: 'http://web.test/events/abc',
+    })
+    expect(log).toHaveBeenCalledOnce()
+    expect(String(log.mock.calls[0]![0])).toContain('http://web.test/events/abc')
   })
 })
 

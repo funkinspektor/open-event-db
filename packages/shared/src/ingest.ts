@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { linksSchema } from './links.js'
 import { lineupSchema } from './lineup.js'
-import { eventCategorySchema, venueDetailEmbedSchema } from './events.js'
+import { eventCategorySchema, eventFieldsSchema, venueDetailEmbedSchema } from './events.js'
 import { cursorQuerySchema } from './pagination.js'
 
 const iso = z.string().datetime({ offset: true })
@@ -93,8 +93,16 @@ export type IngestFitVerdict = z.infer<typeof ingestFitVerdictSchema>
 export const ingestItemViewSchema = z.object({
   id: uuid,
   status: ingestItemStatusSchema,
-  source: z.object({ slug: z.string(), name: z.string() }),
+  /** `kind` tells a person's suggestion (`suggestion`) from a feed item. */
+  source: z.object({ slug: z.string(), name: z.string(), kind: z.string() }),
   draft: ingestDraftSchema,
+  /**
+   * Who suggested the item (suggestions only, else null), with their record: `accepted` counts accepted and merged
+   * suggestions, `decided` those plus rejected ones; pending and withdrawn ones are not counted.
+   */
+  submitter: z
+    .object({ display_name: z.string(), handle: z.string(), accepted: z.number().int(), decided: z.number().int() })
+    .nullable(),
   /** Name of the draft's mapped venue, null without one. */
   venue_name: z.string().nullable(),
   gone_at: iso.nullable(),
@@ -158,7 +166,13 @@ export type IngestAccuracyRow = z.infer<typeof ingestAccuracyRowSchema>
 
 export const ingestRejectSchema = z.object({
   ids: z.array(uuid).min(1).max(100),
+  /** Why, stored on every item of the call; a suggestion's submitter sees it. */
+  reason: z.string().trim().max(500).optional(),
 })
+
+/** Accept publishes the stored draft, or the scout's edited version of it when `event` is given. */
+export const ingestAcceptBodySchema = z.object({ event: eventFieldsSchema.optional() }).optional()
+export type IngestAcceptBody = z.infer<typeof ingestAcceptBodySchema>
 
 /** Event fields a link can take over from the feed's version; `times` is start and end, `place` venue or location. */
 export const ingestMergeFieldSchema = z.enum(['title', 'description', 'lineup', 'times', 'place', 'categories', 'image'])

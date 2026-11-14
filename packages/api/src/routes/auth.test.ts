@@ -22,6 +22,7 @@ beforeAll(async () => {
       outbox.push(msg)
     },
     async sendEmailChangedNotice() {},
+    async sendEventLive() {},
   })
   app = await buildApp({ logger: false })
   const { account } = await createAccount({ label: 'login' })

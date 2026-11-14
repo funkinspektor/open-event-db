@@ -36,6 +36,7 @@ beforeAll(async () => {
       outbox.push(msg)
     },
     async sendEmailChangedNotice() {},
+    async sendEventLive() {},
   })
   app = await buildApp({ logger: true, logStream: { write: (l) => void lines.push(l) } })
   await clear()

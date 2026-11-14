@@ -14,9 +14,22 @@ export interface EmailChangedNoticeEmail {
   newEmail: string
 }
 
+/** To a person whose suggestion a scout accepted or merged: the event is now public. */
+export interface EventLiveEmail {
+  to: string
+  title: string
+  /** ISO instant of the start. */
+  startsAt: string
+  /** The public event page. */
+  url: string
+  /** False for an event whose start time isn't known: the mail names the day only. Default true. */
+  startTimeKnown?: boolean
+}
+
 export interface EmailTransport {
   sendMagicLink(msg: MagicLinkEmail): Promise<void>
   sendEmailChangedNotice(msg: EmailChangedNoticeEmail): Promise<void>
+  sendEventLive(msg: EventLiveEmail): Promise<void>
 }
 
 const escapeHtml = (v: string) =>
@@ -36,6 +49,31 @@ export function emailChangedNoticeText(brand: string, newEmail: string, contact 
     `If this wasn't you, please contact us right away: ${contact} (you can also reply to this mail).`,
   ]
 }
+
+const berlinDay =new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', dateStyle: 'full' })
+const berlinTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', timeStyle: 'short' })
+
+/** "Friday 4 July 2031, 21:30" in Berlin time; the day only when the start time isn't known. */
+export function eventDateText(startsAt: string, startTimeKnown = true): string {
+  const at = new Date(startsAt)
+  return startTimeKnown ? `${berlinDay.format(at)}, ${berlinTime.format(at)}` : berlinDay.format(at)
+}
+
+export const eventLiveSubject = (brand: string) => `Your event is live on ${brand}`
+
+/** The mail text for a person whose suggested event went live. Copy rule: it never says "scout". */
+export function eventLiveText(brand: string, msg: EventLiveEmail): string[] {
+  return [
+    `Good news: the event you suggested is now live on ${brand}.`,
+    '',
+    msg.title,
+    eventDateText(msg.startsAt, msg.startTimeKnown),
+    msg.url,
+    '',
+    `Thanks for helping to keep ${brand} complete.`,
+  ]
+}
+
 const isTestRun = !!process.env.VITEST || process.env.NODE_ENV === 'test'
 
 // Reserved TLDs (RFC 2606/6761) can never receive mail. Sending to them would only produce
@@ -83,6 +121,9 @@ const consoleTransport: EmailTransport = {
   },
   async sendEmailChangedNotice({ to, newEmail }) {
     console.log(`\n[email → ${to}]\n${emailChangedNoticeText('Kellerkompass', newEmail).join('\n')}\n`)
+  },
+  async sendEventLive(msg) {
+    console.log(`\n[email → ${msg.to}] ${eventLiveSubject('Kellerkompass')}\n${eventLiveText('Kellerkompass', msg).join('\n')}\n`)
   },
 }
 
@@ -164,6 +205,26 @@ export function scalewayTransport(config: ScalewayConfig): EmailTransport {
           `${escapeHtml(text[3]!)}</p>`,
         ].join('\n'),
         contact,
+      )
+    },
+
+    async sendEventLive(msg) {
+      if (!isProduction) await consoleTransport.sendEventLive(msg)
+      if (!isDeliverable(msg.to)) return
+
+      const brand = config.fromName
+      const text = eventLiveText(brand, msg)
+      await post(
+        msg.to,
+        eventLiveSubject(brand),
+        text.join('\n'),
+        [
+          `<p>${escapeHtml(text[0]!)}</p>`,
+          `<p><strong>${escapeHtml(msg.title)}</strong><br>`,
+          `${escapeHtml(text[3]!)}</p>`,
+          `<p><a href="${escapeHtml(msg.url)}">See the event</a></p>`,
+          `<p>${escapeHtml(text[6]!)}</p>`,
+        ].join('\n'),
       )
     },
   }

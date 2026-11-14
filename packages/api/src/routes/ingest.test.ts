@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
   editHistory,
+  ensureSuggestionsSource,
   eventOrganizers,
   events,
   ingestItems,
@@ -19,8 +24,9 @@ import { ingestSourceConfigSchema } from '@open-event-db/shared'
 import { encodeCursor } from '../cursor.js'
 import { db } from '../db.js'
 import { buildApp } from '../app.js'
+import { email, type EmailTransport } from '../email.js'
 import { cleanup, createAccount } from '../test/fixtures.js'
-import { imageStore, memoryImageStore } from '../images/store.js'
+import { imageStore, localImageStore, memoryImageStore } from '../images/store.js'
 import { ingestImages } from '../ingest/image.js'
 import { parseUrbanSpreeDetail, type UrbanSpreeCard } from '../ingest/adapters/urbanspree.js'
 import { normalizeFeedEvent } from '../ingest/normalize.js'
@@ -239,7 +245,7 @@ describe('GET /ingest/items and /ingest/count', () => {
     expect(ids).not.toContain(misfit.id)
 
     const first = mine.find((i: { id: string }) => i.id === early.id)
-    expect(first.source).toEqual({ slug: `inbox-${stamp}`, name: sourceName })
+    expect(first.source).toEqual({ slug: `inbox-${stamp}`, name: sourceName, kind: 'ical' })
     expect(first.status).toBe('pending')
     expect(first.event_id).toBeNull()
     expect(first.draft.title).toBe('Same Night Party')
@@ -1135,5 +1141,390 @@ describe('provenance', () => {
     expect(detail.provenance).toBe('organizer')
     expect(detail.venue_listing).not.toBeNull()
     expect(await listed('organizer')).toContain(e.id)
+  })
+})
+
+describe('suggestions in the inbox', () => {
+  const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
+  let suggestionsSource: string
+  let submitter: Account
+  let firstTimer: Account
+  const mails: { to: string; title: string; startsAt: string; url: string }[] = []
+  let failMail = false
+  let attempts = 0
+  let reviewer: Account
+  let keyReviewer: string
+
+  beforeAll(async () => {
+    suggestionsSource = await ensureSuggestionsSource(db)
+    submitter = (await createAccount({ label: 'inbox-submitter', organizer: false })).account
+    firstTimer = (await createAccount({ label: 'inbox-first', organizer: false })).account
+    // A scout of its own: the write rate limit counts per account
+    const r = await createAccount({ scout: true, organizer: false, label: 'inbox-reviewer' })
+    reviewer = r.account
+    keyReviewer = r.key
+  })
+
+  beforeEach(() => {
+    mails.length = 0
+    failMail = false
+    attempts = 0
+    const live: EmailTransport['sendEventLive'] = async (msg) => {
+      attempts++
+      if (failMail) throw new Error('mail provider down')
+      mails.push(msg)
+    }
+    email.setTransport({ sendMagicLink: async () => {}, sendEmailChangedNotice: async () => {}, sendEventLive: live })
+  })
+
+  afterEach(() => {
+    email.reset()
+    imageStore.reset()
+    ingestImages.reset()
+    vi.restoreAllMocks()
+  })
+
+  afterAll(async () => {
+    await db.delete(ingestItems).where(inArray(ingestItems.submittedBy, [submitter.id, firstTimer.id]))
+  })
+
+  const suggestion = (by: Account, over: Partial<typeof ingestItems.$inferInsert> = {}, draft: Record<string, unknown> = {}) =>
+    newItem(
+      { sourceId: suggestionsSource, externalId: randomUUID(), submittedBy: by.id, ...over },
+      draftOf({ links: {}, source_url: null, ...draft }),
+    )
+
+  const detail = (id: string) => app.inject({ method: 'GET', url: `/api/v1/ingest/items/${id}`, headers: auth(keyReviewer) })
+
+  /** Every item of a view of the suggestions source, all pages, and the view's counts. */
+  async function suggestionsIn(view: 'new' | 'filtered' | 'gone') {
+    const items: { id: string; source: { kind: string }; submitter: unknown; fit: unknown }[] = []
+    let cursor: string | null = null
+    let counts: { new: number; filtered: number; gone: number } = { new: 0, filtered: 0, gone: 0 }
+    do {
+      const url: string = `/api/v1/ingest/items?view=${view}&source=suggestions&limit=100${cursor ? `&cursor=${cursor}` : ''}`
+      const res = await app.inject({ method: 'GET', url, headers: auth(keyReviewer) })
+      expect(res.statusCode).toBe(200)
+      const body: { data: typeof items; meta: { cursor: string | null; counts: typeof counts } } = res.json()
+      items.push(...body.data)
+      counts = body.meta.counts
+      cursor = body.meta.cursor
+    } while (cursor)
+    return { items, counts }
+  }
+
+  const waitForMails = (n: number) => vi.waitFor(() => expect(mails).toHaveLength(n), { timeout: 2000 })
+  const settle = () => new Promise((r) => setTimeout(r, 100))
+
+  it('lists a suggestion with its submitter and record', async () => {
+    await suggestion(submitter, { status: 'accepted' })
+    await suggestion(submitter, { status: 'accepted', detachedAt: new Date() }) // merged
+    await suggestion(submitter, { status: 'rejected' })
+    await suggestion(submitter, { status: 'withdrawn' })
+    const open = await suggestion(submitter)
+    const first = await suggestion(firstTimer)
+    const feed = await newItem()
+
+    const { items } = await suggestionsIn('new')
+    const listed = items.find((i) => i.id === open.id)
+    expect(listed?.source.kind).toBe('suggestion')
+    expect(listed?.submitter).toEqual({ display_name: submitter.displayName, handle: submitter.handle, accepted: 2, decided: 3 })
+    expect(items.find((i) => i.id === first.id)?.submitter).toEqual({
+      display_name: firstTimer.displayName,
+      handle: firstTimer.handle,
+      accepted: 0,
+      decided: 0,
+    })
+
+    const one = (await detail(open.id)).json().data
+    expect(one.source.kind).toBe('suggestion')
+    expect(one.submitter).toMatchObject({ accepted: 2, decided: 3 })
+    const feedView = (await detail(feed.id)).json().data
+    expect(feedView.source.kind).toBe('ical')
+    expect(feedView.submitter).toBeNull()
+  })
+
+  it('a misfit suggestion stays in New', async () => {
+    const before = (await suggestionsIn('new')).counts
+    const misfit = await suggestion(submitter, { fitVerdict: 'no', fitReason: 'Not a club night' })
+    const { items, counts } = await suggestionsIn('new')
+    expect(items.find((i) => i.id === misfit.id)?.fit).toEqual({ verdict: 'no', reason: 'Not a club night' })
+    expect(counts.new).toBe(before.new + 1)
+    expect(counts.filtered).toBe(before.filtered)
+    expect((await suggestionsIn('filtered')).items.map((i) => i.id)).not.toContain(misfit.id)
+  })
+
+  it('withdrawn items are in no view and no count', async () => {
+    const before = (await suggestionsIn('new')).counts
+    const gone = await suggestion(submitter, { status: 'withdrawn', fitVerdict: 'no', fitReason: 'x' })
+    for (const view of ['new', 'filtered', 'gone'] as const) {
+      expect((await suggestionsIn(view)).items.map((i) => i.id)).not.toContain(gone.id)
+    }
+    expect((await suggestionsIn('new')).counts).toEqual(before)
+    expect((await detail(gone.id)).statusCode).toBe(404)
+  })
+
+  it('accept publishes a suggestion as created by the submitter', async () => {
+    const store = memoryImageStore()
+    imageStore.setStore(store)
+    const fetched: string[] = []
+    ingestImages.setFetch((async (url: URL) => {
+      fetched.push(String(url))
+      return new Response(PNG)
+    }) as unknown as typeof fetch)
+    const id = randomUUID()
+    const key = `suggestions/${id}/${randomUUID()}.png`
+    await store.put(key, PNG, 'image/png')
+    const item = await suggestion(submitter, { id, imageKey: key }, { image_url: store.url(key), venue_id: venue.id })
+
+    const res = await post(`/items/${item.id}/accept`, keyReviewer)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+
+    const event = await eventRow(eventId)
+    expect(event.createdBy).toBe(submitter.id)
+    expect(event.title).toBe((item.draft as { title: string }).title)
+    expect(await db.select().from(eventOrganizers).where(eq(eventOrganizers.eventId, eventId))).toEqual([])
+    const logs = await db.select().from(editHistory).where(eq(editHistory.entityId, eventId))
+    const created = logs.find((l) => l.action === 'created')
+    expect(created?.accountId).toBe(reviewer.id)
+    expect((created?.diff as { via?: string }).via).toBe('suggestion')
+
+    // The image moved: copied onto the event, the suggestion's own object deleted
+    expect(fetched).toEqual([store.url(key)])
+    expect(event.imageKey).toMatch(new RegExp(`^events/${eventId}/`))
+    expect(store.objects.has(key)).toBe(false)
+    expect([...store.objects.keys()]).toEqual([event.imageKey])
+    const stored = await itemRow(item.id)
+    expect(stored.status).toBe('accepted')
+    expect(stored.imageKey).toBeNull()
+    // Never shown as synced from "Suggestions"
+    const page = (await app.inject({ method: 'GET', url: `/api/v1/events/${eventId}` })).json().data
+    expect(page.synced_from).toBeNull()
+    expect(page.added_by.id).toBe(submitter.id)
+  })
+
+  it('accept copies the image from a local development store too (served from localhost)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'oedb-sugg-'))
+    try {
+      const store = localImageStore(dir, 'http://localhost:3001/images')
+      imageStore.setStore(store)
+      const id = randomUUID()
+      const key = `suggestions/${id}/${randomUUID()}.png`
+      await store.put(key, PNG, 'image/png')
+      const item = await suggestion(submitter, { id, imageKey: key }, { image_url: store.url(key) })
+      const res = await post(`/items/${item.id}/accept`, keyReviewer)
+      expect(res.statusCode).toBe(200)
+      const eventId = res.json().data.event_id as string
+      eventIds.push(eventId)
+      const event = await eventRow(eventId)
+      expect(event.imageKey).toMatch(new RegExp(`^events/${eventId}/`))
+      expect((await store.read(event.imageKey!))?.data).toEqual(PNG)
+      expect(await store.read(key)).toBeNull()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('link moves the suggestion image when the scout takes it, else drops it', async () => {
+    const store = memoryImageStore()
+    imageStore.setStore(store)
+    ingestImages.setFetch((async () => new Response(PNG)) as unknown as typeof fetch)
+    const withImage = async () => {
+      const id = randomUUID()
+      const key = `suggestions/${id}/${randomUUID()}.png`
+      await store.put(key, PNG, 'image/png')
+      return { key, item: await suggestion(submitter, { id, imageKey: key }, { image_url: store.url(key) }) }
+    }
+    const target = async (title: string) => {
+      const [e] = await db
+        .insert(events)
+        .values({ title, startsAt: new Date('2033-01-04T20:00:00Z'), city: 'Linktown', createdBy: alice.id })
+        .returning()
+      eventIds.push(e!.id)
+      return e!
+    }
+
+    const taken = await withImage()
+    const takenTarget = await target('Takes the image')
+    const res = await post(`/items/${taken.item.id}/link`, keyReviewer, { event_id: takenTarget.id, fields: ['image'] })
+    expect(res.statusCode).toBe(200)
+    expect((await eventRow(takenTarget.id)).imageKey).toMatch(new RegExp(`^events/${takenTarget.id}/`))
+    expect(store.objects.has(taken.key)).toBe(false)
+    expect((await itemRow(taken.item.id)).imageKey).toBeNull()
+
+    const left = await withImage()
+    const leftTarget = await target('Keeps its own image')
+    expect((await post(`/items/${left.item.id}/link`, keyReviewer, { event_id: leftTarget.id })).statusCode).toBe(200)
+    expect((await eventRow(leftTarget.id)).imageKey).toBeNull()
+    expect(store.objects.has(left.key)).toBe(false)
+    const stored = await itemRow(left.item.id)
+    expect(stored.imageKey).toBeNull()
+    expect((stored.draft as { image_url: string | null }).image_url).toBeNull()
+
+    // Synced: a suggestion has no feed, so it is detached all the same and never shown as synced from "Suggestions"
+    const synced = await suggestion(submitter)
+    const syncTarget = await target('Synced from a suggestion')
+    expect((await post(`/items/${synced.id}/link`, keyReviewer, { event_id: syncTarget.id, sync: true })).statusCode).toBe(200)
+    expect((await itemRow(synced.id)).detachedAt).not.toBeNull()
+    const page = (await app.inject({ method: 'GET', url: `/api/v1/events/${syncTarget.id}` })).json().data
+    expect(page.synced_from).toBeNull()
+  })
+
+  it('accept publishes a suggestion without a start time as a day', async () => {
+    const item = await suggestion(submitter, {}, { starts_at: '2031-03-01T23:00:00.000Z', times_unverified: true })
+    const res = await post(`/items/${item.id}/accept`, keyReviewer)
+    expect(res.statusCode).toBe(200)
+    eventIds.push(res.json().data.event_id)
+    expect((await eventRow(res.json().data.event_id)).startTimeKnown).toBe(false)
+  })
+
+  it('accept with an edited event publishes the edit', async () => {
+    const edited = {
+      title: 'Fixed',
+      starts_at: '2031-05-01T19:00:00.000Z',
+      ends_at: '2031-05-01T23:00:00.000Z',
+      description: 'Checked by the team',
+      venue_id: venue.id,
+      categories: ['concert'],
+      links: { tickets: 'https://tickets.test/fixed' },
+    }
+    const item = await suggestion(submitter, {}, { title: 'Fixd', city: 'Elsewhere' })
+    const res = await post(`/items/${item.id}/accept`, keyReviewer, { event: edited })
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+    const event = await eventRow(eventId)
+    expect(event).toMatchObject({
+      title: 'Fixed',
+      description: 'Checked by the team',
+      venueId: venue.id,
+      city: 'Venuetown',
+      categories: ['concert'],
+      links: { tickets: 'https://tickets.test/fixed' },
+      createdBy: submitter.id,
+      startTimeKnown: true,
+    })
+    expect(event.startsAt.toISOString()).toBe('2031-05-01T19:00:00.000Z')
+    expect(event.endsAt?.toISOString()).toBe('2031-05-01T23:00:00.000Z')
+
+    // A feed item too: the creator stays the source's scout; the edit is a human's, so the feed stops syncing it
+    const feed = await newItem()
+    const feedRes = await post(`/items/${feed.id}/accept`, keyReviewer, { event: { ...edited, title: 'Fixed feed' } })
+    expect(feedRes.statusCode).toBe(200)
+    const feedEventId = feedRes.json().data.event_id as string
+    eventIds.push(feedEventId)
+    const feedEvent = await eventRow(feedEventId)
+    expect(feedEvent.title).toBe('Fixed feed')
+    expect(feedEvent.createdBy).toBe(feedScout.id)
+    expect((await itemRow(feed.id)).detachedAt).not.toBeNull()
+    const [log] = await db.select().from(editHistory).where(eq(editHistory.entityId, feedEventId))
+    expect((log?.diff as { via?: string }).via).toBe('ingest')
+  })
+
+  it('invalid edited event leaves the item pending', async () => {
+    const item = await suggestion(submitter)
+    const event = { title: `Never ${stamp}`, starts_at: '2031-05-01T19:00:00.000Z', venue_id: venue.id }
+    const bad = await post(`/items/${item.id}/accept`, keyReviewer, { event: { ...event, starts_at: 'tomorrow evening' } })
+    expect(bad.statusCode).toBe(400)
+    const backwards = await post(`/items/${item.id}/accept`, keyReviewer, {
+      event: { ...event, ends_at: '2031-05-01T18:00:00.000Z' },
+    })
+    expect(backwards.statusCode).toBe(400)
+    const noPlace = await post(`/items/${item.id}/accept`, keyReviewer, { event: { ...event, venue_id: null } })
+    expect(noPlace.statusCode).toBe(400)
+    const noVenue = await post(`/items/${item.id}/accept`, keyReviewer, {
+      event: { ...event, venue_id: '00000000-0000-4000-8000-000000000000' },
+    })
+    expect(noVenue.statusCode).toBe(404)
+    expect(noVenue.json().error.code).toBe('venue_not_found')
+
+    const stored = await itemRow(item.id)
+    expect(stored.status).toBe('pending')
+    expect(stored.eventId).toBeNull()
+    expect(stored.decidedBy).toBeNull()
+    expect(await db.select().from(events).where(eq(events.title, event.title))).toEqual([])
+  })
+
+  it('withdrawn items cannot be accepted', async () => {
+    const item = await suggestion(submitter, { status: 'withdrawn' })
+    expect((await post(`/items/${item.id}/accept`, keyReviewer)).statusCode).toBe(409)
+    const edited = await post(`/items/${item.id}/accept`, keyReviewer, {
+      event: { title: 'Fixed', starts_at: '2031-05-01T19:00:00.000Z', venue_id: venue.id },
+    })
+    expect(edited.statusCode).toBe(409)
+    const [target] = await db
+      .insert(events)
+      .values({ title: 'Withdrawn target', startsAt: new Date('2033-01-03T20:00:00Z'), city: 'Linktown', createdBy: alice.id })
+      .returning()
+    eventIds.push(target!.id)
+    expect((await post(`/items/${item.id}/link`, keyReviewer, { event_id: target!.id })).statusCode).toBe(409)
+    expect((await post('/items/reject', keyReviewer, { ids: [item.id] })).json().data).toEqual({ rejected: 0 })
+    const stored = await itemRow(item.id)
+    expect(stored.status).toBe('withdrawn')
+    expect(stored.eventId).toBeNull()
+  })
+
+  it('reject stores the reason', async () => {
+    const item = await suggestion(submitter)
+    const res = await post('/items/reject', keyReviewer, { ids: [item.id], reason: '  Already listed under another name  ' })
+    expect(res.json().data).toEqual({ rejected: 1 })
+    const stored = await itemRow(item.id)
+    expect(stored.status).toBe('rejected')
+    expect(stored.rejectReason).toBe('Already listed under another name')
+
+    const plain = await suggestion(submitter)
+    await post('/items/reject', keyReviewer, { ids: [plain.id] })
+    expect((await itemRow(plain.id)).rejectReason).toBeNull()
+
+    const other = await suggestion(submitter)
+    expect((await post('/items/reject', keyReviewer, { ids: [other.id], reason: 'x'.repeat(501) })).statusCode).toBe(400)
+    expect((await itemRow(other.id)).status).toBe('pending')
+  })
+
+  it('live mail on accept and on link, not on reject', async () => {
+    const accepted = await suggestion(submitter, {}, { title: `Live ${stamp}`, starts_at: '2031-07-04T19:30:00.000Z' })
+    const res = await post(`/items/${accepted.id}/accept`, keyReviewer)
+    expect(res.statusCode).toBe(200)
+    const eventId = res.json().data.event_id as string
+    eventIds.push(eventId)
+    await waitForMails(1)
+    expect(mails[0]).toMatchObject({
+      to: submitter.email,
+      title: `Live ${stamp}`,
+      startsAt: '2031-07-04T19:30:00.000Z',
+      url: `${WEB_URL}/events/${eventId}`,
+    })
+
+    // Linked to an existing event: the mail names that event
+    const [target] = await db
+      .insert(events)
+      .values({ title: `Link live ${stamp}`, startsAt: new Date('2031-07-05T20:00:00Z'), city: 'Linktown', createdBy: alice.id })
+      .returning()
+    eventIds.push(target!.id)
+    const linked = await suggestion(submitter)
+    expect((await post(`/items/${linked.id}/link`, keyReviewer, { event_id: target!.id })).statusCode).toBe(200)
+    await waitForMails(2)
+    expect(mails[1]).toMatchObject({ to: submitter.email, title: `Link live ${stamp}`, url: `${WEB_URL}/events/${target!.id}` })
+    expect((await itemRow(linked.id)).detachedAt).not.toBeNull()
+
+    // No mail for a reject or a feed item
+    const rejected = await suggestion(submitter)
+    await post('/items/reject', keyReviewer, { ids: [rejected.id], reason: 'No' })
+    const feed = await newItem()
+    const feedRes = await post(`/items/${feed.id}/accept`, keyReviewer)
+    eventIds.push(feedRes.json().data.event_id)
+    await settle()
+    expect(mails).toHaveLength(2)
+
+    // A failing mail never fails the accept (nor leaves an unhandled rejection behind)
+    failMail = true
+    const unlucky = await suggestion(submitter)
+    const unluckyRes = await post(`/items/${unlucky.id}/accept`, keyReviewer)
+    expect(unluckyRes.statusCode).toBe(200)
+    eventIds.push(unluckyRes.json().data.event_id)
+    await vi.waitFor(() => expect(attempts).toBe(3), { timeout: 2000 })
+    await settle()
   })
 })

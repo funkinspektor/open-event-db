@@ -20,6 +20,7 @@ beforeAll(async () => {
     async sendEmailChangedNotice(msg) {
       notices.push(msg)
     },
+    async sendEventLive() {},
   })
   app = await buildApp({ logger: false })
 })
@@ -375,6 +376,7 @@ describe('email change', () => {
         throw new Error('boom')
       },
       async sendEmailChangedNotice() {},
+      async sendEventLive() {},
     })
     try {
       const res = await call('POST', '/accounts/me/email', cookie, { email: `fail-${u()}@test.local` })

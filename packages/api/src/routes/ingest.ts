@@ -5,11 +5,15 @@ import {
   canEdit,
   INGEST_SYNCED_FIELDS,
   SYNCED_LINK,
+  ingestAcceptBodySchema,
   ingestDraftSchema,
   ingestGoneSchema,
   ingestLinkSchema,
   ingestListQuerySchema,
   ingestRejectSchema,
+  normalizeCategories,
+  normalizeTags,
+  type IngestAcceptBody,
   type IngestAccuracyRow,
   type IngestDraft,
   type IngestItemDetail,
@@ -18,20 +22,25 @@ import {
   type IngestSourceCount,
   type IngestView,
 } from '@open-event-db/shared'
-import { events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
+import { accounts, events, ingestItems, ingestSources, venues, type IngestItem } from '@open-event-db/db'
 import { db } from '../db.js'
 import { decodeCursor, encodeCursor } from '../cursor.js'
-import { badRequest, conflict, forbidden, notFound } from '../errors.js'
+import { email } from '../email.js'
+import { ApiError, badRequest, conflict, forbidden, notFound } from '../errors.js'
 import { actorOf, currentAccount, requireAuth, writeRateLimit } from '../auth.js'
 import { diff, logEdit } from '../history.js'
 import { cancelEvent, eventSnapshot, getOrganizers } from '../queries/events.js'
 import { findDuplicateCandidates } from '../queries/duplicates.js'
 import { detachIngest } from '../ingest/detach.js'
-import { copyItemImage, syncItemImage } from '../ingest/image.js'
+import { copyItemImage, dropSuggestionImage, moveSuggestionImage, syncItemImage } from '../ingest/image.js'
 import { mergePatch } from '../ingest/merge.js'
 import { feedAccountId } from '../ingest/run.js'
 import { draftStartsAt, isOpen, notOver } from '../ingest/open.js'
 import { serializeCoordinates } from '../serializers.js'
+import { suggestionStart } from '../suggestions/draft.js'
+
+/** Where the web app lives: the live mail links the event page there. */
+const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
 
 const read = { onRequest: requireAuth }
 const write = { onRequest: requireAuth, config: { rateLimit: writeRateLimit } }
@@ -45,8 +54,11 @@ function requireScout(req: FastifyRequest) {
 
 // Open items (pending, still in the feed, not over: a running exhibition stays until its end) the model did not
 // judge a misfit; those it did are Filtered out. A filtered item is still an open item with every action.
-const isNew = () => and(isOpen(), or(isNull(ingestItems.fitVerdict), ne(ingestItems.fitVerdict, 'no')))
-const isFiltered = () => and(isOpen(), eq(ingestItems.fitVerdict, 'no'))
+// A person's suggestion is never filtered out: its verdict is only a label (both need `ingest_sources` joined).
+// Withdrawn suggestions are not pending, so they are in no view.
+const isNew = () =>
+  and(isOpen(), or(isNull(ingestItems.fitVerdict), ne(ingestItems.fitVerdict, 'no'), eq(ingestSources.kind, 'suggestion')))
+const isFiltered = () => and(isOpen(), eq(ingestItems.fitVerdict, 'no'), ne(ingestSources.kind, 'suggestion'))
 // Accepted items that left their feed and still wait for a decision. Detached items (with organizers, edited by a
 // human or linked) are out: the event is no longer the feed's to cancel. An event cancelled elsewhere is settled.
 const isGone = and(
@@ -132,13 +144,47 @@ const duplicatesFor = (draft: IngestDraft) =>
     title: draft.title,
   })
 
+type Submitter = NonNullable<IngestItemView['submitter']>
+
+/**
+ * The people behind a page of suggestions and their record: accepted (merged ones included) and decided suggestions.
+ * Pending and withdrawn ones are not counted. One grouped query per page.
+ */
+async function submitters(items: IngestItem[]): Promise<Map<string, Submitter>> {
+  const ids = [...new Set(items.flatMap((i) => (i.submittedBy ? [i.submittedBy] : [])))]
+  if (!ids.length) return new Map()
+  const record = db
+    .select({
+      by: sql<string>`${ingestItems.submittedBy}`.as('by'),
+      accepted: sql<number>`count(*) filter (where ${ingestItems.status} = 'accepted')`.as('accepted'),
+      decided: sql<number>`count(*) filter (where ${ingestItems.status} in ('accepted', 'rejected'))`.as('decided'),
+    })
+    .from(ingestItems)
+    .where(inArray(ingestItems.submittedBy, ids))
+    .groupBy(ingestItems.submittedBy)
+    .as('record')
+  const rows = await db
+    .select({
+      id: accounts.id,
+      display_name: accounts.displayName,
+      handle: accounts.handle,
+      accepted: sql<number>`coalesce(${record.accepted}, 0)::int`,
+      decided: sql<number>`coalesce(${record.decided}, 0)::int`,
+    })
+    .from(accounts)
+    .leftJoin(record, eq(record.by, accounts.id))
+    .where(inArray(accounts.id, ids))
+  return new Map(rows.map(({ id, ...submitter }) => [id, submitter]))
+}
+
 /** The API view of a stored item; duplicates are looked up for items that still wait for a decision (new or filtered). */
 async function toView(
   item: IngestItem,
-  source: { slug: string; name: string },
+  source: { slug: string; name: string; kind: string },
   venueName: string | null,
   draft: IngestDraft,
   withDuplicates: boolean,
+  submitter: Submitter | null,
 ): Promise<IngestItemView> {
   const duplicates = withDuplicates ? await duplicatesFor(draft) : []
   return {
@@ -146,6 +192,7 @@ async function toView(
     status: item.status,
     source,
     draft,
+    submitter,
     venue_name: venueName,
     gone_at: item.goneAt?.toISOString() ?? null,
     event_id: item.eventId,
@@ -154,12 +201,68 @@ async function toView(
   }
 }
 
+type EventValues = Omit<typeof events.$inferInsert, 'createdBy'>
+type EditedEventInput = NonNullable<NonNullable<IngestAcceptBody>['event']>
+
+/** The event a scout edited before accepting, checked as POST /events checks it. The venue must exist. */
+async function editedEvent(input: EditedEventInput): Promise<EventValues> {
+  let city = input.city ?? null
+  if (input.venue_id) {
+    const [venue] = await db.select({ city: venues.city }).from(venues).where(eq(venues.id, input.venue_id)).limit(1)
+    if (!venue) throw new ApiError(404, 'venue_not_found', 'Venue not found')
+    city = venue.city
+  }
+  if (!city) throw badRequest('Send a city, or pick a venue', 'city_required')
+  const { startsAt, startTimeKnown } = suggestionStart(input.starts_at)
+  const endsAt = input.ends_at ? new Date(input.ends_at) : null
+  if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
+  return {
+    title: input.title,
+    description: input.description ?? '',
+    lineup: input.lineup ?? [],
+    startsAt,
+    startTimeKnown,
+    endsAt,
+    venueId: input.venue_id ?? null,
+    locationText: input.location_text ?? null,
+    city,
+    categories: normalizeCategories(input.categories ?? []),
+    tags: normalizeTags(input.tags ?? []),
+    links: input.links ?? {},
+    recurrence: input.recurrence ?? null,
+  }
+}
+
+/**
+ * Tells the person who suggested an item that its event is live, after the accept or link committed. Runs in the
+ * background: a failed mail is logged and never fails the request.
+ */
+function mailLive(item: IngestItem, log: FastifyBaseLogger) {
+  const { submittedBy, eventId } = item
+  if (!submittedBy || !eventId) return
+  void (async () => {
+    const [row] = await db
+      .select({ to: accounts.email, title: events.title, startsAt: events.startsAt, startTimeKnown: events.startTimeKnown })
+      .from(accounts)
+      .innerJoin(events, eq(events.id, eventId))
+      .where(eq(accounts.id, submittedBy))
+    if (!row) return
+    await email.transport.sendEventLive({
+      to: row.to,
+      title: row.title,
+      startsAt: row.startsAt.toISOString(),
+      startTimeKnown: row.startTimeKnown,
+      url: `${WEB_URL}/events/${eventId}`,
+    })
+  })().catch((err) => log.error({ err, itemId: item.id }, 'sending the event-live mail failed'))
+}
+
 /** One item with its state, judged by the same conditions as the inbox views. Null if unknown or broken. */
 async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDetail | null> {
   const [row] = await db
     .select({
       item: ingestItems,
-      source: { slug: ingestSources.slug, name: ingestSources.name },
+      source: { slug: ingestSources.slug, name: ingestSources.name, kind: ingestSources.kind },
       venue: venues,
       // A filtered item is still new here: it keeps its actions, whichever tab it sits in
       isNew: sql<boolean>`coalesce(${isOpen()}, false)`,
@@ -187,8 +290,9 @@ async function getItem(id: string, log: FastifyBaseLogger): Promise<IngestItemDe
   else state = row.isOver ? 'over' : 'removed'
 
   const { venue } = row
+  const submitter = row.item.submittedBy ? ((await submitters([row.item])).get(row.item.submittedBy) ?? null) : null
   return {
-    ...(await toView(row.item, row.source, venue?.name ?? null, parsed.data, state === 'new')),
+    ...(await toView(row.item, row.source, venue?.name ?? null, parsed.data, state === 'new', submitter)),
     state,
     venue: venue
       ? { id: venue.id, name: venue.name, address: venue.address, city: venue.city, coordinates: serializeCoordinates(venue.coordinates) }
@@ -230,7 +334,7 @@ async function listItems(
   const base = db
     .select({
       item: ingestItems,
-      source: { slug: ingestSources.slug, name: ingestSources.name },
+      source: { slug: ingestSources.slug, name: ingestSources.name, kind: ingestSources.kind },
       venueName: venues.name,
       // Read from the row, not the parsed draft: a page may end on a broken one
       startsAt: sql<string>`to_json(${draftStartsAt}) #>> '{}'`,
@@ -258,8 +362,11 @@ async function listItems(
     return []
   })
 
+  const people = await submitters(valid.map((v) => v.item))
   const items = await Promise.all(
-    valid.map(({ item, source, venueName, draft }) => toView(item, source, venueName, draft, view !== 'gone')),
+    valid.map(({ item, source, venueName, draft }) =>
+      toView(item, source, venueName, draft, view !== 'gone', item.submittedBy ? (people.get(item.submittedBy) ?? null) : null),
+    ),
   )
   return { items, cursor: nextCursor, hasMore }
 }
@@ -295,6 +402,9 @@ export async function ingestRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>('/ingest/items/:id/accept', write, async (req) => {
     const me = requireScout(req)
+    // The scout's edited version is checked before anything changes: a 400 or 404 leaves the item pending
+    const body = ingestAcceptBodySchema.parse(req.body ?? undefined)
+    const edited = body?.event ? await editedEvent(body.event) : null
 
     const accepted = await db.transaction(async (tx) => {
       // The status guard is the lock: of two concurrent accepts the second waits, then matches no row.
@@ -314,29 +424,31 @@ export async function ingestRoutes(app: FastifyInstance) {
 
       const [source] = await tx.select().from(ingestSources).where(eq(ingestSources.id, item.sourceId))
       if (!source) throw new Error('ingest item without source')
+      const suggestion = source.kind === 'suggestion'
       const draft = ingestDraftSchema.parse(item.draft)
 
-      let venueId = draft.venue_id
-      let city = draft.city
-      let locationText = draft.location_text
-      if (venueId) {
-        const [venue] = await tx.select({ city: venues.city }).from(venues).where(eq(venues.id, venueId))
-        if (venue) city = venue.city
-        else {
-          // The mapped venue was deleted since the run: keep a readable place.
-          venueId = null
-          locationText = draft.location_text ?? source.name
+      let values: EventValues
+      if (edited) values = edited
+      else {
+        let venueId = draft.venue_id
+        let city = draft.city
+        let locationText = draft.location_text
+        if (venueId) {
+          const [venue] = await tx.select({ city: venues.city }).from(venues).where(eq(venues.id, venueId))
+          if (venue) city = venue.city
+          else {
+            // The mapped venue was deleted since the run: keep a readable place.
+            venueId = null
+            locationText = draft.location_text ?? source.name
+          }
         }
-      }
-
-      // Created by the source's scout and left unclaimed: no organizer rows
-      const [event] = await tx
-        .insert(events)
-        .values({
+        values = {
           title: draft.title,
           description: draft.description,
           lineup: draft.lineup,
           startsAt: new Date(draft.starts_at),
+          // A suggestion sent with a day only keeps it a day; a feed's unverified times are a different matter
+          ...(suggestion ? { startTimeKnown: !draft.times_unverified } : {}),
           endsAt: draft.ends_at ? new Date(draft.ends_at) : null,
           venueId,
           locationText,
@@ -344,8 +456,13 @@ export async function ingestRoutes(app: FastifyInstance) {
           categories: draft.categories,
           tags: [],
           links: draft.links,
-          createdBy: feedAccountId(source),
-        })
+        }
+      }
+
+      // Created by the person who suggested it, else by the source's scout; left unclaimed: no organizer rows
+      const [event] = await tx
+        .insert(events)
+        .values({ ...values, createdBy: item.submittedBy ?? feedAccountId(source) })
         .returning()
       if (!event) throw new Error('insert returned no row')
       await logEdit(tx, {
@@ -353,21 +470,31 @@ export async function ingestRoutes(app: FastifyInstance) {
         entityId: event.id,
         accountId: me.id,
         action: 'created',
-        diff: { ...diff(null, eventSnapshot(event)), via: 'ingest' },
+        diff: { ...diff(null, eventSnapshot(event)), via: suggestion ? 'suggestion' : 'ingest' },
       })
-      const [linked] = await tx.update(ingestItems).set({ eventId: event.id }).where(eq(ingestItems.id, item.id)).returning()
-      return { item: linked!, draft }
+      // A suggestion has no feed to sync from, and the scout's edit is a human's: neither stays attached
+      const detach = suggestion || !!edited
+      const [linked] = await tx
+        .update(ingestItems)
+        .set({ eventId: event.id, ...(detach ? { detachedAt: new Date() } : {}) })
+        .where(eq(ingestItems.id, item.id))
+        .returning()
+      return { item: linked!, draft, suggestion }
     })
 
-    // After the commit: the event is live even if the feed image cannot be fetched
-    await syncItemImage(accepted.item, accepted.draft, me.id)
-    return { data: { event_id: accepted.item.eventId! } }
+    const eventId = accepted.item.eventId!
+    if (accepted.suggestion) mailLive(accepted.item, req.log)
+    // After the commit: the event is live even if the image cannot be fetched
+    if (accepted.suggestion) await moveSuggestionImage(eventId, accepted.item, accepted.draft, me.id)
+    else if (edited) await copyItemImage(eventId, accepted.draft, me.id)
+    else await syncItemImage(accepted.item, accepted.draft, me.id)
+    return { data: { event_id: eventId } }
   })
 
   // Static path: registered next to '/ingest/items/:id/*'; find-my-way prefers the static segment
   app.post('/ingest/items/reject', write, async (req) => {
     const me = requireScout(req)
-    const { ids } = ingestRejectSchema.parse(req.body)
+    const { ids, reason } = ingestRejectSchema.parse(req.body)
     // Record whether the scout saw duplicate candidates: the fit scoring reads it as a decision signal
     const pending = await db
       .select({ id: ingestItems.id, draft: ingestItems.draft })
@@ -386,7 +513,7 @@ export async function ingestRoutes(app: FastifyInstance) {
       if (!group.length) continue
       const done = await db
         .update(ingestItems)
-        .set({ status: 'rejected', decidedBy: me.id, decidedAt, hadDuplicates })
+        .set({ status: 'rejected', decidedBy: me.id, decidedAt, hadDuplicates, rejectReason: reason || null })
         .where(and(inArray(ingestItems.id, group), eq(ingestItems.status, 'pending')))
         .returning({ id: ingestItems.id })
       rejected += done.length
@@ -411,10 +538,23 @@ export async function ingestRoutes(app: FastifyInstance) {
       }
       // An item the event was synced from (re-posted under a new id) must not later offer it as gone
       await detachIngest(tx, event_id)
-      // Detached unless the scout hands the event to the feed: otherwise it stays a human's, never overwritten
+      const [source] = await tx
+        .select({ name: ingestSources.name, kind: ingestSources.kind })
+        .from(ingestItems)
+        .innerJoin(ingestSources, eq(ingestSources.id, ingestItems.sourceId))
+        .where(eq(ingestItems.id, req.params.id))
+      const suggestion = source?.kind === 'suggestion'
+      // Detached unless the scout hands the event to the feed: otherwise it stays a human's, never overwritten.
+      // A suggestion has no feed, so it is always detached.
       const [item] = await tx
         .update(ingestItems)
-        .set({ status: 'accepted', eventId: event_id, detachedAt: sync ? null : new Date(), decidedBy: me.id, decidedAt: new Date() })
+        .set({
+          status: 'accepted',
+          eventId: event_id,
+          detachedAt: sync && !suggestion ? null : new Date(),
+          decidedBy: me.id,
+          decidedAt: new Date(),
+        })
         .where(and(eq(ingestItems.id, req.params.id), eq(ingestItems.status, 'pending')))
         .returning()
       if (!item) {
@@ -423,9 +563,8 @@ export async function ingestRoutes(app: FastifyInstance) {
         throw conflict('Item has already been decided')
       }
       const draft = ingestDraftSchema.parse(item.draft)
-      if (!merging) return { item, draft }
+      if (!merging) return { item, draft, suggestion }
 
-      const [source] = await tx.select({ name: ingestSources.name }).from(ingestSources).where(eq(ingestSources.id, item.sourceId))
       const patch = await mergePatch(tx, target, draft, source?.name ?? draft.city, { fields, links: linkKeys })
       const endsAt = patch.endsAt === undefined ? target.endsAt : patch.endsAt
       if (endsAt && endsAt <= (patch.startsAt ?? target.startsAt)) throw badRequest('ends_at must be after starts_at')
@@ -444,11 +583,16 @@ export async function ingestRoutes(app: FastifyInstance) {
           diff: { ...diff(eventSnapshot(target), eventSnapshot(updated)), via: 'ingest-link' },
         })
       }
-      return { item, draft }
+      return { item, draft, suggestion }
     })
 
-    // After the commit, as on accept: the merge stands even if the feed image cannot be fetched
-    if (sync) await syncItemImage(linked.item, linked.draft, me.id)
+    // After the commit, as on accept: the merge stands even if the image cannot be fetched
+    if (linked.suggestion) {
+      mailLive(linked.item, req.log)
+      // The person's upload goes onto the event when the scout takes the image; otherwise it is not needed any more
+      if (fields.includes('image')) await moveSuggestionImage(event_id, linked.item, linked.draft, me.id)
+      else await dropSuggestionImage(linked.item)
+    } else if (sync) await syncItemImage(linked.item, linked.draft, me.id)
     else if (fields.includes('image')) await copyItemImage(event_id, linked.draft, me.id)
     return { data: { event_id } }
   })
