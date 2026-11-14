@@ -7,6 +7,7 @@ import { EVENT_CATEGORIES, type EventCategory, type EventDetail, type EventStatu
 import { CATEGORY_LABELS } from '@/lib/categories'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import { dayKey } from '@/lib/format'
+import { draftStartFields } from '@/lib/draft-start'
 import type { DuplicateDraft } from '@/lib/duplicates'
 import { imageSaveOutcome, savedParam, suggestedParam, type ImageSaveOutcome } from '@/lib/image-save'
 import { fromLineupRows, toLineupRows, type LineupGroupRow } from '@/lib/lineup'
@@ -82,8 +83,7 @@ export function EventForm({ mode, event, item, canCancel = false, knownTags, pub
   const [publishAsValue, setPublishAsValue] = useState(publishAs[0]?.value ?? '')
   const [title, setTitle] = useState(event?.title ?? draft?.title ?? pre?.title ?? '')
   // Date and time are separate fields: flyers nearly always have the date, often not the time
-  const draftStart = draft ? toLocalInput(draft.starts_at).split('T') : null
-  const start = event ? startFields(event) : draftStart ? { date: draftStart[0] ?? '', time: draftStart[1] ?? '' } : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
+  const start = event ? startFields(event) : draft ? draftStartFields(draft) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
   const [startDate, setStartDate] = useState(start.date)
   const [startTime, setStartTime] = useState(start.time)
   const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : draft ? toLocalInput(draft.ends_at) : (pre?.endsAt ?? ''))
