@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { EventSlim } from '@open-event-db/shared'
 import { formatDay, relativeDayLabel } from '@/lib/format'
 import { groupForList } from '@/lib/group'
@@ -46,6 +46,7 @@ export function EventList({
   const [cursor, setCursor] = useState(initialCursor)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const sentinel = useRef<HTMLDivElement>(null)
   const now = new Date()
   const marked = interestedIds ? new Set(interestedIds) : null
   const interestedFor = (id: string) =>
@@ -70,6 +71,25 @@ export function EventList({
       setLoading(false)
     }
   }
+
+  // Infinite scroll: load the next page once the end of the list comes within ~1.5 screens. The observer is
+  // rebuilt after every page, so a page that still leaves the end in view loads the next one right away.
+  // After an error it stays off until "Try again", so a failing API is not hammered.
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el || !cursor || loading || error) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          observer.disconnect()
+          void loadMore()
+        }
+      },
+      { rootMargin: '0px 0px 150% 0px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [cursor, loading, error]) // loadMore reads the same cursor
 
   if (events.length === 0) return <p className="kk-empty">{emptyMessage}</p>
 
@@ -119,11 +139,17 @@ export function EventList({
     <div>
       {groupByDay ? grouped(groupByDay) : events.map((e) => row(e))}
       {cursor && (
-        <div className="flex flex-wrap items-center gap-4 pt-7">
-          <button type="button" onClick={loadMore} disabled={loading} className="kk-btn kk-btn--outline">
-            {loading ? 'Loading…' : 'Load more'}
-          </button>
-          {error && <p className="kk-error">{error}</p>}
+        <div ref={sentinel} className="flex flex-wrap items-center gap-4 pt-7" aria-live="polite">
+          {error ? (
+            <>
+              <button type="button" onClick={() => void loadMore()} className="kk-btn kk-btn--outline">
+                Try again
+              </button>
+              <p className="kk-error">{error}</p>
+            </>
+          ) : (
+            <p className="kk-hint">{loading ? 'Loading more…' : ''}</p>
+          )}
         </div>
       )}
     </div>
