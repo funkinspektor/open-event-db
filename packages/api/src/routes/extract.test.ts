@@ -7,7 +7,13 @@ import { lineupReading } from '../extract/lineup.js'
 import { ExtractionError, vision, type ExtractImage } from '../extract/vision.js'
 
 let app: FastifyInstance
-const keys: Record<'member' | 'scout' | 'limited', string> = { member: '', scout: '', limited: '' }
+const keys: Record<'member' | 'scout' | 'limited' | 'plain' | 'fresh', string> = {
+  member: '',
+  scout: '',
+  limited: '',
+  plain: '',
+  fresh: '',
+}
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)])
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(32)])
@@ -69,6 +75,8 @@ beforeAll(async () => {
   keys.member = (await createAccount({ label: 'extract-member' })).key
   keys.scout = (await createAccount({ scout: true, organizer: false, label: 'extract-scout' })).key
   keys.limited = (await createAccount({ label: 'extract-limited' })).key
+  keys.plain = (await createAccount({ organizer: false, label: 'extract-plain' })).key
+  keys.fresh = (await createAccount({ organizer: false, onboarded: false, label: 'extract-fresh' })).key
 })
 
 beforeEach(() => {
@@ -108,6 +116,19 @@ describe('POST /events/extract', () => {
         links: { instagram: 'https://www.instagram.com/keller' },
       })
     }
+  })
+
+  it('a plain onboarded account may extract', async () => {
+    const res = await post(keys.plain, PNG)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.title).toBe('Keller Nacht')
+  })
+
+  it('a non-onboarded account may not', async () => {
+    const res = await post(keys.fresh, PNG)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('onboarding_required')
+    expect(received).toHaveLength(0)
   })
 
   it('passes the sniffed image type, not the claimed one', async () => {

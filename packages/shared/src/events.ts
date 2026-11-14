@@ -161,7 +161,7 @@ export const eventDetailResponseSchema = z.object({
 /** A day without a time (YYYY-MM-DD), for `starts_at` when the start time isn't known. */
 export const eventDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
-const eventFieldsSchema = z.object({
+export const eventFieldsSchema = z.object({
   title: z.string().trim().min(1).max(200),
   /** A timestamp, or just the day when the start time isn't known (stored with `start_time_known: false`). */
   starts_at: z.union([z.string().datetime({ offset: true }), eventDaySchema]),

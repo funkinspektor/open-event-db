@@ -29,6 +29,10 @@ export const IMAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 
 export const imageKey = (eventId: string, type: ImageType) => `events/${eventId}/${randomUUID()}.${EXTENSIONS[type]}`
 
+/** Images a person uploaded with a suggestion: `suggestions/<ingest item id>/<uuid>.jpg`. */
+export const suggestionImageKey = (itemId: string, type: ImageType) =>
+  `suggestions/${itemId}/${randomUUID()}.${EXTENSIONS[type]}`
+
 const joinUrl = (base: string, key: string) => `${base.replace(/\/+$/, '')}/${key}`
 
 export interface S3Config {

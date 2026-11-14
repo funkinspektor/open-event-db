@@ -1,0 +1,228 @@
+import { randomUUID } from 'node:crypto'
+import type { FastifyInstance } from 'fastify'
+import { and, count, desc, eq, gt, ne, sql } from 'drizzle-orm'
+import {
+  EVENT_IMAGE_MAX_BYTES,
+  EXTRACT_IMAGE_TYPES,
+  effectiveEnd,
+  suggestionCreateSchema,
+  type MySuggestion,
+} from '@open-event-db/shared'
+import { ensureSuggestionsSource, ingestItems, venues, type IngestItem } from '@open-event-db/db'
+import { db } from '../db.js'
+import { currentAccount, requireAuth, requireOnboarded, writeRateLimit } from '../auth.js'
+import { ApiError, badRequest, conflict, notFound } from '../errors.js'
+import { markPrivate } from '../headers.js'
+import { sniffImageType } from '../images/sniff.js'
+import { imageStore, suggestionImageKey } from '../images/store.js'
+import { suggestionStart, toSuggestionDraft } from '../suggestions/draft.js'
+
+const guard = { onRequest: [requireAuth, requireOnboarded], config: { rateLimit: writeRateLimit } }
+
+const DEFAULT_PER_DAY = 5
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Suggestions one account may send within 24 hours, withdrawn ones included. */
+function perDay(): number {
+  const n = Number.parseInt(process.env.SUGGESTIONS_PER_DAY ?? '', 10)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_PER_DAY
+}
+
+let sourceId: string | null = null
+async function suggestionsSourceId(): Promise<string> {
+  sourceId ??= await ensureSuggestionsSource(db)
+  return sourceId
+}
+
+const imagesUnavailable = () => new ApiError(503, 'images_unavailable', 'Event images are not available right now')
+
+function toMySuggestion(item: IngestItem): MySuggestion {
+  const draft = item.draft as { title?: string; starts_at?: string }
+  const store = imageStore.store
+  return {
+    id: item.id,
+    title: draft.title ?? '',
+    starts_at: draft.starts_at ?? item.firstSeenAt.toISOString(),
+    status: item.status === 'rejected' ? 'not_accepted' : item.status === 'accepted' ? 'live' : 'in_review',
+    event_id: item.status === 'accepted' ? item.eventId : null,
+    reason: item.status === 'rejected' ? item.rejectReason : null,
+    image_url: item.imageKey && store ? store.url(item.imageKey) : null,
+    created_at: item.firstSeenAt.toISOString(),
+  }
+}
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+const uuidOrNil = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : NIL_UUID
+
+/** The account's own live item of the suggestions source; anyone else's id (or a withdrawn one) is not found. */
+async function ownItem(id: string, accountId: string): Promise<IngestItem> {
+  const [item] = await db
+    .select()
+    .from(ingestItems)
+    .where(and(eq(ingestItems.id, uuidOrNil(id)), eq(ingestItems.submittedBy, accountId), ne(ingestItems.status, 'withdrawn')))
+    .limit(1)
+  if (!item) throw notFound('Suggestion not found')
+  return item
+}
+
+async function deleteQuietly(key: string | null) {
+  const store = imageStore.store
+  if (!key || !store) return
+  try {
+    await store.delete(key)
+  } catch (err) {
+    console.warn(`Could not delete image ${key}:`, err instanceof Error ? err.message : err)
+  }
+}
+
+export async function suggestionRoutes(app: FastifyInstance) {
+  // Image uploads arrive as the raw body; the signature, not this header, decides what they are
+  app.addContentTypeParser(
+    [...EXTRACT_IMAGE_TYPES],
+    { parseAs: 'buffer', bodyLimit: EVENT_IMAGE_MAX_BYTES },
+    (_req, body, done) => done(null, body),
+  )
+
+  app.post('/suggestions', guard, async (req, reply) => {
+    const me = currentAccount(req)
+    const input = suggestionCreateSchema.parse(req.body)
+
+    let venueCity: string | null = null
+    if (input.venue_id) {
+      const [venue] = await db.select({ city: venues.city }).from(venues).where(eq(venues.id, input.venue_id)).limit(1)
+      if (!venue) throw new ApiError(404, 'venue_not_found', 'Venue not found')
+      venueCity = venue.city
+    } else if (!input.city) {
+      throw badRequest('Send a city, or pick a venue', 'city_required')
+    }
+
+    const { startsAt, startTimeKnown } = suggestionStart(input.starts_at)
+    const endsAt = input.ends_at ? new Date(input.ends_at) : null
+    if (endsAt && endsAt <= startsAt) throw badRequest('ends_at must be after starts_at')
+    const end = effectiveEnd({
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt?.toISOString() ?? null,
+      start_time_known: startTimeKnown,
+      categories: input.categories ?? [],
+    })
+    if (end.getTime() <= Date.now()) throw badRequest('This event is already over', 'event_over')
+
+    const source = await suggestionsSourceId()
+    const limit = perDay()
+    const id = randomUUID()
+    const item = await db.transaction(async (tx) => {
+      // Counting is only safe one request at a time per account
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'suggestion-limit:' + me.id}))`)
+      const [{ n } = { n: 0 }] = await tx
+        .select({ n: count() })
+        .from(ingestItems)
+        .where(and(eq(ingestItems.submittedBy, me.id), gt(ingestItems.firstSeenAt, new Date(Date.now() - DAY_MS))))
+      if (n >= limit) {
+        throw new ApiError(
+          429,
+          'suggestion_limit',
+          `You've sent ${limit} suggestions today. Try again tomorrow.`,
+        )
+      }
+      const [row] = await tx
+        .insert(ingestItems)
+        .values({
+          id,
+          sourceId: source,
+          externalId: id,
+          status: 'pending',
+          draft: toSuggestionDraft(input, venueCity),
+          raw: JSON.stringify(input),
+          submittedBy: me.id,
+        })
+        .returning()
+      if (!row) throw new Error('insert returned no row')
+      return row
+    })
+
+    markPrivate(reply)
+    return reply.code(201).send({ data: toMySuggestion(item) })
+  })
+
+  app.put<{ Params: { id: string } }>(
+    '/suggestions/:id/image',
+    { ...guard, bodyLimit: EVENT_IMAGE_MAX_BYTES },
+    async (req, reply) => {
+      const me = currentAccount(req)
+      await ownItem(req.params.id, me.id)
+      const store = imageStore.store
+      if (!store) throw imagesUnavailable()
+      const type = Buffer.isBuffer(req.body) ? sniffImageType(req.body) : null
+      if (!type) throw new ApiError(415, 'unsupported_media_type', 'Send one PNG, JPEG or WEBP image as the request body')
+
+      const key = suggestionImageKey(req.params.id, type)
+      await store.put(key, req.body as Buffer, type)
+      let previous: string | null
+      try {
+        previous = await setImage(req.params.id, me.id, key, store.url(key))
+      } catch (err) {
+        await deleteQuietly(key)
+        throw err
+      }
+      await deleteQuietly(previous)
+      markPrivate(reply)
+      return { data: toMySuggestion(await ownItem(req.params.id, me.id)) }
+    },
+  )
+
+  app.delete<{ Params: { id: string } }>('/suggestions/:id/image', guard, async (req, reply) => {
+    const me = currentAccount(req)
+    await ownItem(req.params.id, me.id)
+    const previous = await setImage(req.params.id, me.id, null, null)
+    await deleteQuietly(previous)
+    markPrivate(reply)
+    return { data: toMySuggestion(await ownItem(req.params.id, me.id)) }
+  })
+
+  app.delete<{ Params: { id: string } }>('/suggestions/:id', guard, async (req, reply) => {
+    const me = currentAccount(req)
+    const previous = await db.transaction(async (tx) => {
+      const [item] = await tx
+        .select()
+        .from(ingestItems)
+        .where(and(eq(ingestItems.id, uuidOrNil(req.params.id)), eq(ingestItems.submittedBy, me.id), ne(ingestItems.status, 'withdrawn')))
+        .for('update')
+      if (!item) throw notFound('Suggestion not found')
+      if (item.status !== 'pending') throw conflict('Only a suggestion that is still in review can be withdrawn')
+      await tx.update(ingestItems).set({ status: 'withdrawn', imageKey: null, draft: { ...item.draft, image_url: null } }).where(eq(ingestItems.id, item.id))
+      return item.imageKey
+    })
+    await deleteQuietly(previous)
+    return reply.code(204).send()
+  })
+
+  app.get('/accounts/me/suggestions', guard, async (req, reply) => {
+    markPrivate(reply)
+    const me = currentAccount(req)
+    const rows = await db
+      .select()
+      .from(ingestItems)
+      .where(and(eq(ingestItems.submittedBy, me.id), ne(ingestItems.status, 'withdrawn')))
+      .orderBy(desc(ingestItems.firstSeenAt), desc(ingestItems.id))
+    return { data: rows.map(toMySuggestion) }
+  })
+}
+
+/** Points a pending item at a new image (or none); returns the previous key. 409 when the item is decided. */
+async function setImage(id: string, accountId: string, key: string | null, url: string | null): Promise<string | null> {
+  return db.transaction(async (tx) => {
+    const [item] = await tx
+      .select()
+      .from(ingestItems)
+      .where(and(eq(ingestItems.id, uuidOrNil(id)), eq(ingestItems.submittedBy, accountId), ne(ingestItems.status, 'withdrawn')))
+      .for('update')
+    if (!item) throw notFound('Suggestion not found')
+    if (item.status !== 'pending') throw conflict('Only a suggestion that is still in review can be changed')
+    await tx
+      .update(ingestItems)
+      .set({ imageKey: key, draft: { ...item.draft, image_url: url } })
+      .where(eq(ingestItems.id, id))
+    return item.imageKey
+  })
+}

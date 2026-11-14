@@ -18,13 +18,11 @@ afterAll(async () => {
 describe('accounts without rights', () => {
   const venue = { name: 'V', address: 'A 1', city: 'Testcity' }
 
-  it('get 403 no_rights on venue and extract writes', async () => {
+  it('get 403 no_rights on venue writes', async () => {
     const { key } = await createAccount({ organizer: false })
     const calls = [
       { method: 'POST', url: '/api/v1/venues', payload: venue },
       { method: 'PUT', url: '/api/v1/venues/11111111-1111-4111-8111-111111111111', payload: { name: 'X' } },
-      { method: 'POST', url: '/api/v1/events/extract', payload: {} },
-      { method: 'POST', url: '/api/v1/events/extract-lineup', payload: {} },
     ] as const
     for (const c of calls) {
       const res = await app.inject({ ...c, headers: auth(key) })

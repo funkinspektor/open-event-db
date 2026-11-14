@@ -15,6 +15,7 @@ import { eventRoutes } from './routes/events.js'
 import { interestRoutes } from './routes/interests.js'
 import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
+import { suggestionRoutes } from './routes/suggestions.js'
 import { ingestRoutes } from './routes/ingest.js'
 import { hasIngestSecret, internalRoutes } from './routes/internal.js'
 import { IMAGE_CACHE_CONTROL, imageStore, isLocalStore } from './images/store.js'
@@ -130,6 +131,7 @@ export async function buildApp({ logger = true, logStream }: AppOptions = {}): P
       await api.register(tagsRoutes)
       await api.register(authRoutes)
       await api.register(interestRoutes)
+      await api.register(suggestionRoutes)
     },
     { prefix: '/api/v1' },
   )

@@ -7,7 +7,7 @@ import {
   EXTRACT_MAX_IMAGES,
 } from '@open-event-db/shared'
 import { ApiError } from '../errors.js'
-import { requireRights } from '../auth.js'
+import { requireAuth, requireOnboarded } from '../auth.js'
 import { lineupReading } from '../extract/lineup.js'
 import { isEmptyDraft, normalizeExtraction } from '../extract/normalize.js'
 import { sniffImageType } from '../images/sniff.js'
@@ -87,7 +87,7 @@ export async function extractRoutes(app: FastifyInstance) {
 
   app.post(
     '/events/extract',
-    { onRequest: requireRights, bodyLimit: EXTRACT_MAX_BYTES, config: { rateLimit: extractRateLimit } },
+    { onRequest: [requireAuth, requireOnboarded], bodyLimit: EXTRACT_MAX_BYTES, config: { rateLimit: extractRateLimit } },
     async (req) => {
       const images = await imagesFromBody(req.body)
 
@@ -107,7 +107,7 @@ export async function extractRoutes(app: FastifyInstance) {
   )
 
   // The editor's "Read from description": the same checked reading the ingest uses; nothing is stored
-  app.post('/events/extract-lineup', { onRequest: requireRights, config: { rateLimit: lineupRateLimit } }, async (req) => {
+  app.post('/events/extract-lineup', { onRequest: [requireAuth, requireOnboarded], config: { rateLimit: lineupRateLimit } }, async (req) => {
     const { text } = lineupBodySchema.parse(req.body)
     let lineup
     try {
