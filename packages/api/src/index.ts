@@ -1,5 +1,5 @@
 import { buildApp } from './app.js'
-import { CLEANUP_INTERVAL_MS, cleanupExpiredAuth } from './cleanup.js'
+import { CLEANUP_INTERVAL_MS, cleanupExpiredAuth, cleanupSuggestionImages } from './cleanup.js'
 
 // Serverless platforms (Scaleway) inject PORT; API_PORT wins locally.
 const port = Number(process.env.API_PORT ?? process.env.PORT ?? 3001)
@@ -20,6 +20,12 @@ async function cleanup() {
     }
   } catch (err) {
     app.log.error({ err }, 'auth cleanup failed')
+  }
+  try {
+    const images = await cleanupSuggestionImages()
+    if (images) app.log.info({ images }, 'deleted images of withdrawn and decided suggestions')
+  } catch (err) {
+    app.log.error({ err }, 'suggestion image cleanup failed')
   }
 }
 void cleanup()
