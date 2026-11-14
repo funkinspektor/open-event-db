@@ -20,7 +20,10 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState(false)
+  const [reason, setReason] = useState('')
   const { draft, state } = item
+  const suggestion = item.source.kind === 'suggestion'
 
   async function act<T>(path: string, body: unknown, then: (data: T) => string) {
     setError(null)
@@ -38,7 +41,8 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
   }
 
   const accept = () => act<{ event_id: string }>(`items/${item.id}/accept`, {}, (d) => `/events/${d.event_id}?saved=accepted`)
-  const reject = () => act(`items/reject`, { ids: [item.id] }, () => '/ingest')
+  // A suggestion's reject may carry a reason for the person who sent it
+  const reject = (why?: string) => act(`items/reject`, { ids: [item.id], ...(why ? { reason: why } : {}) }, () => '/ingest')
   // Linking first compares the two: the page shows the merge panel for `?merge=`
   const link = (eventId: string) => router.push(`/ingest/${item.id}?merge=${eventId}`)
   const gone = (action: 'keep' | 'cancel') => act(`items/${item.id}/gone`, { action }, () => '/ingest?view=gone')
@@ -62,7 +66,12 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
         <div className="flex flex-wrap items-center gap-3">
           {state === 'new' && (
             <>
-              <button type="button" onClick={reject} disabled={busy} className="kk-btn kk-btn--outline">
+              <button
+                type="button"
+                onClick={() => (suggestion ? setRejecting(true) : reject())}
+                disabled={busy || rejecting}
+                className="kk-btn kk-btn--outline"
+              >
                 Reject
               </button>
               <Link href={`/ingest/${item.id}/edit`} className="kk-btn kk-btn--outline">
@@ -91,6 +100,23 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
           )}
         </div>
       </div>
+
+      {state === 'new' && rejecting && (
+        <div className="flex flex-col gap-3">
+          <label className="kk-field">
+            Reason (shown to the person)
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3} className="kk-input" />
+          </label>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => reject(reason.trim() || undefined)} disabled={busy} className="kk-btn kk-btn--primary">
+              Confirm reject
+            </button>
+            <button type="button" onClick={() => setRejecting(false)} disabled={busy} className="kk-btn kk-btn--text">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {state === 'gone' && (
         <p className="m-0 text-[15px] text-muted">
