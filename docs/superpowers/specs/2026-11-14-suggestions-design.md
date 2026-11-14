@@ -25,7 +25,7 @@ taken back. People who suggest good events regularly become scout candidates; th
 4. **No notification** to scouts beyond the existing inbox counter.
 5. **The inbox card names the person and their record**: "Suggested by Maria (@maria) · 4 of 5 accepted", or
    "first suggestion". This is how the owner spots scout candidates.
-6. **Copy rule:** nothing a suggesting person sees says "scout". Use "someone from Kellerkompass".
+6. **Copy rule:** nothing a suggesting person sees says "scout". Use "the Kellerkompass team".
 7. Unchanged from the program: daily limit 5 (configurable), "My suggestions" with status and optional reason,
    withdraw while pending (no editing), mail only on accept or merge, scouts and organizer members keep publishing
    directly.
@@ -111,9 +111,9 @@ per-account daily limit (`EXTRACT_DAILY_LIMIT`). Plain accounts thereby get the 
   "Create event" (user menu and list toolbar). Logged out, the toolbar shows "Suggest event", leading to login with
   `return_to=/events/new`.
 - `/events/new` in suggestion mode: same form incl. flyer import and image field; venue is "pick an existing venue or
-  type the place" (no venue creation). Above the button: "Someone from Kellerkompass reviews your suggestion before it
+  type the place" (no venue creation). Above the button: "The Kellerkompass team reviews your suggestion before it
   goes live. If it's accepted, your display name is shown as ‘Added by’." Button: **Send suggestion**. After sending:
-  "Thanks! Someone from Kellerkompass will review it. We'll email you when it's live." with a link to My suggestions.
+  "Thanks! The Kellerkompass team will review it. We'll email you when it's live." with a link to My suggestions.
   At the limit the form keeps its content and shows the 429 message.
 - `/dashboard` gets **My suggestions**: title, date, status — "In review" (with **Withdraw**, after a confirm),
   "Live" (link to the event), "Not accepted" (plus the reason if given). Empty state with a "Suggest event" link.
