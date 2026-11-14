@@ -248,4 +248,28 @@ describe('selectExamples', () => {
     expect(examples.rejected.map((s) => s.title)).toEqual(['Rejected one'])
     expect(examples.accepted[0]).toMatchObject({ source: source.name, place: 'Some Club' })
   })
+
+  it('takes feed decisions only, and undated ones after the dated', async () => {
+    // Rows without decided_at (written straight into the database, as some tests do) must not crowd out real ones
+    for (let i = 0; i < 25; i++) await addItem(`Undated ${i}`, { status: 'accepted' })
+    await addItem('Dated one', { status: 'accepted', decidedAt: new Date('2000-01-01T00:00:00Z') })
+    const [suggestions] = await db
+      .insert(ingestSources)
+      .values({ slug: `fit-sugg-${stamp}-${++seq}`, name: 'Fit suggestions', kind: 'suggestion', url: 'https://sugg.test/' })
+      .returning()
+    try {
+      const late = new Date('2099-01-01T00:00:00Z')
+      await addItem('Suggested and taken', { status: 'accepted', decidedAt: late }, undefined, suggestions!)
+      await addItem('Suggested and turned down', { status: 'rejected', decidedAt: late }, undefined, suggestions!)
+
+      const examples = await selectExamples({ only: [source.slug, suggestions!.slug] })
+
+      expect(examples.accepted[0]!.title).toBe('Dated one')
+      expect(examples.accepted).toHaveLength(20)
+      expect(examples.accepted.map((s) => s.title)).not.toContain('Suggested and taken')
+      expect(examples.rejected).toEqual([])
+    } finally {
+      await db.delete(ingestSources).where(eq(ingestSources.id, suggestions!.id))
+    }
+  })
 })

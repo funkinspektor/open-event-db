@@ -9,7 +9,6 @@ import type { FastifyInstance } from 'fastify'
 import { eq, inArray } from 'drizzle-orm'
 import {
   editHistory,
-  ensureSuggestionsSource,
   eventOrganizers,
   events,
   ingestItems,
@@ -1146,6 +1145,9 @@ describe('provenance', () => {
 
 describe('suggestions in the inbox', () => {
   const WEB_URL = process.env.WEB_URL ?? 'http://localhost:3000'
+  // A suggestion-kind source of this file's own: views and counts filtered by it stay exact while other test files
+  // (run in parallel by the workspace) add and remove items of the built-in suggestions source
+  const suggestionsSlug = `inbox-sugg-${stamp}`
   let suggestionsSource: string
   let submitter: Account
   let firstTimer: Account
@@ -1156,7 +1158,11 @@ describe('suggestions in the inbox', () => {
   let keyReviewer: string
 
   beforeAll(async () => {
-    suggestionsSource = await ensureSuggestionsSource(db)
+    const [src] = await db
+      .insert(ingestSources)
+      .values({ slug: suggestionsSlug, name: `Suggestions ${stamp}`, kind: 'suggestion', url: 'https://suggestions.test/' })
+      .returning()
+    suggestionsSource = src!.id
     submitter = (await createAccount({ label: 'inbox-submitter', organizer: false })).account
     firstTimer = (await createAccount({ label: 'inbox-first', organizer: false })).account
     // A scout of its own: the write rate limit counts per account
@@ -1185,7 +1191,7 @@ describe('suggestions in the inbox', () => {
   })
 
   afterAll(async () => {
-    await db.delete(ingestItems).where(inArray(ingestItems.submittedBy, [submitter.id, firstTimer.id]))
+    await db.delete(ingestSources).where(eq(ingestSources.id, suggestionsSource)) // cascades items
   })
 
   const suggestion = (by: Account, over: Partial<typeof ingestItems.$inferInsert> = {}, draft: Record<string, unknown> = {}) =>
@@ -1202,7 +1208,7 @@ describe('suggestions in the inbox', () => {
     let cursor: string | null = null
     let counts: { new: number; filtered: number; gone: number } = { new: 0, filtered: 0, gone: 0 }
     do {
-      const url: string = `/api/v1/ingest/items?view=${view}&source=suggestions&limit=100${cursor ? `&cursor=${cursor}` : ''}`
+      const url: string = `/api/v1/ingest/items?view=${view}&source=${suggestionsSlug}&limit=100${cursor ? `&cursor=${cursor}` : ''}`
       const res = await app.inject({ method: 'GET', url, headers: auth(keyReviewer) })
       expect(res.statusCode).toBe(200)
       const body: { data: typeof items; meta: { cursor: string | null; counts: typeof counts } } = res.json()

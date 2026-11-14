@@ -95,7 +95,8 @@ describe('ingestItemViewSchema', () => {
     const view = {
       id: uuid,
       status: 'pending',
-      source: { slug: 'hall', name: 'Hall' },
+      source: { slug: 'hall', name: 'Hall', kind: 'ical' },
+      submitter: null,
       draft: {
         title: 'Concert',
         description: 'Verbatim text',
@@ -139,5 +140,16 @@ describe('ingestItemViewSchema', () => {
     const { lineup_from_text: __, ...unreadDraft } = view.draft
     expect(ingestItemViewSchema.parse({ ...view, draft: unreadDraft }).draft.lineup_from_text).toBe(false)
     expect(() => ingestItemViewSchema.parse({ ...view, fit: { verdict: 'great', reason: 'x' } })).toThrow()
+
+    // A person's suggestion carries its submitter and their record
+    const suggestion = {
+      ...view,
+      source: { slug: 'suggestions', name: 'Suggestions', kind: 'suggestion' },
+      submitter: { display_name: 'Mia', handle: 'mia', accepted: 2, decided: 3 },
+    }
+    expect(ingestItemViewSchema.parse(suggestion)).toEqual(suggestion)
+    expect(() => ingestItemViewSchema.parse({ ...view, source: { slug: 'hall', name: 'Hall' } })).toThrow()
+    const { submitter: ___, ...noSubmitter } = view
+    expect(() => ingestItemViewSchema.parse(noSubmitter)).toThrow()
   })
 })

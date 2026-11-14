@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm'
 import { ingestItems, ingestSources, venues } from '@open-event-db/db'
 import { ingestDraftSchema, type IngestDraft } from '@open-event-db/shared'
 import { db } from '../../db.js'
@@ -31,7 +31,11 @@ const EXAMPLE_COUNT = 20
 /** Joins the draft's venue as text: a broken stored venue_id must not make the uuid cast fail the whole query. */
 const venueJoin = sql`${venues.id}::text = ${ingestItems.draft}->>'venue_id'`
 
-/** The editors' latest decisions, newest first: what they took and what they turned down. */
+/**
+ * The editors' latest decisions on feed items, newest first: what they took and what they turned down. People's
+ * suggestions are left out: a person picked them already, and a reject there often means "incomplete" or "already
+ * listed", not "not our taste". Items without a decision time (rows written by hand) come last, not first.
+ */
 export async function selectExamples(opts: { only?: string[] } = {}): Promise<FitExamples> {
   const recent = async (decided: 'accepted' | 'rejected'): Promise<FitSubject[]> => {
     const rows = await db
@@ -44,10 +48,11 @@ export async function selectExamples(opts: { only?: string[] } = {}): Promise<Fi
           eq(ingestItems.status, decided),
           // A duplicate merged into one item says little about the editors' taste
           decided === 'rejected' ? eq(ingestItems.hadDuplicates, false) : undefined,
+          ne(ingestSources.kind, 'suggestion'),
           opts.only ? inArray(ingestSources.slug, opts.only) : undefined,
         ),
       )
-      .orderBy(desc(ingestItems.decidedAt), asc(ingestItems.id))
+      .orderBy(sql`${ingestItems.decidedAt} desc nulls last`, asc(ingestItems.id))
       .limit(EXAMPLE_COUNT)
     return rows.flatMap((row) => {
       const parsed = ingestDraftSchema.safeParse(row.draft)
