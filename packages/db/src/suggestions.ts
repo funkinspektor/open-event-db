@@ -23,10 +23,16 @@ export async function ensureSuggestionsSource(db: Db): Promise<string> {
       venueId: null,
     })
     .onConflictDoNothing({ target: ingestSources.slug })
+  // Only a source of kind 'suggestion' may take people's suggestions: never a feed that happens to have the slug
   const [row] = await db
-    .select({ id: ingestSources.id })
+    .select({ id: ingestSources.id, kind: ingestSources.kind })
     .from(ingestSources)
     .where(eq(ingestSources.slug, SUGGESTIONS_SOURCE_SLUG))
   if (!row) throw new Error('suggestions source missing after upsert')
+  if (row.kind !== 'suggestion') {
+    throw new Error(
+      `The ingest source with slug "${SUGGESTIONS_SOURCE_SLUG}" has kind "${row.kind}", not "suggestion": rename that source's slug, then restart`,
+    )
+  }
   return row.id
 }

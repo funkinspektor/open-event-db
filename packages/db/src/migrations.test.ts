@@ -318,6 +318,15 @@ describe('migration 0024: suggestions', () => {
     ])
   })
 
+  it('ensureSuggestionsSource refuses a source with its slug but another kind', async () => {
+    const { sql } = db!
+    const orm = drizzleOrm(sql, { schema }) as unknown as Parameters<typeof ensureSuggestionsSource>[0]
+    await sql`insert into accounts (id, email, handle, display_name) values (${SCOUT}, 's@example.com', 's', 'S')`
+    await sql`insert into ingest_sources (slug, name, kind, url, account_id) values ('suggestions', 'A feed', 'ical', 'https://feed.example/e.ics', ${SCOUT})`
+    await expect(ensureSuggestionsSource(orm)).rejects.toThrow(/slug "suggestions".*kind "ical"/)
+    expect(await sql`select kind from ingest_sources`).toEqual([{ kind: 'ical' }])
+  })
+
   it('a feed source still needs an account', async () => {
     const { sql } = db!
     await expect(
