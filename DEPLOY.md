@@ -1,6 +1,6 @@
 # Deploying to Scaleway
 
-Two containers, a database and the event images bucket, all in Amsterdam (`nl-ams`). Transactional
+Two containers, the ingest job, a database and the event images bucket, all in Amsterdam (`nl-ams`). Transactional
 Email and the Generative APIs stay in `fr-par` (`SCALEWAY_REGION=fr-par`) — the API reaches both over
 HTTPS, so the region split doesn't matter. (Managed PostgreSQL creation in `fr-par` was disabled on 2026-10-14.)
 
@@ -8,6 +8,7 @@ HTTPS, so the region split doesn't matter. (Managed PostgreSQL creation in `fr-p
 |---|---|---|
 | Web (Next.js) | Serverless Container, port 3000 | `https://kellerkompass.de` |
 | API (Fastify) | Serverless Container, port 3001 | `https://api.kellerkompass.de` |
+| Feed ingest (daily) | Serverless Job, API image with its own startup command | — |
 | Postgres 16 | Managed Database for PostgreSQL | — |
 
 Web and API run on sibling subdomains so the session cookie can be shared via `COOKIE_DOMAIN`.
@@ -16,16 +17,17 @@ Web and API run on sibling subdomains so the session cookie can be shared via `C
 
 `.github/workflows/deploy.yml` builds and rolls out on every push to `main`. It rebuilds only the image whose
 sources changed (API first, because it runs the migrations), tags it `:latest` and with the commit SHA, points
-the container at the SHA tag and waits until the container is ready again. "Run workflow" in the Actions tab
-rebuilds both. To roll back, point the container at an earlier SHA tag in the Scaleway console.
+the container at the SHA tag and waits until the container is ready again. Once the API is ready, the ingest job
+is pointed at the same API image tag (section 4). "Run workflow" in the Actions tab rebuilds both. To roll back, point the container at an earlier SHA tag in the Scaleway console.
 
-It needs three repository secrets (Settings → Secrets and variables → Actions):
+It needs four repository secrets (Settings → Secrets and variables → Actions):
 
 | Secret | Value |
 |---|---|
-| `SCW_SECRET_KEY` | secret key of the IAM application `kellerkompass-deploy`; its policy needs `ContainerRegistryFullAccess` and `ContainersFullAccess` in the project |
+| `SCW_SECRET_KEY` | secret key of the IAM application `kellerkompass-deploy`; its policy needs `ContainerRegistryFullAccess`, `ContainersFullAccess` and `ServerlessJobsFullAccess` in the project |
 | `SCW_WEB_CONTAINER_ID` | ID of the web container (Scaleway console → Serverless Containers → container → Settings) |
 | `SCW_API_CONTAINER_ID` | ID of the API container |
+| `SCW_INGEST_JOB_ID` | ID of the ingest job definition (Scaleway console → Serverless Jobs → `kellerkompass-ingest`). Unset, the workflow only warns and the job keeps its image |
 
 The manual steps below still work, for example from a laptop when Actions is down.
 
@@ -48,6 +50,9 @@ docker push $REGISTRY/api:latest
 docker push $REGISTRY/web:latest
 ```
 
+Then point the ingest job at the new API image too (Serverless Jobs → `kellerkompass-ingest` → Settings →
+image), so it runs the same code as the API.
+
 ## 2. Environment
 
 Put secrets (marked 🔒) into the container's *secret* environment variables, not the plain ones.
@@ -69,11 +74,13 @@ Put secrets (marked 🔒) into the container's *secret* environment variables, n
 | `EMAIL_FROM`, `EMAIL_FROM_NAME` | verified TEM sender |
 | `VISION_MODEL` | `mistral-medium-3.5-128b` |
 | `TEXT_MODEL` | optional; model for reading feed descriptions and scoring the fit of imported events, defaults to `VISION_MODEL` |
-| `INGEST_CRON_SECRET` 🔒 | `openssl rand -hex 32` — without it `/internal/ingest/run` answers 404 |
 | `S3_ENDPOINT`, `S3_REGION` | `https://s3.nl-ams.scw.cloud`, `nl-ams` |
 | `S3_BUCKET` | the event images bucket (see below); without it events have no images |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` 🔒 | API key whose IAM policy has `ObjectStorageFullAccess` for the project |
 | `IMAGE_BASE_URL` | `https://<bucket>.s3.nl-ams.scw.cloud` |
+
+The feed ingest doesn't run in the API container any more; its job has its own environment (section 4).
+`INGEST_CRON_SECRET` is no longer read: remove it from the API container if it is still set.
 
 **Event images bucket.** Create an Object Storage bucket in `nl-ams` (Scaleway console → Object Storage →
 Create bucket, visibility private: the API writes every object with a `public-read` ACL, so only the images
@@ -154,48 +161,112 @@ members) and drops the old table. The API changed shape too, so take these steps
    scripts/prod-db.sh pnpm db:cli delete-account letzte-welle
    ```
 
-## 4. Feed ingest cron
+## 4. Feed ingest job
 
-The API container gets a Scaleway cron trigger (container → Triggers → Create trigger, type CRON) that runs
-every enabled ingest source once a day:
+The daily feed ingest (every enabled source, then the fit-scoring pass, with its LLM calls and image uploads)
+runs as a **Scaleway Serverless Job**, not in the API container, so a long or stuck run can't slow down or break
+the public API. The job runs the API image with its own startup command, `node dist/ingest-job.js`: no web
+server, no migrations (those stay with the API container). It exists only while it runs, so it costs nothing
+between runs (the job equivalent of min scale 0) and has no HTTP endpoint, hence no secret to guard it. A
+Serverless Job rather than a second Serverless Container, because a job runs to completion with a timeout of up
+to 24 h instead of living inside one HTTP request, brings its own cron triggers, and shows each run's
+status (`succeeded`/`failed`) and logs.
+
+A run exits 0 when it went through, even if single sources failed: as before, a source's error lands in its
+`lastError` (`pnpm db:cli ingest-list`), and the job log gets one line `ingest source <slug> failed: …` per failed
+source. The run shows as `failed` only when it crashes (database unreachable, a bug). A run that finds another
+one holding the ingest lock (for example a laptop run via `prod-db.sh`) logs that it was skipped and exits 0.
+
+### Settings
+
+Scaleway console → Serverless → Jobs → Create job:
+
+| Setting | Value |
+|---|---|
+| Registry | Scaleway Container Registry, namespace `kellerkompass`, image `api`, tag: the commit SHA the API container runs (afterwards the deploy workflow updates it) |
+| Name, region | `kellerkompass-ingest`, `nl-ams` (Amsterdam) |
+| Resources | the default (1120 mvCPU, 2048 MB) is ample; any preset with ≥ 1 GB memory works |
+| Environment variables | see below |
+| Secret references | see below |
+| Ephemeral storage | the smallest value; the job writes nothing to disk |
+| Startup command | `node --enable-source-maps /app/dist/ingest-job.js` (if the form takes one entry per word: `node`, `--enable-source-maps`, `/app/dist/ingest-job.js`) |
+| Arguments | none (every enabled source). Source slugs as arguments run just those, enabled or not, like the `ingest` CLI |
+| Maximum duration | `1h`; a normal run takes a few minutes |
+| Retries | `0`: a retry would fetch every source again; the next day's run catches up |
+
+Trigger (job → Triggers → Create trigger):
 
 | Setting | Value |
 |---|---|
 | Name | `ingest-daily` |
 | Schedule | `0 4 * * *` |
 | Timezone | `Europe/Berlin` — 04:00 local time all year |
-| Method, Path | `POST`, `/` |
-| JSON body | `{"secret":"<INGEST_CRON_SECRET>"}` — one line, no trailing comma, or the form rejects it |
-| HTTP headers | none |
+| Startup command, arguments | leave empty (the job's own are used) |
 
-The API serves the run at both `POST /` and `POST /internal/ingest/run` and reads the secret from the JSON
-body or the `X-Ingest-Secret` header, so a trigger with path `/internal/ingest/run` and the header works just
-as well. Check the wiring by sending the same request by hand (zsh); `read -s` keeps the secret out of the shell
-history:
+**Environment.** Plain variables:
 
-```bash
-read -s "S?Secret: "
-curl -X POST https://api.kellerkompass.de/ -H 'content-type: application/json' -d "{\"secret\":\"$S\"}"
-```
+| Variable | Value |
+|---|---|
+| `SCALEWAY_PROJECT_ID` | as on the API container |
+| `VISION_MODEL`, `TEXT_MODEL` | as on the API container (`TEXT_MODEL` only if set there) |
+| `S3_ENDPOINT`, `S3_REGION` | `https://s3.nl-ams.scw.cloud`, `nl-ams` |
+| `S3_BUCKET`, `IMAGE_BASE_URL` | as on the API container |
+| `S3_ACCESS_KEY_ID` | as on the API container |
 
-It answers `{"data":{"skipped":false,"sources":[…]}}` with `"ok":true` per source; 404 means
-`INGEST_CRON_SECRET` isn't set on the container (or it hasn't restarted yet), 403 a wrong secret. After the
-first scheduled run, `pnpm db:cli ingest-list` (via `prod-db.sh`) shows the new `last run` time; the API
-container log shows the request.
+Jobs take secrets only as references to **Secret Manager** (no secret variables typed into the form), and only
+from the same region. Create these three in Secret Manager (console → Secret Manager → Create secret, region
+`nl-ams`, project as the containers, the value exactly as on the API container), then reference each as an
+**environment variable** of the same name (job → Settings → Secret references → Add secret reference, version
+`latest` if offered, else the newest):
 
-The run is synchronous inside the request: fetching every feed and extracting the times of new events can
-take minutes, so it must finish within the container's request timeout. Do the first production run, which
-extracts every upcoming event at once, from a laptop with the CLI instead:
+| Secret = variable name | Value |
+|---|---|
+| `DATABASE_URL` 🔒 | as on the API container |
+| `SCALEWAY_SECRET_KEY` 🔒 | as on the API container (Generative APIs key, not the deploy key) |
+| `S3_SECRET_ACCESS_KEY` 🔒 | as on the API container |
+
+The job sends no email, so it needs none of the `EMAIL_*`, `WEB_URL`, cookie or rate-limit variables.
+`NODE_ENV=production` comes from the image. Changing a secret's value means a new version in Secret Manager; with
+a pinned version, update the reference too.
+
+### Moving the cron off the API container (once)
+
+The first deploy with this change removes `POST /` and `/internal/ingest/run` from the API. Until the job
+exists, the API container's old cron trigger gets a 404 and no ingest runs, so do steps 2–6 the same day,
+before 04:00 (or start the job by hand afterwards).
+
+1. Fast-forward and push. The deploy workflow warns "Secret SCW_INGEST_JOB_ID is not set"; that is expected
+   this once. Note the commit SHA: it is the API image tag the job starts from.
+2. Create the three secrets in Secret Manager and the job with the settings above, image tag = that SHA.
+3. Test it: job → Actions → Run job. The run must end `succeeded`; its log (job run → Logs, or Cockpit) ends
+   with `ingest run done in … s: N sources, 0 failed` and the result as JSON. `scripts/prod-db.sh pnpm db:cli
+   ingest-list` shows the new `last run` times. A `failed` run: read the log, usually a missing variable or
+   secret reference.
+4. Create the trigger `ingest-daily` on the job (table above).
+5. API container (Serverless → Containers → API container): Triggers → delete the CRON trigger `ingest-daily`;
+   Settings → secret environment variables → delete `INGEST_CRON_SECRET` and deploy the change. The secret may
+   also be deleted from your password manager; nothing reads it any more.
+6. IAM → Applications → `kellerkompass-deploy` → its policy: add `ServerlessJobsFullAccess` for the project.
+   GitHub → repository → Settings → Secrets and variables → Actions: add `SCW_INGEST_JOB_ID` with the job
+   definition's ID (job → Overview or Settings).
+7. Check with the next push that touches the API (or Actions → Deploy → Run workflow): the API leg's last step
+   prints `ingest job image: rg.nl-ams.scw.cloud/kellerkompass/api:<sha>`. The next morning the job's run list
+   shows a run at 04:00.
+
+To run the ingest by hand: job → Actions → Run job (all enabled sources), or "Run job with options" with the
+source slugs as arguments (`berghain kantine`). Unlike a laptop run via `prod-db.sh`, a job run has the bucket
+credentials, so it stores images too. Do the first production run of a new source, which extracts every
+upcoming event at once, either way; from the laptop:
 
 ```bash
 scripts/prod-db.sh pnpm --filter @open-event-db/api ingest acud
 ```
 
 **Fit scoring.** Every run ends with the fit-scoring pass: up to 200 open pending items, 4 LLM calls at a
-time, inside the same request. Normally only the new items are scored (a few dozen), but a backfill is far
+time, in the same run. Normally only the new items are scored (a few dozen), but a backfill is far
 larger, so after the first deploy of this feature, and after every edit of
 `packages/api/src/ingest/fit/taste.ts` or the fit prompt (`fit/prompt.ts`), run it once from the laptop
-instead of waiting for the cron:
+instead of waiting for the nightly job:
 
 ```bash
 scripts/prod-db.sh pnpm --filter @open-event-db/api ingest:score
@@ -203,8 +274,8 @@ scripts/prod-db.sh pnpm --filter @open-event-db/api ingest:score
 
 Repeat until it reports `scored: 0`; one run scores at most 200 items, `--limit N` changes that. The model is
 `TEXT_MODEL`, else `VISION_MODEL`, with the Scaleway keys above; without a model, scoring is skipped and the
-run result says `scoring: { skipped: 'no model' }`. The cron response carries the pass as its `scoring`
-field. `ingest:score` exits 1 when another ingest run holds the lock, and 2 on bad arguments or a crash.
+run result says `scoring: { skipped: 'no model' }`. The JSON at the end of the job log carries the pass as
+its `scoring` field. `ingest:score` exits 1 when another ingest run holds the lock, and 2 on bad arguments or a crash.
 
 Sources are added with the admin CLI, for example the ones in production:
 
@@ -301,7 +372,7 @@ line about tickets (or the line below it). One request, about 1.2 MB.
 
 Urban Spree lists newest first, so `?limit=100` must reach back past today (the source fails with "raise
 ?limit=" otherwise). Descriptions are only on the detail pages: a run fetches one per upcoming event, one
-after another, which takes about 40 seconds of the request timeout.
+after another, which takes about 40 seconds.
 
 The Badehaus feed (WordPress Events Manager) has no LOCATION, hence `default_location`, and lists only the
 next 50 events, hence `capped`: without it, an event pushed past the 50th by a newly added one would be
@@ -318,14 +389,14 @@ scripts/prod-db.sh pnpm db:cli ingest-set-config duncker --config '{"extract_fro
 ```
 
 The next run reads every item stored before categories existed once more and syncs the categories into
-accepted events. With `extract_from_text` newly set that is one extraction per stored item, so run it from
-the laptop as above, not in the scheduled request.
+accepted events. With `extract_from_text` newly set that is one extraction per stored item, so run it right
+away (laptop or "Run job with options" as above) rather than leaving it to the nightly job.
 
 **Lineups.** The Berghain/Kantine and Dunckerclub adapters write the lineup into its own field and leave it
 out of the description. After the deploy that brought this, the next run reads every stored item of every
 source once more (the drafts gain a `lineup` field); events still synced from their feed take the lineup and
 the shorter description then. Sources with `extract_from_text` (ACUD, Duncker) make one extraction per
-stored item, so run all enabled sources from the laptop right after the deploy, not in the cron request:
+stored item, so run all enabled sources from the laptop right after the deploy, not in the nightly job:
 
 ```bash
 scripts/prod-db.sh pnpm --filter @open-event-db/api ingest

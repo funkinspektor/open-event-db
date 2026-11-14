@@ -380,7 +380,7 @@ async function runSource(source: IngestSource, now: Date, fetchText: (url: strin
 }
 
 /**
- * Runs `fn` holding the global ingest advisory lock (cron, `ingest` and `ingest:score` share it).
+ * Runs `fn` holding the global ingest advisory lock (the ingest job, `ingest` and `ingest:score` share it).
  * Returns `null` without running `fn` when another run holds the lock.
  */
 export async function withIngestLock<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -408,8 +408,8 @@ export interface IngestRunResult {
 
 /**
  * Fetches every enabled source (or `only`) one after the other into `ingest_items` and syncs accepted events,
- * then scores the open items for fit. A run already in progress (cron and CLI share one advisory lock) makes
- * this one return `skipped: true`.
+ * then scores the open items for fit. A run already in progress (the ingest job and the CLI share one advisory
+ * lock) makes this one return `skipped: true`.
  */
 export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestRunResult> {
   const now = opts.now ?? new Date()
@@ -441,23 +441,4 @@ export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestRunR
     return { skipped: false, sources: results, scoring }
   })
   return result ?? { skipped: true, sources: [] }
-}
-
-/**
- * The pipeline call the cron endpoint makes, behind a holder so route tests install a stub and never
- * run the real pipeline (which takes the global advisory lock that run.test.ts also uses).
- */
-type IngestRunFn = () => Promise<IngestRunResult>
-
-const defaultRun: IngestRunFn = () => runIngest()
-let currentRun: IngestRunFn = defaultRun
-
-export const ingestRunner = {
-  run: () => currentRun(),
-  setRunner(fn: IngestRunFn) {
-    currentRun = fn
-  },
-  reset() {
-    currentRun = defaultRun
-  },
 }

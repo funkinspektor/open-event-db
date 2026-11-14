@@ -1,12 +1,16 @@
 # Builds the web and API images on every push to main and rolls them out to the Scaleway
-# Serverless Containers (see DEPLOY.md). Only the image whose sources changed is rebuilt;
+# Serverless Containers (see DEPLOY.md). The ingest Serverless Job runs the API image, so it
+# follows every API rollout. Only the image whose sources changed is rebuilt;
 # "Run workflow" in the Actions tab rebuilds both.
 #
 # Repository secrets:
-#   SCW_SECRET_KEY        secret key of the IAM application kellerkompass-deploy
-#                         (needs ContainerRegistryFullAccess and ContainersFullAccess in the project)
+#   SCW_SECRET_KEY        secret key of the IAM application kellerkompass-deploy (needs
+#                         ContainerRegistryFullAccess, ContainersFullAccess and ServerlessJobsFullAccess
+#                         in the project)
 #   SCW_WEB_CONTAINER_ID  ID of the web Serverless Container
 #   SCW_API_CONTAINER_ID  ID of the API Serverless Container
+#   SCW_INGEST_JOB_ID     ID of the ingest Serverless Job definition (unset: the job keeps its image,
+#                         the run only warns)
 name: Deploy
 
 on:
@@ -137,3 +141,27 @@ jobs:
           done
           echo "::error::Container not ready after 10 minutes"
           exit 1
+
+      # The ingest job runs the API image with its own startup command. It moves to the new image only
+      # once the API is ready, i.e. after the API applied the migrations, so the job never meets an older
+      # schema. A job definition has no rollout: the next run starts the new image.
+      - name: Point the ingest job at the new image
+        if: steps.gate.outputs.run == 'true' && matrix.service == 'api'
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          JOB_ID: ${{ secrets.SCW_INGEST_JOB_ID }}
+          IMAGE: ${{ env.REGISTRY }}/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$JOB_ID" ]; then
+            echo "::warning::Secret SCW_INGEST_JOB_ID is not set; the ingest job keeps its old image (see DEPLOY.md)"
+            exit 0
+          fi
+          if ! res=$(curl -sS --fail-with-body -X PATCH \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/$REGION/job-definitions/$JOB_ID" \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'Content-Type: application/json' \
+            -d "{\"image_uri\": \"$IMAGE\"}"); then
+            echo "::error::Updating the ingest job failed: $res"
+            exit 1
+          fi
+          echo "ingest job image: $(jq -r .image_uri <<<"$res")"

@@ -17,7 +17,6 @@ import { authRoutes } from './routes/auth.js'
 import { extractRoutes } from './routes/extract.js'
 import { suggestionRoutes } from './routes/suggestions.js'
 import { ingestRoutes } from './routes/ingest.js'
-import { hasIngestSecret, internalRoutes } from './routes/internal.js'
 import { IMAGE_CACHE_CONTROL, imageStore, isLocalStore } from './images/store.js'
 
 const UUID_PARAMS = ['id', 'organizer_id'] as const
@@ -96,10 +95,7 @@ export async function buildApp({ logger = true, logStream }: AppOptions = {}): P
     hook: 'preHandler',
     // IPv6 clients get a whole /64, so bucket by prefix
     keyGenerator: (req) => ipKey(req.ip),
-    // The cron call is exempt too, but only with the right secret, so guessing it stays rate limited
-    allowList: (req) =>
-      (!!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN) ||
-      hasIngestSecret(req),
+    allowList: (req) => !!INTERNAL_TOKEN && req.headers['x-internal-token'] === INTERNAL_TOKEN,
   })
 
   await app.register(healthRoutes)
@@ -110,7 +106,6 @@ export async function buildApp({ logger = true, logStream }: AppOptions = {}): P
     if (!found) throw notFound('Image not found')
     return reply.type(found.type).header('cache-control', IMAGE_CACHE_CONTROL).send(found.data)
   })
-  await app.register(internalRoutes)
   await app.register(calendarRoutes)
   await app.register(
     async (api) => {

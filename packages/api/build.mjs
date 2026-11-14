@@ -1,11 +1,11 @@
-// Production build: bundles the server (and the migration runner) into self-contained ESM files.
+// Production build: bundles the server, the migration runner and the ingest job into self-contained ESM files.
 // The workspace packages @open-event-db/shared and /db export raw TypeScript, which plain `tsc` output
 // can't import at runtime — esbuild compiles them in, together with all npm dependencies, so the
 // container needs nothing but `node dist/index.js`.
 import { build } from 'esbuild'
 
 await build({
-  entryPoints: ['src/index.ts', 'src/migrate.ts'],
+  entryPoints: ['src/index.ts', 'src/migrate.ts', 'src/ingest-job.ts'],
   outdir: 'dist',
   bundle: true,
   platform: 'node',

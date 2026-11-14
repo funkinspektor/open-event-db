@@ -1,5 +1,7 @@
 # API container: Fastify server bundled with esbuild. Applies pending migrations on start.
 #   docker build -f Dockerfile.api -t kellerkompass-api .
+# The ingest Serverless Job runs the same image with the startup command
+# `node --enable-source-maps /app/dist/ingest-job.js` instead of CMD (no server, no migrations; see DEPLOY.md).
 FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /repo
