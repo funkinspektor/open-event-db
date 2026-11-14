@@ -7,7 +7,7 @@ Kellerkompass (kellerkompass.de) ist ein unentgeltliches, nicht-kommerzielles Pr
 
 ## § 2 Was Kellerkompass ist
 
-Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underground- und Community-Szene. Events lesen kann jede Person ohne Account. Mit einem Account kannst du Events als „Interessiert“ markieren. Events eintragen kann, wer als Scout oder Veranstalter:in freigeschaltet ist. Es gibt keinen Anspruch auf eine bestimmte Verfügbarkeit oder bestimmte Funktionen. Wir können den Dienst ändern oder einstellen.
+Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underground- und Community-Szene. Events lesen kann jede Person ohne Account. Mit einem Account kannst du Events als „Interessiert“ markieren. Events vorschlagen kann jeder Account. Events direkt eintragen kann, wer als Scout oder Veranstalter:in freigeschaltet ist. Es gibt keinen Anspruch auf eine bestimmte Verfügbarkeit oder bestimmte Funktionen. Wir können den Dienst ändern oder einstellen.
 
 ## § 3 Account und Mindestalter
 
@@ -21,6 +21,14 @@ Kellerkompass ist eine offene Datenbank für Veranstaltungen der Berliner Underg
 - **Veranstalter:innen** tragen eigene Events ein und können weitere Personen als Mitverantwortliche hinzufügen. Wer ein Event angelegt hat, kann es absagen und löschen.
 - **Scouts** tragen Events anderer Veranstaltender ein. Auf der Event-Seite steht, dass ein Scout sie hinzugefügt hat. Diese Events haben keinen Eigentümer und können von allen Scouts bearbeitet werden. Die tatsächlichen Veranstaltenden können sie übernehmen.
 - Rollen und Verifizierungen vergeben wir nach eigenem Ermessen.
+
+## § 4a Events vorschlagen
+
+1. Jeder Account, der die Einrichtung abgeschlossen hat, kann Events vorschlagen, optional mit einem Bild. Das Kellerkompass-Team prüft den Vorschlag. Ein Anspruch auf Veröffentlichung besteht nicht, wir können Vorschläge ohne Begründung ablehnen. Eine Begründung geben wir, wenn wir es sinnvoll finden.
+2. Wir dürfen Vorschläge vor der Veröffentlichung ändern, etwa Angaben korrigieren, ergänzen oder zusammenführen.
+3. Bilder und Texte in deinem Vorschlag dürfen keine Rechte Dritter verletzen. Es gelten die Regeln aus § 5 und § 6.
+4. Wird dein Vorschlag angenommen, geht das Event online und dein Anzeigename steht als „Added by“ daran. Bis dahin kannst du den Vorschlag zurückziehen. Ein veröffentlichtes Event bleibt bestehen, auch wenn du deinen Account löschst (§ 9).
+5. Pro Account sind nur wenige Vorschläge pro Tag möglich.
 
 ## § 5 Regeln für Inhalte
 

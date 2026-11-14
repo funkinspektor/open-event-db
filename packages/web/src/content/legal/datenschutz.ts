@@ -37,13 +37,25 @@ Mit einem Account kannst du Events als „Interessiert“ markieren. Wir speiche
 
 Aus deinen Markierungen kannst du einen privaten Kalender-Link erzeugen. Er enthält ein geheimes Token: Wer den Link kennt, sieht deine gemerkten Events. Gib ihn deshalb nicht weiter. Du kannst ihn jederzeit neu erzeugen, der alte Link funktioniert dann nicht mehr. Markierungen und Kalender-Link speichern wir, bis du sie entfernst oder deinen Account löschst.
 
+## 4b. Event-Vorschläge
+
+Mit einem Account kannst du Events vorschlagen. Wir speichern dafür den Inhalt deines Vorschlags (Angaben zum Event, optional ein Bild), welcher Account ihn eingereicht hat, den Zeitpunkt und den Status. Lehnt das Kellerkompass-Team deinen Vorschlag ab, speichern wir optional eine kurze Begründung, die du unter „Meine Vorschläge“ siehst. Das Kellerkompass-Team sieht deinen Anzeigenamen und deinen Handle zum Vorschlag, deine E-Mail-Adresse sieht es dort nicht. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung der Funktion).
+
+**Automatische Vorab-Einschätzung:** Den Inhalt deines Vorschlags (Titel, Beschreibung, Ort, Zeitpunkt, Kategorien und Line-up, keine Account-Daten) schicken wir an Scaleway Generative APIs (Region Paris). Dort entsteht eine automatische Vorab-Einschätzung, ob das Event zu Kellerkompass passt. Sie hilft dem Kellerkompass-Team nur beim Sortieren und entscheidet nichts.
+
+**Bilder:** Ziehst du einen Vorschlag zurück, löschen wir das Bild sofort. Das Bild eines abgelehnten Vorschlags löschen wir nach 30 Tagen, ebenso das Bild eines angenommenen Vorschlags, falls die Kopie zum Event nicht geklappt hat. Wird ein Vorschlag angenommen, kopieren wir das Bild zum Event. Es wird dann Teil des öffentlichen Events und mit ihm veröffentlicht, auch über die offene API (Abschnitt 12).
+
+**Veröffentlichung:** Nimmt das Kellerkompass-Team deinen Vorschlag an, geht das Event online und dein Anzeigename steht öffentlich als „Added by“ am Event. Bis dahin ist dein Vorschlag nicht öffentlich. Über die Veröffentlichung informieren wir dich per E-Mail (Abschnitt 5).
+
+**Speicherdauer:** Den Vorschlag selbst (Inhalt, wer ihn eingereicht hat, Begründung) speichern wir auch nach der Entscheidung, als Protokoll und zur Erkennung doppelter Vorschläge. Löschst du deinen Account, ziehen wir noch offene Vorschläge zurück und löschen ihre Bilder innerhalb einer Stunde. Deine Vorschläge bleiben danach gespeichert, aber ohne Bezug zu deiner Person, weil wir den Account anonymisieren. Pro Account sind nur wenige Vorschläge pro Tag möglich (derzeit 5), um Missbrauch zu verhindern.
+
 ## 5. E-Mail-Versand
 
-Login-, Anmelde- und Bestätigungslinks verschicken wir über Scaleway Transactional Email (Region Paris). Dabei werden Empfängeradresse, Inhalt und Zustellstatus verarbeitet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
+Login-, Anmelde- und Bestätigungslinks sowie die Nachricht, dass dein Vorschlag online ist, verschicken wir über Scaleway Transactional Email (Region Paris). Dabei werden Empfängeradresse, Inhalt und Zustellstatus verarbeitet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
 
 ## 6. Events aus Bildern erfassen
 
-Veranstalter:innen und Scouts können Flyer oder Screenshots hochladen, um das Formular vorauszufüllen. Das Bild wird an Scaleway Generative APIs (Region Paris) geschickt, dort ausgewertet und von uns nicht gespeichert. Gespeichert wird nur, was du danach im Formular bestätigst. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Bitte lade nur Bilder hoch, die du dafür verwenden darfst.
+Jeder Account, der die Einrichtung abgeschlossen hat, kann Flyer oder Screenshots hochladen, um das Formular vorauszufüllen. Das Bild wird an Scaleway Generative APIs (Region Paris) geschickt, dort ausgewertet und von uns nicht gespeichert. Gespeichert wird nur, was du danach im Formular bestätigst. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Bitte lade nur Bilder hoch, die du dafür verwenden darfst.
 
 ## 7. Karten
 
