@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import type { DuplicateCandidate, IngestItemView, IngestView } from '@open-event-db/shared'
 import { categoryLabel } from '@/lib/categories'
 import { formatDate, formatTimeRange, knownStart } from '@/lib/format'
+import { submitterLine } from '@/lib/ingest-submitter'
 import { Markdown } from './Markdown'
 
 interface Props {
@@ -13,7 +15,8 @@ interface Props {
   busy: boolean
   onSelect: (selected: boolean) => void
   onAccept: () => void
-  onReject: () => void
+  /** `reason` is the optional note a suggestion's submitter sees. */
+  onReject: (reason?: string) => void
   onLink: (eventId: string) => void
   onGone: (action: 'cancel' | 'keep') => void
 }
@@ -49,6 +52,9 @@ export function Duplicate({ d, busy, onLink }: { d: DuplicateCandidate; busy: bo
 export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept, onReject, onLink, onGone }: Props) {
   const { draft } = item
   const gone = view === 'gone'
+  const [rejecting, setRejecting] = useState(false)
+  const [reason, setReason] = useState('')
+  const suggestion = item.source.kind === 'suggestion'
   const category = categoryLabel(draft.categories)
   const where = draft.venue_id ? (
     <Link href={`/venues/${draft.venue_id}`}>{item.venue_name ?? draft.location_text ?? 'Venue'}</Link>
@@ -84,7 +90,11 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="kk-badge kk-badge--scout">{item.source.name}</span>
+          {suggestion && item.submitter ? (
+            <span className="kk-badge kk-badge--scout">{submitterLine(item.submitter)}</span>
+          ) : (
+            <span className="kk-badge kk-badge--scout">{item.source.name}</span>
+          )}
           {item.fit && (
             <span className={VERDICT_BADGE[item.fit.verdict].className}>{VERDICT_BADGE[item.fit.verdict].label}</span>
           )}
@@ -111,6 +121,34 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
             </summary>
             <Markdown text={draft.description} className="mt-3" />
           </details>
+        )}
+
+        {rejecting && (
+          <div className="flex flex-col gap-3">
+            <label className="kk-field">
+              Reason (shown to the person)
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="kk-input"
+              />
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => onReject(reason.trim() || undefined)}
+                disabled={busy}
+                className="kk-btn kk-btn--primary"
+              >
+                Confirm reject
+              </button>
+              <button type="button" onClick={() => setRejecting(false)} disabled={busy} className="kk-btn kk-btn--text">
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
 
         {!gone && item.duplicates.length > 0 && (
@@ -144,9 +182,17 @@ export function IngestItemCard({ item, view, selected, busy, onSelect, onAccept,
           </>
         ) : (
           <>
-            <button type="button" onClick={onReject} disabled={busy} className="kk-btn kk-btn--outline">
+            <button
+              type="button"
+              onClick={() => (suggestion ? setRejecting(true) : onReject())}
+              disabled={busy || rejecting}
+              className="kk-btn kk-btn--outline"
+            >
               Reject
             </button>
+            <Link href={`/ingest/${item.id}/edit`} className="kk-btn kk-btn--outline">
+              Edit &amp; accept
+            </Link>
             <button type="button" onClick={onAccept} disabled={busy} className="kk-btn kk-btn--primary">
               Accept
             </button>

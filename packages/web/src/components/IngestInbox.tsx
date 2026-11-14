@@ -62,8 +62,8 @@ export function IngestInbox({ items, view }: Props) {
     router.refresh()
   }
 
-  async function reject(rejectIds: string[]) {
-    const data = await call<{ rejected: number }>('items/reject', { ids: rejectIds }, rejectIds)
+  async function reject(rejectIds: string[], reason?: string) {
+    const data = await call<{ rejected: number }>('items/reject', { ids: rejectIds, ...(reason ? { reason } : {}) }, rejectIds)
     if (!data) return
     setSelected(new Set())
     router.refresh()
@@ -135,7 +135,7 @@ export function IngestInbox({ items, view }: Props) {
               busy={busy.has(item.id)}
               onSelect={(on) => toggle(item.id, on)}
               onAccept={() => accept(item)}
-              onReject={() => reject([item.id])}
+              onReject={(reason) => reject([item.id], reason)}
               onLink={(eventId) => link(item, eventId)}
               onGone={(action) => gone(item, action)}
             />

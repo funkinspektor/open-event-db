@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { EVENT_CATEGORIES, type EventCategory, type EventDetail, type EventStatus } from '@open-event-db/shared'
+import { EVENT_CATEGORIES, type EventCategory, type EventDetail, type EventStatus, type IngestItemDetail } from '@open-event-db/shared'
 import { CATEGORY_LABELS } from '@/lib/categories'
 import { toLocalInput, type ImportResult } from '@/lib/draft'
 import { dayKey } from '@/lib/format'
@@ -26,9 +27,11 @@ export interface PublishAsOption {
 }
 
 interface Props {
-  /** `suggest`: a plain account proposes an event for review; `accept` (scout edits a suggestion) is added in a later task. */
+  /** `suggest`: a plain account proposes an event for review; `accept`: a scout edits an inbox item and publishes it. */
   mode: 'create' | 'edit' | 'suggest' | 'accept'
   event?: EventDetail
+  /** Accept mode: the inbox item whose draft pre-fills the form. */
+  item?: IngestItemDetail
   /** Edit mode: whether the current account may set `cancelled` (creator, or a scout on an unclaimed event). */
   canCancel?: boolean
   knownTags: string[]
@@ -72,27 +75,28 @@ function startFields(e: EventDetail): { date: string; time: string } {
   return { date, time }
 }
 
-export function EventForm({ mode, event, canCancel = false, knownTags, publishAs = [], imported, onDraftChange }: Props) {
-  if (mode === 'accept') throw new Error('EventForm mode accept is not implemented yet')
+export function EventForm({ mode, event, item, canCancel = false, knownTags, publishAs = [], imported, onDraftChange }: Props) {
   const router = useRouter()
   const pre = imported?.prefill
+  const draft = mode === 'accept' ? item?.draft : undefined
   const [publishAsValue, setPublishAsValue] = useState(publishAs[0]?.value ?? '')
-  const [title, setTitle] = useState(event?.title ?? pre?.title ?? '')
+  const [title, setTitle] = useState(event?.title ?? draft?.title ?? pre?.title ?? '')
   // Date and time are separate fields: flyers nearly always have the date, often not the time
-  const start = event ? startFields(event) : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
+  const draftStart = draft ? toLocalInput(draft.starts_at).split('T') : null
+  const start = event ? startFields(event) : draftStart ? { date: draftStart[0] ?? '', time: draftStart[1] ?? '' } : { date: pre?.startDate ?? '', time: pre?.startTime ?? '' }
   const [startDate, setStartDate] = useState(start.date)
   const [startTime, setStartTime] = useState(start.time)
-  const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : (pre?.endsAt ?? ''))
-  const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? imported?.venue ?? null)
+  const [endsAt, setEndsAt] = useState(event ? toLocalInput(event.ends_at) : draft ? toLocalInput(draft.ends_at) : (pre?.endsAt ?? ''))
+  const [venue, setVenue] = useState<VenueOption | null>(event?.venue ?? item?.venue ?? imported?.venue ?? null)
   const [creatingVenue, setCreatingVenue] = useState(!!imported?.newVenue)
-  const [locationText, setLocationText] = useState(event?.location_text ?? pre?.locationText ?? '')
-  const [city, setCity] = useState(event?.city ?? pre?.city ?? 'Berlin')
-  const [description, setDescription] = useState(event?.description ?? pre?.description ?? '')
-  const [lineup, setLineup] = useState<LineupGroupRow[]>(() => toLineupRows(event?.lineup ?? pre?.lineup ?? []))
+  const [locationText, setLocationText] = useState(event?.location_text ?? draft?.location_text ?? pre?.locationText ?? '')
+  const [city, setCity] = useState(event?.city ?? draft?.city ?? pre?.city ?? 'Berlin')
+  const [description, setDescription] = useState(event?.description ?? draft?.description ?? pre?.description ?? '')
+  const [lineup, setLineup] = useState<LineupGroupRow[]>(() => toLineupRows(event?.lineup ?? draft?.lineup ?? pre?.lineup ?? []))
   const [previewing, setPreviewing] = useState(false)
-  const [categories, setCategories] = useState<EventCategory[]>(event?.categories ?? pre?.categories ?? [])
+  const [categories, setCategories] = useState<EventCategory[]>(event?.categories ?? draft?.categories ?? pre?.categories ?? [])
   const [tags, setTags] = useState<string[]>(event?.tags ?? pre?.tags ?? [])
-  const [links, setLinks] = useState<LinkRow[]>(event ? toLinkRows(event.links) : (pre?.links ?? []))
+  const [links, setLinks] = useState<LinkRow[]>(event ? toLinkRows(event.links) : draft ? toLinkRows(draft.links) : (pre?.links ?? []))
   const [recurrence, setRecurrence] = useState(event?.recurrence ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'scheduled')
   const [image, setImage] = useState<ImageChange>({ kind: 'keep' })
@@ -159,6 +163,28 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
 
     setBusy(true)
     try {
+      if (mode === 'accept') {
+        // The API copies the stored image to the new event; only a change in the form is sent afterwards
+        const res = await fetch(`${API_URL}/api/v1/ingest/items/${item!.id}/accept`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ event: payload }),
+        })
+        const json = (await res.json().catch(() => ({}))) as { data?: { event_id: string }; error?: { message: string } }
+        if (res.status === 409) {
+          setError('Someone else decided this item meanwhile.')
+          return
+        }
+        if (!res.ok || !json.data) {
+          setError(json.error?.message ?? `Request failed (${res.status})`)
+          return
+        }
+        const outcome = await saveImage('events', json.data.event_id, image)
+        router.push(`/events/${json.data.event_id}?saved=${outcome === 'saved' ? 'accepted' : `accepted_image_${outcome}`}`)
+        router.refresh()
+        return
+      }
       if (mode === 'suggest') {
         const res = await fetch(`${API_URL}/api/v1/suggestions`, {
           method: 'POST',
@@ -364,7 +390,7 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
           </div>
         )}
 
-        <EventImageInput current={event?.image_url ?? null} value={image} onChange={setImage} />
+        <EventImageInput current={event?.image_url ?? draft?.image_url ?? null} value={image} onChange={setImage} />
 
         <div className="kk-field">
           Links
@@ -408,11 +434,17 @@ export function EventForm({ mode, event, canCancel = false, knownTags, publishAs
           title={creatingVenue ? 'Save or cancel the new venue first' : undefined}
           className="kk-btn kk-btn--primary kk-btn--lg"
         >
-          {busy ? (mode === 'suggest' ? 'Sending…' : 'Saving…') : mode === 'create' ? 'Create event' : mode === 'suggest' ? 'Send suggestion' : 'Save changes'}
+          {busy ? (mode === 'suggest' ? 'Sending…' : 'Saving…') : mode === 'create' ? 'Create event' : mode === 'suggest' ? 'Send suggestion' : mode === 'accept' ? 'Publish' : 'Save changes'}
         </button>
-        <button type="button" onClick={() => router.back()} className="kk-btn kk-btn--text">
-          Cancel
-        </button>
+        {mode === 'accept' ? (
+          <Link href="/ingest" className="kk-btn kk-btn--text">
+            Cancel
+          </Link>
+        ) : (
+          <button type="button" onClick={() => router.back()} className="kk-btn kk-btn--text">
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   )

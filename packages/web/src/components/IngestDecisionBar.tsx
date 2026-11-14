@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { IngestItemDetail } from '@open-event-db/shared'
 import { ingestAction } from '@/lib/ingest-actions'
+import { submitterLine } from '@/lib/ingest-submitter'
 import { Duplicate } from './IngestItemCard'
 
 const SETTLED: Record<'accepted' | 'rejected' | 'over' | 'removed', string> = {
@@ -46,7 +47,9 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
     <section className="kk-panel flex flex-col gap-4" aria-label="Inbox decision" aria-busy={busy}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="kk-badge kk-badge--scout">{item.source.name}</span>
+          <span className="kk-badge kk-badge--scout">
+            {item.source.kind === 'suggestion' && item.submitter ? submitterLine(item.submitter) : item.source.name}
+          </span>
           {draft.times_unverified && <span className="kk-badge kk-badge--postponed">Times unverified</span>}
           {state === 'gone' && <span className="kk-badge kk-badge--cancelled">Gone from source</span>}
           {draft.source_url && (
@@ -62,6 +65,9 @@ export function IngestDecisionBar({ item }: { item: IngestItemDetail }) {
               <button type="button" onClick={reject} disabled={busy} className="kk-btn kk-btn--outline">
                 Reject
               </button>
+              <Link href={`/ingest/${item.id}/edit`} className="kk-btn kk-btn--outline">
+                Edit &amp; accept
+              </Link>
               <button type="button" onClick={accept} disabled={busy} className="kk-btn kk-btn--primary">
                 Accept
               </button>
