@@ -420,6 +420,30 @@ After the deploy, on production:
    proves nothing if that machine leaves through a single egress address.
 7. Subscribe to the calendar link in a real Apple Calendar and a real Google Calendar (not just a sample file).
 
+## Release: suggestions
+
+Migration `0024` is additive (new table and columns, nothing dropped), so no snapshot is needed; the API
+container applies it and runs `ensureSuggestionsSource` (creates the internal source for accepted suggestions)
+on start. Before deploying, the owner approves the changed texts in `packages/web/src/content/legal/` (privacy
+policy section 4b and the flyer import in section 6, terms section 4a).
+
+New optional API environment variables (the defaults are fine, set them only to change the limits):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SUGGESTIONS_PER_DAY` | `5` | suggestions per account per day |
+| `SUGGESTION_IMAGE_KEEP_DAYS` | `30` | days until the hourly cleanup deletes the image of a rejected suggestion (or of an accepted one whose copy to the event failed); images of withdrawn suggestions go at once |
+
+After the deploy, on production:
+
+1. As a plain onboarded account, suggest an event (with an image) at `/suggest`.
+2. As a scout, find it in the inbox with the "Suggested by" line.
+3. Edit and accept it: the event is live with "Added by <name>", the image is on the event.
+4. The submitter receives the "your suggestion is live" mail.
+5. Suggest another one and reject it with a reason: the reason shows in "My suggestions".
+6. Suggest a third one and withdraw it; its image disappears at the next hourly cleanup.
+7. Delete the test account(s) and the test event.
+
 ## Going public
 
 Remove `BASIC_AUTH` and `SITE_NOINDEX` from the web container once imprint and privacy policy are online.
