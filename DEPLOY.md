@@ -436,11 +436,11 @@ New optional API environment variables (the defaults are fine, set them only to 
 
 After the deploy, on production:
 
-1. As a plain onboarded account, suggest an event (with an image) at `/suggest`.
-2. As a scout, find it in the inbox with the "Suggested by" line.
-3. Edit and accept it: the event is live with "Added by <name>", the image is on the event.
+1. As a plain onboarded account, use "Suggest event" (`/events/new`) to suggest an event (with an image).
+2. As a scout, find it in the inbox (`/ingest`) with the "Suggested by" line.
+3. Edit and accept it (`/ingest/<id>/edit`): the event is live with "Added by <name>", the image is on the event.
 4. The submitter receives the "your suggestion is live" mail.
-5. Suggest another one and reject it with a reason: the reason shows in "My suggestions".
+5. Suggest another one and reject it with a reason: the reason shows in "My suggestions" on `/dashboard`.
 6. Suggest a third one and withdraw it; its image disappears at the next hourly cleanup.
 7. Delete the test account(s) and the test event.
 
